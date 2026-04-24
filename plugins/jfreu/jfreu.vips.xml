@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<lists>
+	<vip_list>
+		<login></login>
+	</vip_list>
+
+	<vip_team_list>
+		<team></team>
+	</vip_team_list>
+</lists>

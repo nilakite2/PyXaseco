@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<aseco_plugins>
+	<plugin>plugin_localdatabase</plugin>
+	<plugin>plugin_rounds</plugin>
+	<plugin>chat_admin</plugin>
+	<plugin>plugin_server_admin_bridge</plugin>
+	<plugin>chat_help</plugin>
+	<plugin>chat_records</plugin>
+	<plugin>chat_records2</plugin>
+	<plugin>chat_recrels</plugin>
+	<plugin>chat_dedimania</plugin>
+	<plugin>chat_players</plugin>
+	<plugin>chat_players2</plugin>
+	<plugin>chat_wins</plugin>
+	<plugin>chat_laston</plugin>
+	<plugin>chat_lastwin</plugin>
+	<plugin>chat_stats</plugin>
+	<plugin>chat_server</plugin>
+	<plugin>chat_songmod</plugin>
+	<plugin>chat_me</plugin>
+	<plugin>plugin_tmxinfo</plugin>
+	<plugin>plugin_track</plugin>
+	<plugin>plugin_checkpoints</plugin>
+	<plugin>plugin_dedimania</plugin>
+	<plugin>plugin_rasp</plugin>
+	<plugin>plugin_rasp_jukebox</plugin>
+	<plugin>plugin_rasp_chat</plugin>
+	<plugin>plugin_rasp_nextmap</plugin>
+	<plugin>plugin_rasp_nextrank</plugin>
+	<plugin>plugin_rasp_votes</plugin>
+	<plugin>plugin_chatlog</plugin>
+	<plugin>plugin_style</plugin>
+	<plugin>plugin_panels</plugin>
+	<plugin>plugin_donate</plugin>
+	<plugin>plugin_uptodate</plugin>
+	<plugin>plugin_rpoints</plugin>
+	<plugin>jfreu_plugin</plugin>
+	<plugin>plugin_records_eyepiece</plugin>
+	<plugin>plugin_cplive_v3</plugin>
+	<plugin>plugin_bestsecs</plugin>
+	<plugin>plugin_bestcps</plugin>
+	<plugin>plugin_tgj_allbutton</plugin>
+<!--<plugin>plugin_best_checkpoint_times</plugin>-->
+	<plugin>plugin_bestruns</plugin>
+	<plugin>plugin_mania_karma</plugin>
+<!--<plugin>plugin_freezone</plugin>-->
+	<plugin>plugin_fufi_menu</plugin>
+	<plugin>plugin_cpll</plugin>
+	<plugin>plugin_ztrack</plugin>
+</aseco_plugins>

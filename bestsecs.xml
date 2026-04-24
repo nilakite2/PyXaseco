@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<settings>
+	<position>
+		<xPos>50.9</xPos>
+		<yPos>-30</yPos>
+	</position>
+		
+	<display_recs>
+		<sec_recs>1</sec_recs> <!-- 1 = Show message on new Record; 0 = No message on new Record -->
+		<own_recs>1</own_recs> <!-- 1 = Show message on new Record; 0 = No message on new Record -->
+	</display_recs>
+		
+	<window_enabled>
+		<TA>1</TA> <!-- 1 = show Window; 0 = hide Window -->
+		<Rounds>1</Rounds> <!-- 1 = show Window; 0 = hide Window -->
+		<Team>1</Team> <!-- 1 = show Window; 0 = hide Window -->
+		<Cup>1</Cup> <!-- 1 = show Window; 0 = hide Window -->
+		<Lap>1</Lap> <!-- 1 = show Window; 0 = hide Window -->
+		<Stunts>1</Stunts> <!-- 1 = show Window; 0 = hide Window -->
+	</window_enabled>
+	
+	<remove_sec_from_db>1</remove_sec_from_db> <!-- 1 = Secrec scores of track in database removed after the track was erase/removed; 0 = Secrec scores remain after track removal, you can re-add the track and your secs are back -->
+</settings>
