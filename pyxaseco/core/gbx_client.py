@@ -20,12 +20,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Maximum allowed packet size (4 MB, same as PHP original)
+# Maximum allowed packet size (4 MB)
 MAX_PACKET_SIZE = 4 * 1024 * 1024
 # Maximum outgoing request size (512 KB - 8 bytes header)
 MAX_REQUEST_SIZE = 512 * 1024 - 8
 
-# First request handle value (matches PHP: 0x80000000)
+# First request handle value (0x80000000)
 HANDLE_ORIGIN = 0x80000000
 
 
@@ -387,7 +387,7 @@ class GbxClient:
                 header = await self._read_exactly(8)
                 size, handle = struct.unpack_from('<II', header)
 
-                # amd64 sign-extension fix (mirrors PHP original)
+# amd64 sign-extension fix for 64-bit handle values
                 # On 64-bit PHP the handle could come back sign-extended;
                 # we mask to uint32 range.
                 handle = handle & 0xFFFFFFFF

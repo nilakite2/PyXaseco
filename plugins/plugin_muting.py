@@ -71,7 +71,6 @@ async def _init_globalpat(aseco: 'Aseco', _data):
 async def send_window_message(aseco: 'Aseco', message: str, scoreboard: bool):
     """
     Buffer a system message and display the recent window to all players.
-    Mirrors PHP send_window_message() from plugin.msglog.php.
     Used by voting, jukebox, and other plugins when window_style is set.
     """
     global _msgbuf

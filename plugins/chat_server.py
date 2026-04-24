@@ -383,7 +383,7 @@ async def chat_plugins(aseco: 'Aseco', command: dict):
 
 
 async def chat_nations(aseco: 'Aseco', command: dict):
-    """PHP: queries DB for top 10 nations by player count."""
+    """Query the database for the top 10 nations by player count."""
     player = command['author']
     login  = player.login
 

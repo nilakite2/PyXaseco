@@ -6,6 +6,7 @@ plugin_mania_karma.py — PyXaseco port of plugins/plugin.mania_karma.php
 
 import asyncio
 import base64
+import gzip
 import logging
 import math
 import pathlib
@@ -59,7 +60,32 @@ VOTE_KEYS = {
     -3: "waste",
 }
 
+VOTE_SCORES = {
+    "fantastic": 100,
+    "beautiful": 80,
+    "good": 60,
+    "bad": 40,
+    "poor": 20,
+    "waste": 0,
+}
+
 GM_TAG = {0: "rounds", 1: "time_attack", 2: "team", 3: "laps", 4: "stunts", 5: "cup", 7: "score"}
+
+TMX_HOST_ALIASES = {
+    "TMNF": "tmnf.exchange",
+    "TMU": "tmuf.exchange",
+    "TMN": "nations.tm-exchange.com",
+    "TMO": "original.tm-exchange.com",
+    "TMS": "sunrise.tm-exchange.com",
+}
+
+TMX_PREFIX_HOSTS = {
+    "tmnforever": "tmnf.exchange",
+    "united": "tmuf.exchange",
+    "nations": "nations.tm-exchange.com",
+    "original": "original.tm-exchange.com",
+    "sunrise": "sunrise.tm-exchange.com",
+}
 
 NUMBER_FORMATS = {
     "english": {"decimal_sep": ".", "thousands_sep": ","},
@@ -436,6 +462,26 @@ def _track_page_url(aseco: Aseco) -> str:
     return f"http://{_cfg.website}/goto?uid={uid}&env={env}&game={game}"
 
 
+def _normalise_web_url(url: str) -> str:
+    val = str(url or "").strip()
+    if not val:
+        return ""
+    if val.startswith("https://"):
+        return "http://" + val[len("https://"):]
+    if val.startswith("http://"):
+        return val
+    return f"http://{val.lstrip('/')}"
+
+
+def _tmx_public_host(aseco: Aseco) -> str:
+    game = aseco.server.get_game()
+    if game == "TMF":
+        section = "TMNF" if getattr(aseco.server, "packmask", "") == "Stadium" else "TMU"
+    else:
+        section = game
+    return TMX_HOST_ALIASES.get((section or "").upper(), "tmnf.exchange")
+
+
 def _tmx_page_url(aseco: Aseco) -> str:
     # First try challenge object attributes set by plugin_tmxinfo
     ch = getattr(aseco.server, "challenge", None)
@@ -444,12 +490,20 @@ def _tmx_page_url(aseco: Aseco) -> str:
         if obj is not None:
             pageurl = getattr(obj, "pageurl", "") or ""
             if pageurl:
-                return str(pageurl).replace("&", "&amp;")
+                return _normalise_web_url(pageurl).replace("&", "&amp;")
+            obj_id = str(getattr(obj, "id", "") or "").strip()
+            if obj_id.isdigit():
+                return f"http://{_tmx_public_host(aseco)}/trackshow/{obj_id}"
+    tmx_id = str(getattr(ch, "tmx_id", "") or "").strip()
+    if tmx_id.isdigit():
+        prefix = str(getattr(ch, "tmx_prefix", "") or "").strip().lower()
+        host = TMX_PREFIX_HOSTS.get(prefix, _tmx_public_host(aseco))
+        return f"http://{host}/trackshow/{tmx_id}"
     # Fall back to TMX track ID stored in karma data
     tmx_id = str(_karma.get("data", {}).get("tmx", "") or "").strip()
     if tmx_id and tmx_id.isdigit():
-        return f"tmnf.exchange/trackshow/{tmx_id}"
-    return "tmnf.exchange"
+        return f"http://{_tmx_public_host(aseco)}/trackshow/{tmx_id}"
+    return f"http://{_tmx_public_host(aseco)}"
 
 
 def _ensure_player_state(player: Any) -> None:
@@ -687,6 +741,17 @@ async def _api_get(url: str, timeout: int) -> str | None:
     return None
 
 
+async def _api_post(url: str, payload: str, timeout: int) -> tuple[int, str | None]:
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as sess:
+            async with sess.post(url, data=payload.encode("utf-8"), headers={"Content-Type": "text/plain; charset=utf-8"}) as resp:
+                return resp.status, await resp.text(errors="replace")
+    except Exception as exc:
+        logger.debug("[ManiaKarma] api POST failed: %s", exc)
+    return 0, None
+
+
 async def _api_auth(aseco: Aseco) -> bool:
     global _api_authcode, _api_connected, _retrytime
     login = getattr(aseco.server, "serverlogin", "") or getattr(aseco.server, "login", "") or ""
@@ -839,15 +904,8 @@ def _calculate_karma(which: list[str]) -> None:
             positive = votes["fantastic"]["count"] + votes["beautiful"]["count"] + votes["good"]["count"]
             votes["karma"] = int(round(positive * 100.0 / total))
         else:
-            score = (
-                votes["fantastic"]["count"] * 3
-                + votes["beautiful"]["count"] * 2
-                + votes["good"]["count"]
-                - votes["bad"]["count"]
-                - votes["poor"]["count"] * 2
-                - votes["waste"]["count"] * 3
-            )
-            votes["karma"] = int(((score + 3 * total) / (6 * total)) * 100)
+            score = sum(int(votes[key]["count"] or 0) * value for key, value in VOTE_SCORES.items())
+            votes["karma"] = int(round(score / total))
 
 
 async def _load_local_karma() -> None:
@@ -1828,10 +1886,7 @@ async def chat_karma(aseco: Aseco, command: dict) -> None:
         await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', _fmt_message(aseco, '{#admin}Reloading the configuration "mania_karma.xml" now.'), login)
         return
     if params == 'EXPORT' and _is_master_admin(aseco, author):
-        csv = await _export_votes_csv(aseco)
-        target = pathlib.Path(getattr(aseco, '_base_dir', '.')) / 'mania_karma_export.csv'
-        target.write_text(csv, encoding='utf-8')
-        await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', _fmt_message(aseco, f'{{#server}}> {{#highlite}}Export written to {target.name}'), login)
+        await _api_export_votes(aseco, author)
         return
     if params == 'UPTODATE' and _is_master_admin(aseco, author):
         await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', _fmt_message(aseco, '{#server}> {#karma}Up-to-date check is not implemented for this PyXaseco port.'), login)
@@ -1909,8 +1964,7 @@ async def _mk_onPlayerDisconnect(aseco: Aseco, player: Any) -> None:
 
 async def _mk_onPlayerFinish(aseco: Aseco, finish_item: Any) -> None:
     player = getattr(finish_item, 'player', None)
-    score = int(getattr(finish_item, 'score', 0) or 0)
-    if player is None or score == 0:
+    if player is None:
         return
     _ensure_player_state(player)
     if _cfg.require_finish > 0:
@@ -2085,6 +2139,134 @@ async def _export_votes_csv(aseco: Aseco) -> str:
     return '\n'.join(out) + '\n'
 
 
+async def _build_export_payload(aseco: Aseco) -> tuple[str, int]:
+    server_login = getattr(aseco.server, "serverlogin", "") or getattr(aseco.server, "login", "") or ""
+    rows = []
+    try:
+        rows = await _db_fetchall(
+            "SELECT c.Uid, c.Name, c.Author, c.Environment, p.Login, k.Score "
+            "FROM rs_karma k "
+            "LEFT JOIN challenges c ON c.Id=k.ChallengeId "
+            "LEFT JOIN players p ON p.Id=k.PlayerId "
+            "ORDER BY c.Uid ASC"
+        )
+    except Exception:
+        try:
+            rows = await _db_fetchall(
+                "SELECT k.uid, '', '', '', p.Login, k.vote "
+                "FROM rs_karma k "
+                "LEFT JOIN players p ON p.Id=k.PlayerId "
+                "ORDER BY k.uid ASC"
+            )
+        except Exception:
+            rows = []
+
+    lines: list[str] = []
+    count = 0
+    for row in rows:
+        uid = str(row[0] or '')
+        if not uid:
+            continue
+        count += 1
+        lines.append(
+            "\t".join([
+                uid,
+                str(row[1] or ''),
+                str(row[2] or ''),
+                str(row[3] or ''),
+                server_login,
+                _api_authcode,
+                str(_cfg.nation or ''),
+                str(row[4] or ''),
+                str(int(row[5] or 0)),
+            ])
+        )
+
+    raw = ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
+    return base64.b64encode(gzip.compress(raw, compresslevel=9)).decode("ascii"), count
+
+
+async def _api_export_votes(aseco: Aseco, player: Any) -> None:
+    if _cfg.import_done:
+        await aseco.client.query_ignore_result(
+            'ChatSendServerMessageToLogin',
+            _fmt_message(aseco, '{#server}>> {#admin}Export of local votes already done, skipping...'),
+            player.login,
+        )
+        return
+
+    if not _api_connected or not _cfg.api_url or not _api_authcode:
+        await _api_auth(aseco)
+        if not _api_connected or not _cfg.api_url or not _api_authcode:
+            await aseco.client.query_ignore_result(
+                'ChatSendServerMessageToLogin',
+                _fmt_message(aseco, '{#server}>> {#error}Export failed because ManiaKarma is not connected.'),
+                player.login,
+            )
+            return
+
+    await aseco.client.query_ignore_result(
+        'ChatSendServerMessageToLogin',
+        _fmt_message(aseco, '{#server}>> {#admin}Collecting players with their votes on Maps...'),
+        player.login,
+    )
+    payload, count = await _build_export_payload(aseco)
+    await aseco.client.query_ignore_result(
+        'ChatSendServerMessageToLogin',
+        _fmt_message(aseco, f'{{#server}}>> {{#admin}}Found {count} votes in database.'),
+        player.login,
+    )
+    await aseco.client.query_ignore_result(
+        'ChatSendServerMessageToLogin',
+        _fmt_message(aseco, '{#server}>> {#admin}Compressing collected data...'),
+        player.login,
+    )
+    await aseco.client.query_ignore_result(
+        'ChatSendServerMessageToLogin',
+        _fmt_message(aseco, '{#server}>> {#admin}Encoding data...'),
+        player.login,
+    )
+    await aseco.client.query_ignore_result(
+        'ChatSendServerMessageToLogin',
+        _fmt_message(aseco, f'{{#server}}>> {{#admin}}Sending now the export with size of {len(payload)} bytes...'),
+        player.login,
+    )
+
+    login = getattr(aseco.server, "serverlogin", "") or getattr(aseco.server, "login", "") or ""
+    url = (
+        f"{_cfg.api_url}?Action=Import"
+        f"&login={urllib.parse.quote(login)}"
+        f"&authcode={urllib.parse.quote(_api_authcode)}"
+        f"&nation={urllib.parse.quote(str(_cfg.nation or ''))}"
+    )
+    status, _body = await _api_post(url, payload, _cfg.wait_timeout)
+    if status == 200:
+        _cfg.import_done = True
+        await aseco.client.query_ignore_result(
+            'ChatSendServerMessageToLogin',
+            _fmt_message(aseco, '{#server}>> {#admin}Export done. Thanks for supporting mania-karma.com!'),
+            player.login,
+        )
+    elif status == 406:
+        await aseco.client.query_ignore_result(
+            'ChatSendServerMessageToLogin',
+            _fmt_message(aseco, '{#server}>> {#error}Export rejected! Please check your <login> and <nation> in config file "mania_karma.xml"!'),
+            player.login,
+        )
+    elif status == 409:
+        await aseco.client.query_ignore_result(
+            'ChatSendServerMessageToLogin',
+            _fmt_message(aseco, '{#server}>> {#error}Export rejected! Export was already done, allowed only one time!'),
+            player.login,
+        )
+    else:
+        await aseco.client.query_ignore_result(
+            'ChatSendServerMessageToLogin',
+            _fmt_message(aseco, f'{{#server}}>> {{#error}}Connection failed with {status} for url [{url}]'),
+            player.login,
+        )
+
+
 async def _store_karma_votes(aseco: Aseco) -> None:
     new_votes = dict(_karma.get('new', {}).get('players', {}) or {})
     if not new_votes:
@@ -2117,7 +2299,7 @@ def register(aseco: Aseco) -> None:
     aseco.register_event('onKarmaChange', _mk_onKarmaChange)
     aseco.register_event('onPlayerConnect', _mk_onPlayerConnect)
     aseco.register_event('onPlayerDisconnect', _mk_onPlayerDisconnect)
-    aseco.register_event('onPlayerFinish', _mk_onPlayerFinish)
+    aseco.register_event('onPlayerFinish1', _mk_onPlayerFinish)
     aseco.register_event('onPlayerManialinkPageAnswer', _mk_onPlayerManialinkPageAnswer)
     aseco.register_event('onNewChallenge', _mk_onNewChallenge)
     aseco.register_event('onNewChallenge2', _mk_onNewChallenge2)

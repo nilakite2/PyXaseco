@@ -258,7 +258,7 @@ class Aseco:
         self._do_log(message + '\n')
 
     def console_text(self, message: str, *args):
-        """Log a message (same as console, PHP had two names)."""
+        """Alias for console()."""
         self.console(message, *args)
 
     def _do_log(self, text: str):
@@ -450,7 +450,7 @@ class Aseco:
                     raise RuntimeError('Timed out waiting for dedicated server to be ready')
 
     async def _server_sync(self):
-        """Sync server state (mirrors serverSync() in PHP)."""
+        """Sync server state."""
         # Server identity
         sys_info = await self.client.query('GetSystemInfo')
         self.server.serverlogin = sys_info.get('ServerLogin', '')
@@ -490,7 +490,8 @@ class Aseco:
 
         # Server options
         await self._get_server_options()
-
+        await self._enforce_runtime_server_options()
+        
         # Fire sync event
         await self.release_event('onSync', None)
 
@@ -512,6 +513,18 @@ class Aseco:
         self.server.name    = opts.get('Name', '')
         self.server.maxplay = opts.get('CurrentMaxPlayers', 0)
         self.server.maxspec = opts.get('CurrentMaxSpectators', 0)
+
+    async def _enforce_runtime_server_options(self):
+        """
+        Apply controller-owned dedicated-server runtime options.
+
+        Keep VehicleNetQuality pinned to 1 so reconnects / restarts restore
+        the expected networking behavior automatically.
+        """
+        try:
+            await self.client.query_ignore_result('SetVehicleNetQuality', 1)
+        except Exception as e:
+            logger.warning('Could not enforce SetVehicleNetQuality(1): %s', e)
 
     async def _send_header(self):
         """Send a version header to in-game server chat."""
@@ -725,7 +738,7 @@ class Aseco:
         if not player:
             return
 
-        # Build finish_item object (mirrors PHP's playerFinish)
+        # Build the finish_item object used by downstream race handlers.
         from pyxaseco.models import Record, Challenge as _Ch
         import time as _t, datetime as _dt
         finish_item = Record()

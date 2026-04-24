@@ -85,11 +85,11 @@ def format_time_h(ms: int, hsec: bool = True) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Text formatting  (mirrors basic.inc.php)
+# Text formatting
 # ---------------------------------------------------------------------------
 
 def format_text(text: str, *args) -> str:
-    """Replace {1}, {2}, … placeholders with args. Mirrors PHP formatText()."""
+    """Replace {1}, {2}, … placeholders with args."""
     for i, arg in enumerate(args, 1):
         text = text.replace('{' + str(i) + '}', str(arg))
     return text
@@ -97,7 +97,7 @@ def format_text(text: str, *args) -> str:
 
 def strip_colors(text: str, for_tm: bool = True) -> str:
     """
-    Strip Maniaplanet colour/style codes. Mirrors PHP stripColors().
+    Strip Maniaplanet colour/style codes.
     for_tm=True  → surviving $$ become $$ (for TM display)
     for_tm=False → surviving $$ become $  (for log messages)
     """
@@ -113,21 +113,21 @@ def strip_colors(text: str, for_tm: bool = True) -> str:
 
 
 def strip_sizes(text: str, for_tm: bool = True) -> str:
-    """Strip only $n, $w, $o size tags. Mirrors PHP stripSizes()."""
+    """Strip only $n, $w, $o size tags."""
     text = text.replace('$$', '\x00')
     text = re.sub(r'\$[nwoNWO]', '', text)
     return text.replace('\x00', '$$' if for_tm else '$')
 
 
 def is_lan_login(login: str) -> bool:
-    """Detect LAN logins (IP suffix). Mirrors PHP isLANLogin()."""
+    """Detect LAN logins by their IP-style suffix."""
     n = r'(?:25[0-5]|2[0-4]\d|[01]?\d\d|\d)'
     pattern = rf'(?:/{n}\.{n}\.{n}\.{n}:\d+|_{n}\.{n}\.{n}\.{n}_\d+)$'
     return bool(re.search(pattern, login))
 
 
 def validate_utf8(text: str) -> str:
-    """Ensure valid UTF-8. Mirrors PHP validateUTF8String()."""
+    """Ensure valid UTF-8."""
     try:
         return text.encode('utf-8', errors='replace').decode('utf-8')
     except Exception:
@@ -135,10 +135,10 @@ def validate_utf8(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# ManiaLink IDs  (mirrors manialinks.inc.php comment block)
+# ManiaLink IDs
 # ---------------------------------------------------------------------------
 
-ML_ID_MAIN   = '1'   # Main pop-up window  — PHP id="1"
+ML_ID_MAIN   = '1'   # Main pop-up window
 ML_ID_CP     = '2'   # CheckPoints panel
 ML_ID_ADMIN  = '3'   # Admin panel
 ML_ID_RECS   = '4'   # Records panel
@@ -148,7 +148,7 @@ ML_ID_MSG    = '7'   # Messages window
 
 
 def _esc(text: str) -> str:
-    """HTML-escape for ManiaLink XML. Mirrors PHP htmlspecialchars(validateUTF8String(...))."""
+    """HTML-escape text for ManiaLink XML."""
     return html.escape(validate_utf8(str(text)))
 
 
@@ -160,7 +160,6 @@ def display_manialink(aseco: 'Aseco', login: str, header: str,
                       icon: list, data: list, widths: list, button: str):
     """
     Display a single-page ManiaLink window to a player.
-    Mirrors PHP display_manialink().
 
     icon:   [style, substyle] or [style, substyle, size_offset]
     data:   list of rows; each row is a list of column values
@@ -181,7 +180,7 @@ def display_manialink(aseco: 'Aseco', login: str, header: str,
         xml = _build_styled_window(header, icon, data, widths, button, style)
 
     xml = aseco.format_colors(xml)
-    # PHP: aseco->client->addCall('SendDisplayManialinkPageToLogin', [$login, $xml, 0, true])
+    # Send a single-page window with autoclose enabled.
     asyncio.ensure_future(
         aseco.client.query_ignore_result(
             'SendDisplayManialinkPageToLogin', login, xml, 0, True
@@ -192,7 +191,6 @@ def display_manialink(aseco: 'Aseco', login: str, header: str,
 def display_manialink_multi(aseco: 'Aseco', player: 'Player'):
     """
     Display the current page of a multi-page ManiaLink window.
-    Mirrors PHP display_manialink_multi() which calls event_manialink(action=1).
     """
     import asyncio
     asyncio.ensure_future(_send_multipage(aseco, player))
@@ -201,7 +199,7 @@ def display_manialink_multi(aseco: 'Aseco', player: 'Player'):
 def show_help(aseco: 'Aseco', player: 'Player', show_admin: bool = False,
               disp_all: bool = False, width: float = 0.3):
     """
-    Display help for chat commands. Mirrors PHP showHelp().
+    Display help for chat commands.
     """
     import asyncio
 
@@ -209,7 +207,7 @@ def show_help(aseco: 'Aseco', player: 'Player', show_admin: bool = False,
             if cmd.isadmin == show_admin}
 
     if not disp_all:
-        # PHP: "Currently supported chat commands:\n" + names joined by ", "
+        # Show the available command names in a single compact message.
         kind = 'admin' if show_admin else 'chat'
         head = aseco.format_colors(f'{{#interact}}Currently supported {kind} commands:\n')
         msg  = head + ', '.join(sorted(cmds.keys()))
@@ -238,17 +236,15 @@ def show_help(aseco: 'Aseco', player: 'Player', show_admin: bool = False,
 def setup_manialink_events(aseco: 'Aseco'):
     """
     Register the core ManiaLink page-answer handler and panel on/off hooks.
-    Mirrors PHP manialinks.inc.php event registrations.
     """
     aseco.register_event('onPlayerManialinkPageAnswer', _event_manialink)
-    # Panel on/off — mirrors PHP manialinks.inc.php hooks
+    # Reset key window layers at end of race.
     aseco.register_event('onEndRace', _allwindows_off)
 
 
 async def _allwindows_off(aseco: 'Aseco', _data=None):
     """
-    Clear main window, records panel, and donate panel at end of race.
-    Mirrors PHP allwindows_off().
+    Clear the main window, records panel, and donate panel at end of race.
     """
     xml = (f'<manialinks>'
            f'<manialink id="{ML_ID_MAIN}"></manialink>'
@@ -261,7 +257,6 @@ async def _allwindows_off(aseco: 'Aseco', _data=None):
 async def _event_manialink(aseco: 'Aseco', answer: list):
     """
     Handle ManiaLink page-answer events for the main popup window.
-    Mirrors PHP event_manialink().
 
     Action routing:
       action  0          → close main window
@@ -275,7 +270,7 @@ async def _event_manialink(aseco: 'Aseco', answer: list):
     login  = answer[1]
     action = int(answer[2])
 
-    # PHP gate: leave actions outside -6..36 to other handlers
+    # Leave actions outside -6..36 to other handlers.
     if action < -6 or action > 36:
         return
 
@@ -350,7 +345,6 @@ async def _send_multipage(aseco: 'Aseco', player: 'Player'):
     widths = list(meta[2]) if len(meta) > 2 else [1.0]
     icon   = list(meta[3]) if len(meta) > 3 else ['Icons64x64_1', 'TrackInfo']
 
-    # PHP: $lines = max($lines, count($player->msgs[1]))
     # All pages use the height of page 1 so the window doesn't resize on navigation.
     page1_len = len(player.msgs[1]) if total_pages >= 1 else len(rows)
     if len(rows) < page1_len:
@@ -362,7 +356,7 @@ async def _send_multipage(aseco: 'Aseco', player: 'Player'):
                                      page_idx, total_pages, style)
     xml = aseco.format_colors(xml)
 
-    # PHP: autoclose=false for multi-page
+    # Keep autoclose disabled for multi-page windows.
     await aseco.client.query_ignore_result(
         'SendDisplayManialinkPageToLogin', player.login, xml, 0, False
     )
@@ -379,7 +373,7 @@ def _build_multi_page_window(header, icon, rows, widths, page, total, style) -> 
 # ---------------------------------------------------------------------------
 
 def _build_plain_window(header, data, widths, button) -> str:
-    """Mirrors PHP display_manialink() TMN branch."""
+    """Build plain TMN-style window markup."""
     tsp = 'B'
     txt = '333' + tsp
     bgd = 'FFF' + tsp
@@ -423,7 +417,7 @@ def _build_plain_window(header, data, widths, button) -> str:
 
 
 def _build_plain_multi_page_window(header, data, widths, page, total) -> str:
-    """Mirrors PHP event_manialink() TMN branch."""
+    """Build plain TMN-style multi-page window markup."""
     tsp = 'B'
     txt = '333' + tsp
     bgd = 'FFF' + tsp
@@ -510,7 +504,7 @@ def _s(style, path) -> str:
 
 
 def _build_styled_window(header, icon, data, widths, button, style) -> str:
-    """Mirrors PHP display_manialink() TMF branch."""
+    """Build styled TMF-style window markup."""
     hsize = float(_s(style, 'HEADER.TEXTSIZE') or 0.06)
     bsize = float(_s(style, 'BODY.TEXTSIZE') or 0.04)
     w     = widths[0]
@@ -577,7 +571,7 @@ def _build_styled_window(header, icon, data, widths, button, style) -> str:
                         f' halign="left" style="{_s(style, "BODY.TEXTSTYLE")}"'
                         f' text="{_esc(row[0])}"/>\n')
 
-    # Close button — PHP: pos="-{w/2} -{0.04+hsize+lines*bsize} -0.2"
+    # Anchor the close button below the window body.
     xml += (f'<quad pos="-{w / 2:.3f} -{0.04 + hsize + lines * bsize:.3f} -0.2"'
             f' size="0.06 0.06" halign="center"'
             f' style="Icons64x64_1" substyle="Close" action="0"/>\n')
@@ -590,12 +584,11 @@ def _build_styled_window(header, icon, data, widths, button, style) -> str:
 
 
 def _build_styled_multi_page_window(header, icon, data, widths, page, total, style) -> str:
-    """Mirrors PHP event_manialink() TMF branch."""
+    """Build styled TMF-style multi-page window markup."""
     hsize = float(_s(style, 'HEADER.TEXTSIZE') or 0.06)
     bsize = float(_s(style, 'BODY.TEXTSIZE') or 0.04)
     w     = widths[0]
 
-    # PHP: $lines = max($lines, count($player->msgs[1]))
     # All pages must have the same window height (page 1 height is the reference)
     lines = len(data)
     # Note: caller (_send_multipage) passes page1_lines via widths tuple if needed;
@@ -625,7 +618,7 @@ def _build_styled_multi_page_window(header, icon, data, widths, page, total, sty
                 f' halign="left" style="{_s(style, "HEADER.TEXTSTYLE")}"'
                 f' text="{_esc(header)}"/>\n')
 
-    # Page counter label — PHP: pos="-{w-0.02} -0.025 -0.2"
+    # Page counter label.
     xml += (f'<label pos="-{w - 0.02:.3f} -0.025 -0.2" size="0.12 {hsize:.3f}"'
             f' halign="right" style="{_s(style, "HEADER.TEXTSTYLE")}"'
             f' text="$n({page}/{total})"/>\n')
@@ -671,7 +664,7 @@ def _build_styled_multi_page_window(header, icon, data, widths, page, total, sty
                         f' halign="left" style="{_s(style, "BODY.TEXTSTYLE")}"'
                         f' text="{_esc(row[0])}"/>\n')
 
-    # Navigation buttons — PHP positions exactly
+    # Navigation buttons.
     add5     = total > 5
     footer_y = 0.045 + hsize + lines * bsize   # nav buttons y
     close_y  = 0.04  + hsize + lines * bsize   # close button y (0.005 higher)
@@ -694,7 +687,7 @@ def _build_styled_multi_page_window(header, icon, data, widths, page, total, sty
             xml += _nav(0.095,    'StarGold', None)
         xml += _nav(w * 0.25, 'StarGold', None)
 
-    # Close button — PHP: pos="-{w/2} -{0.04+hsize+lines*bsize}"
+    # Close button.
     xml += (f'<quad pos="-{w / 2:.3f} -{close_y:.3f} -0.2"'
             f' size="0.06 0.06" halign="center"'
             f' style="Icons64x64_1" substyle="Close" action="0"/>\n')

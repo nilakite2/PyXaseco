@@ -34,7 +34,7 @@ def _is_stnt(aseco: 'Aseco') -> bool:
 
 
 def _fmt_rec(aseco: 'Aseco', rec, rank) -> str:
-    """PHP: formatText(RANKING_RECORD_NEW, rank, nick, score) then strip trailing ', '"""
+    """Format the ranking message and trim the trailing separator."""
     is_stnt = _is_stnt(aseco)
     score   = str(rec.score) if is_stnt else format_time(rec.score)
     msg     = format_text(aseco.get_chat_message('RANKING_RECORD_NEW'),
@@ -43,7 +43,7 @@ def _fmt_rec(aseco: 'Aseco', rec, rank) -> str:
 
 
 def _diff_fmt(diff_ms: int, sign: str = '') -> str:
-    """Format millisecond difference as S.hh — PHP: sprintf('%s%d.%02d', sign, sec, hun)"""
+    """Format a millisecond difference as S.hh."""
     sec = diff_ms // 1000
     hun = (diff_ms % 1000) // 10
     return f'{sign}{sec}.{hun:02d}'

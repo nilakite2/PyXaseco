@@ -416,5 +416,5 @@ class ChatCommand:
 # ---------------------------------------------------------------------------
 
 def _strip_newlines(text: str) -> str:
-    """Remove embedded newlines from map names (mirrors PHP stripNewlines)."""
+    """Remove embedded newlines from map names."""
     return text.replace('\n', '').replace('\r', '').replace('\\n', '')

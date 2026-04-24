@@ -59,7 +59,7 @@ def _close_to_you(records, login: str, limit: int, topcount: int, player_nick: s
             entry['self'] = 1
             worse.append(entry)
 
-    # ── Top-X pinning (PHP: array_shift topcount entries from better) ──────
+# ── Top-X pinning from the better-record slice ──────
     array_top: list = []
     ctu_count = limit
     if len(better) > topcount:

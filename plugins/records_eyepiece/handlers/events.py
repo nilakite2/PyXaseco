@@ -606,7 +606,7 @@ async def _redraw_all(aseco: 'Aseco'):
 async def _redraw_player(aseco: 'Aseco', login: str):
     from ..widgets.common import _hide, _send
 
-    # XAseco keeps F7 bound through an always-present hidden actionkey manialink
+# Keep F7 bound through an always-present hidden actionkey manialink.
     # so widgets can be restored even while they are currently hidden.
     await _send(
         aseco,

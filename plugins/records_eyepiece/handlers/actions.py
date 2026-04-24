@@ -323,7 +323,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             await _send(aseco, login, xml)
         return
 
-    # 918159 = Show TopVisitorsWindow (PHP id)
+        # 918159 = Show TopVisitorsWindow
     if action == 918159:
         xml = await _build_generic_toplist_window(aseco, 'TOPVISITORS')
         if xml:

@@ -414,7 +414,7 @@ class _CPLive:
                 info = {}
             spec_status = int(info.get("SpectatorStatus", 0) or 0)
 
-        # Canonical spec detection — matches PHP: ($specStatus % 10) != 0
+    # Canonical spectator detection uses the low digit of spectatorstatus.
         live_is_spec = (spec_status % 10) != 0
 
         p.SpectatorStatus = spec_status

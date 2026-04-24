@@ -25,7 +25,7 @@ async def chat_recs(aseco: 'Aseco', command: dict):
     login  = player.login
     param  = command['params'].strip().lower().split()[0] if command['params'].strip() else ''
 
-    # Sub-command dispatch (mirrors PHP chat_recs arglist dispatch)
+# Sub-command dispatch based on the argument list.
     if param == 'help':
         await _show_help(aseco, login)
         return

@@ -275,7 +275,7 @@ def _list_templates(aseco: "Aseco", prefix: str, max_count: int) -> list[str]:
 
 
 async def _redisplay_all_admin_panels(aseco: "Aseco", _data=None):
-    """Redisplay admin panel for all admins on new challenge (PHP parity)."""
+    """Redisplay the admin panel for all admins on a new challenge."""
     for player in aseco.server.players.all():
         try:
             if aseco.is_any_admin(player) and _player_panel(player, "admin"):
@@ -285,7 +285,7 @@ async def _redisplay_all_admin_panels(aseco: "Aseco", _data=None):
 
 
 async def _update_allstatspanels_on_challenge(aseco: "Aseco", _data=None):
-    """Refresh stats panel on new challenge as well as end of race (PHP parity)."""
+    """Refresh the stats panel on a new challenge and at end of race."""
     await update_allstatspanels(aseco, _data)
 
 

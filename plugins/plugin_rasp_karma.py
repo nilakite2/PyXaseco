@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Mirrors includes/rasp.settings.php defaults.
+# Default settings for the karma feature.
 feature_karma = False
 allow_public_karma = False
 karma_show_start = False

@@ -37,7 +37,7 @@ _LEGACY_ADMIN_ABILITIES: dict[str, bool] = {}
 _LEGACY_OPERATOR_ABILITIES: dict[str, bool] = {}
 
 # ---------------------------------------------------------------------------
-# PHP-compatible runtime globals
+# Module-level runtime globals
 # ---------------------------------------------------------------------------
 
 PM_BUFFER: list[str] = []
@@ -47,7 +47,7 @@ PM_LINE_LEN = 40
 AUTO_SCOREPANEL = True
 ROUNDS_FINISHPANEL = True
 
-# ManiaLink action id ranges from PHP chat.admin.php
+# Reserved ManiaLink action id ranges for admin panels
 ML_WARN_BASE = 2200
 ML_IGNORE_BASE = 2400
 ML_UNIGNORE_BASE = 2600
@@ -2534,7 +2534,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub == 'add':
         # /admin add <id1> [id2] ... [tmnf|tmu|tmo|tms|tmn]
-        # PHP: permanently adds via AddChallenge, optionally jukeboxes (jukebox_adminadd)
+        # Add permanently via AddChallenge and optionally queue it for the jukebox.
         if not args:
             await _reply(aseco, login,
                          '{#server}> {#error}Usage: {#highlite}/admin add <TMX_ID>... [tmnf|tmu|...]')
@@ -2557,7 +2557,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
             await _reply(aseco, login, '{#server}> {#error}You must include a TMX Track_ID!')
             return
 
-        # jukebox_adminadd flag (default true, matches PHP rasp.settings.php)
+        # jukebox_adminadd defaults to enabled when not configured elsewhere.
         jukebox_adminadd = True
 
         for trkid in track_ids:
@@ -2567,7 +2567,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 )
                 ok, info = await admin_add_tmx_track(
                     aseco, trkid, login, source_hint,
-                    use_add_challenge=True  # PHP uses AddChallenge (permanent)
+                    use_add_challenge=True  # Keep the track in the permanent rotation.
                 )
 
                 if ok:
@@ -2599,8 +2599,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub == 'addthis':
         try:
-            # PHP behavior:
-            # if current track is a temporary /add-ed TMX track, move it to permanent list
+            # If the current track came from a temporary TMX add, move it to the permanent list.
             from pyxaseco.plugins.plugin_rasp_jukebox import tmxplayed
         except Exception:
             tmxplayed = None
@@ -3187,7 +3186,7 @@ async def _event_admin(aseco: 'Aseco', answer: list):
     """
     Handle ManiaLink clicks from admin-related panels.
 
-    PHP uses these action ranges:
+    Action ranges:
       2201-2400  warn
       2401-2600  ignore
       2601-2800  unignore

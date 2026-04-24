@@ -358,7 +358,7 @@ async def build_top_nations_widget(aseco: 'Aseco') -> str:
         return _stl_empty(ML_TOP_NATIONS)
 
     entries = int(cfg.get('entries', 6))
-    # Flag code remapping from PHP (legacy ISO codes)
+# Flag code remapping for legacy ISO codes.
     _FLAGFIX = {'SCG': 'SRB', 'ROM': 'ROU', 'CAR': 'CMR'}
 
     rows = await _db_query(
@@ -859,7 +859,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             'action_id': action_id,
         })
 
-    # PHP order
+    # Preserve the expected display order.
     dedi_cfg = _state.dedi.get(_effective_mode(aseco))
     if gamemode != Gameinfo.STNT and getattr(dedi_cfg, 'enabled', False):
         from .widgets.records_dedi import _get_dedi_records
@@ -882,7 +882,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
                     score_text = '--'
 
             dedi_rows.append({
-                # XAseco numbers these rows sequentially in the More Ranking window.
+    # Number these rows sequentially in the More Ranking window.
                 'rank': idx,
                 'score': str(score_text or '--'),
                 'nickname': _sanitise_nick(str(rec.get('nickname') or rec.get('NickName') or login_id or '?')),

@@ -265,7 +265,7 @@ async def chat_dedihelp(aseco: 'Aseco', command: dict):
 
 
 async def chat_helpdedi(aseco: 'Aseco', command: dict):
-    """PHP: display_manialink with widths [0.95] (single full-width column), 15 rows."""
+    """Render a single-column Dedimania window with 15 rows."""
     login = command['author'].login
     header = 'Dedimania information:'
     data = [
@@ -384,7 +384,7 @@ async def _dedirecs_help(aseco: 'Aseco', login: str):
 
 
 # ---------------------------------------------------------------------------
-# /dedinew /dedilive — call show_dedirecs() like PHP does
+    # Route /dedinew and /dedilive through the same record window helper.
 # ---------------------------------------------------------------------------
 
 async def chat_dedinew(aseco: 'Aseco', command: dict):

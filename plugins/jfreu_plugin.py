@@ -1146,7 +1146,7 @@ async def chat_message(aseco: 'Aseco', command: dict):
     await info_message(aseco, None)
 
 async def chat_fake(aseco: 'Aseco', command: dict):
-    """Kept as a small admin-only testing helper with PHP-style output."""
+    """Kept as a small admin-only testing helper with compact output."""
     player = command['author']
     login = player.login
 
@@ -1175,7 +1175,7 @@ async def chat_fake(aseco: 'Aseco', command: dict):
 
 
 async def on_player_vote(aseco: 'Aseco', vote_data):
-    """Unused compatibility stub; PHP left onPlayerVote disabled."""
+    """Unused compatibility stub; onPlayerVote stays disabled here as well."""
     return
 
 

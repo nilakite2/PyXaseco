@@ -71,7 +71,7 @@ _COUNTRY_MAP = {
 
 
 def map_country(nation: str) -> str:
-    """Map TMF nation name to 3-letter code. Mirrors PHP mapCountry()."""
+    """Map a TMF nation name to a 3-letter code."""
     return _COUNTRY_MAP.get(nation, nation[:3].upper() if nation else '')
 
 
@@ -161,7 +161,7 @@ async def _open_pool() -> aiomysql.Pool:
 
 
 async def ldb_reconnect(aseco: 'Aseco', _param=None):
-    """Mirror XAseco's idle reconnect check when no players are online."""
+    """Run the idle reconnect check when no players are online."""
     global _pool
 
     if aseco.server.players.all():
@@ -187,7 +187,7 @@ async def ldb_reconnect(aseco: 'Aseco', _param=None):
 
 
 async def _ensure_tables(aseco: 'Aseco'):
-    """Create tables and apply schema migrations identical to the PHP plugin."""
+    """Create tables and apply the required schema migrations."""
     async with _pool.acquire() as conn:
         async with conn.cursor() as cur:
             # Suppress "Table already exists" notes from MySQL/MariaDB

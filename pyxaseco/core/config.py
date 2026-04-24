@@ -78,7 +78,7 @@ class Settings:
     server_password: str = 'SuperAdmin'
     server_timeout: int = 10
 
-    # -- Feature flags (match PHP config keys) --
+# -- Feature flags using the current config key names --
     lock_password: str = ''
     cheater_action: int = 0
     script_timeout: int = 3600

@@ -170,21 +170,21 @@ class FufiMenu:
                     continue
                 name = node.text.strip()
                 vals.append(name)
-                # Store BOTH the PHP-dotted form and the Python-underscore stem so
+                # Store both the dotted form and the underscore stem so
                 # that fufi_menu_config.xml dependency strings match regardless of
                 # which naming convention plugins.xml uses.
                 #
-                # PHP name   ("chat.records.php") -> also add Python stem ("chat_records")
-                # Python stem ("chat_records")     -> also add PHP name   ("chat.records.php")
-                # .py file   ("chat_records.py")   -> also add bare stem  ("chat_records")
+                # Dotted name ("chat.records.php") -> also add underscore stem ("chat_records")
+                # Stem       ("chat_records")      -> also add dotted name      ("chat.records.php")
+                # .py file   ("chat_records.py")   -> also add bare stem        ("chat_records")
                 if name.endswith(".php"):
-                    # PHP -> Python: "chat.records.php" -> "chat_records"
+                    # Dotted name -> underscore stem: "chat.records.php" -> "chat_records"
                     alt = name[:-4].replace(".", "_")
                 elif name.endswith(".py"):
                     # .py -> stem: "chat_records.py" -> "chat_records"
                     alt = name[:-3]
                 else:
-                    # Python stem -> PHP: "chat_records" -> "chat.records.php"
+                    # Stem -> dotted name: "chat_records" -> "chat.records.php"
                     alt = name.replace("_", ".") + ".php"
                 if alt != name:
                     vals.append(alt)

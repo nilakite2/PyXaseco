@@ -1418,7 +1418,7 @@ async def chat_y(aseco: 'Aseco', command: dict):
     player = command['author']
     login = player.login
 
-    # Use spectatorstatus % 10 (canonical, same as PHP CPLive) not isspectator
+    # Use spectatorstatus % 10 for canonical spectator detection instead of isspectator.
     _raw_ss = getattr(player, 'spectatorstatus', None)
     _player_is_spec = ((int(_raw_ss) % 10) != 0) if _raw_ss is not None else bool(player.isspectator)
     if _player_is_spec and not aseco.is_any_admin(player) and not allow_spec_voting:

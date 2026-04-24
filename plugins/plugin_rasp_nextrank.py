@@ -78,7 +78,7 @@ async def chat_nextrank(aseco: 'Aseco', command: dict):
 
             my_avg = float(row[0])
 
-            # XAseco logic: fetch all strictly better averages and take the last one.
+    # Fetch all strictly better averages and take the nearest one above the player.
             await cur.execute(
                 'SELECT playerID, avg FROM rs_rank WHERE avg < %s ORDER BY avg ASC',
                 (my_avg,)

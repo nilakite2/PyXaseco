@@ -832,6 +832,6 @@ def apply_phase1_defaults(aseco: 'Aseco') -> None:
         if '{score}' not in fmt and ('{remaining}' not in fmt or '{pointlimit}' not in fmt):
             rounds.fmt = '{score} ({remaining})'
 
-    # TMN/TMNF-style accounts do not support payout features in the PHP plugin.
+# TMN/TMNF-style accounts do not support payout features in this configuration.
     if not bool(getattr(aseco.server, 'rights', False)):
         setattr(_state, 'winning_payout_enabled', False)

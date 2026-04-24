@@ -21,7 +21,7 @@ async def chat_laston(aseco: 'Aseco', command: dict):
     player = command['author']
     login  = player.login
 
-    # Determine target — PHP: getPlayerParam() resolves login or numeric player ID.
+# Determine target from login or numeric player index.
     # We resolve: if no param, use self; if param given, resolve against online players
     # first (supports numeric IDs via player list), then fall back to DB lookup.
     param = command['params'].strip()
@@ -29,7 +29,7 @@ async def chat_laston(aseco: 'Aseco', command: dict):
         target_login = login
         target_nick  = player.nickname
     else:
-        # Try to resolve as online player (supports numeric index as PHP does)
+# Try to resolve as an online player, including numeric indices.
         resolved = aseco.server.players.get_player(param)
         if resolved:
             target_login = resolved.login
@@ -65,11 +65,11 @@ async def chat_laston(aseco: 'Aseco', command: dict):
     if target_nick is None:
         target_nick = db_nick
 
-    # Strip seconds from timestamp: PHP preg_replace('/:\d\d$/', '', ...)
+# Strip trailing seconds from the timestamp for display.
     ts = str(updated_at)
     ts = re.sub(r':\d\d$', '', ts)
 
-    # PHP message: '{#server}> Player {#highlite}' + $target->nickname + '$z$s{#server} was last online on: {#highlite}' + ts
+# Compose the final "last online" message.
     msg = (f'{{#server}}> Player {{#highlite}}{target_nick}'
            f'$z$s{{#server}} was last online on: {{#highlite}}{ts}')
     await aseco.client.query_ignore_result(
