@@ -525,7 +525,6 @@ class Aseco:
     async def _main_loop(self):
         """
         Continuously poll callbacks from the GbxRemote client and dispatch them.
-        Mirrors the PHP while(true) loop with 200ms sleep.
         """
         prev_second = int(time.time())
         while not self._shutdown_requested:
@@ -543,7 +542,7 @@ class Aseco:
                 prev_second = now
                 await self.release_event('onEverySecond', None)
 
-            # Maintain ~200ms loop cadence
+            # Maintain ~20ms loop cadence
             elapsed = time.monotonic() - loop_start
             sleep_time = max(0.0, 0.02 - elapsed)
             await asyncio.sleep(sleep_time)
