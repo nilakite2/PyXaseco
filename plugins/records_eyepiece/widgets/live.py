@@ -207,6 +207,7 @@ async def _draw_live_player(aseco: 'Aseco', login: str):
         online=set(),
         mode=mode,
         is_live=True,
+        click_action=91806,
     )
     await _send(aseco, login, xml)
 
