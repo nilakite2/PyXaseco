@@ -11,7 +11,7 @@ Responsibilities:
   - Manage player connect/disconnect, challenge changes, chat commands
   - Provide helper API used by plugins
 
-TMF-only.  TMN branches removed.
+TMF-only.
 """
 
 from __future__ import annotations
@@ -86,6 +86,7 @@ class Aseco:
         self.uptime: int = int(time.time())
         self._shutdown_requested: bool = False
         self._shutdown_stop_server: bool = False
+        self._restart_requested: bool = False
 
         # Chat commands: name → ChatCommand
         self._chat_commands: dict[str, ChatCommand] = {}
@@ -103,7 +104,7 @@ class Aseco:
         logger.info('PyXaseco %s initialising', PYXASECO_VERSION)
 
     # ------------------------------------------------------------------
-    # Public plugin API — mirrors PHP static/instance methods
+    # Public plugin API
     # ------------------------------------------------------------------
 
     def register_event(self, event_type: str, handler):
@@ -282,6 +283,29 @@ class Aseco:
             await self.release_event('onShutdown', {'stop_server': stop_server})
         except Exception as e:
             logger.warning('onShutdown event failed: %s', e)
+
+    async def restart(self):
+        """
+        Request a full controller restart.
+        The process re-exec is handled by main.py after the run loop exits.
+        """
+        self._restart_requested = True
+        self._shutdown_requested = True
+        self._shutdown_stop_server = False
+
+        logger.info('Restart requested')
+
+        try:
+            await self.release_event('onShutdown', {
+                'stop_server': False,
+                'restart': True,
+            })
+        except Exception as e:
+            logger.warning('onShutdown event failed during restart: %s', e)
+
+    @property
+    def restart_requested(self) -> bool:
+        return bool(self._restart_requested)
 
     async def _perform_shutdown(self):
         """
@@ -813,7 +837,7 @@ class Aseco:
         if self.events.has_handlers(event_name):
             await self.release_event(event_name, command)
         else:
-            # Try the PHP-style function name pattern: chat_{cmd_name}
+
             handler_name = 'chat_' + cmd_name
             await self.release_event('onChatCommand', {
                 'name': cmd_name,

@@ -11,7 +11,7 @@ In Python, each plugin module must expose a register(aseco) function that
 performs those registrations.  The loader calls register(aseco) immediately
 after importing the module.
 
-Plugin file naming: PHP 'chat.chatlog.php' → Python 'chat_chatlog.py'
+Plugin file naming: PHP 'chat.chatlog.php' -> Python 'chat_chatlog.py'
 (dots in the base name other than the extension are replaced with underscores)
 """
 
@@ -34,6 +34,7 @@ class PluginLoader:
 
     def __init__(self, plugins_dir: str | Path = 'plugins'):
         self.plugins_dir = Path(plugins_dir)
+        self._plugins_dir_str = str(self.plugins_dir.resolve())
         self._loaded: list[str] = []
 
     def load_all(self, plugin_filenames: list[str], aseco: 'Aseco'):
@@ -44,7 +45,7 @@ class PluginLoader:
         e.g. 'chat.help' or 'plugin.chatlog'.
 
         The corresponding Python file is found by replacing dots with
-        underscores: 'chat.help' → 'chat_help.py'.
+        underscores: 'chat.help' -> 'chat_help.py'.
         """
         for filename in plugin_filenames:
             # Strip trailing .php if present (in case plugins.xml still has it)
@@ -62,6 +63,12 @@ class PluginLoader:
         if not plugin_path.exists():
             logger.error('PluginLoader: plugin file not found: %s', plugin_path)
             return
+
+        if self._plugins_dir_str not in sys.path:
+            # Package-backed plugins such as records_eyepiece live under the
+            # shared plugins directory and should not need per-plugin sys.path
+            # bootstrapping in their wrapper modules.
+            sys.path.insert(0, self._plugins_dir_str)
 
         # Build a unique module name to avoid collisions
         full_module_name = f'pyxaseco_plugins.{module_name}'
