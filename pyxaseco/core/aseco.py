@@ -545,7 +545,7 @@ class Aseco:
 
             # Maintain ~200ms loop cadence
             elapsed = time.monotonic() - loop_start
-            sleep_time = max(0.0, 0.2 - elapsed)
+            sleep_time = max(0.0, 0.02 - elapsed)
             await asyncio.sleep(sleep_time)
 
     async def _execute_callbacks(self):
