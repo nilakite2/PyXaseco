@@ -96,21 +96,35 @@ class FufiMenuEntry:
 
         result: list[FufiMenuEntry] = []
         for entry in self.entries:
-            if (entry.rights == getattr(player, "rights", False)) or (not entry.rights):
-                if "/admin" in entry.chatcmd:
-                    parts = entry.chatcmd.split()
-                    cmd = parts[1] if len(parts) > 1 else ""
-                    if menu.aseco.allow_ability(player, cmd):
-                        result.append(entry)
-                elif "/jfreu" in entry.chatcmd:
-                    if menu.aseco.allow_ability(player, "chat_jfreu"):
+            if entry.rights and not menu.aseco.is_any_admin(player):
+                continue
+
+            if entry.is_group() and not entry.chatcmd:
+                result.append(entry)
+
+            elif "/admin" in entry.chatcmd:
+                parts = entry.chatcmd.split()
+                cmd = parts[1].lower() if len(parts) > 1 else ""
+
+                try:
+                    from pyxaseco.plugins import chat_admin
+                    allowed = bool(chat_admin._auth_check(menu.aseco, player, cmd)[0])
+                except Exception:
+                    allowed = menu.aseco.is_any_admin(player)
+
+                if allowed:
+                    result.append(entry)
+
+            elif "/jfreu" in entry.chatcmd:
+                if menu.aseco.is_any_admin(player):
+                    result.append(entry)
+
+            else:
+                if entry.ability:
+                    if menu.aseco.allow_ability(player, entry.ability):
                         result.append(entry)
                 else:
-                    if entry.ability:
-                        if menu.aseco.allow_ability(player, entry.ability):
-                            result.append(entry)
-                    else:
-                        result.append(entry)
+                    result.append(entry)
 
         filtered: list[FufiMenuEntry] = []
         for entry in result:
@@ -623,21 +637,35 @@ class FufiMenu:
 
         result: list[FufiMenuEntry] = []
         for entry in self.entries:
-            if (entry.rights == getattr(player, "rights", False)) or (not entry.rights):
-                if "/admin" in entry.chatcmd:
-                    parts = entry.chatcmd.split()
-                    cmd = parts[1] if len(parts) > 1 else ""
-                    if self.aseco.allow_ability(player, cmd):
-                        result.append(entry)
-                elif "/jfreu" in entry.chatcmd:
-                    if self.aseco.allow_ability(player, "chat_jfreu"):
+            if entry.rights and not self.aseco.is_any_admin(player):
+                continue
+
+            if entry.is_group() and not entry.chatcmd:
+                result.append(entry)
+
+            elif "/admin" in entry.chatcmd:
+                parts = entry.chatcmd.split()
+                cmd = parts[1].lower() if len(parts) > 1 else ""
+
+                try:
+                    from pyxaseco.plugins import chat_admin
+                    allowed = bool(chat_admin._auth_check(self.aseco, player, cmd)[0])
+                except Exception:
+                    allowed = self.aseco.is_any_admin(player)
+
+                if allowed:
+                    result.append(entry)
+
+            elif "/jfreu" in entry.chatcmd:
+                if self.aseco.is_any_admin(player):
+                    result.append(entry)
+
+            else:
+                if entry.ability:
+                    if self.aseco.allow_ability(player, entry.ability):
                         result.append(entry)
                 else:
-                    if entry.ability:
-                        if self.aseco.allow_ability(player, entry.ability):
-                            result.append(entry)
-                    else:
-                        result.append(entry)
+                    result.append(entry)
 
         filtered: list[FufiMenuEntry] = []
         for entry in result:

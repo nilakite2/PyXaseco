@@ -255,8 +255,7 @@ def register(aseco: 'Aseco'):
         ('shutdownall',   'Shuts down Server & XASECO', True),
     ]
         # Commands registered by other plugins — must not get admin aliases
-
-
+    aseco._admin_command_meta = [(name, help_text) for name, help_text, _flag in admin_cmds]
 
     _read_adminops_xml(aseco)
 
@@ -319,12 +318,20 @@ async def _hide_admin_panel(aseco: 'Aseco', login: str):
 
 def _visible_admin_commands_for_player(aseco: 'Aseco', player) -> list[tuple[str, str]]:
     result = []
+    seen: set[str] = set()
+
+    for name, help_text in getattr(aseco, '_admin_command_meta', []):
+        if _auth_check(aseco, player, name)[0]:
+            result.append((name, help_text))
+            seen.add(name.lower())
 
     for name, cc in sorted(aseco._chat_commands.items()):
         if not getattr(cc, 'isadmin', False):
             continue
 
         cmd = name.lower().split('/')[0]
+        if cmd in ('admin', 'ad') or cmd in seen:
+            continue
 
         if _auth_check(aseco, player, cmd)[0]:
             result.append((name, cc.help))
@@ -1292,13 +1299,13 @@ async def chat_admin(aseco: 'Aseco', command: dict):
         return
 
     if sub == 'help':
-        cmds_list = _all_visible_commands_for_player(aseco, admin)
+        cmds_list = _visible_admin_commands_for_player(aseco, admin)
         shown = cmds_list[:20]
 
         if shown:
             msg = (
-                f'{{#server}}> Available commands: ' +
-                ' '.join(f'{{#highlite}}/{n}{{#message}}' for n, _ in shown)
+                f'{{#server}}> Available commands for {{#highlite}}/admin <cmd>{{#message}}: ' +
+                ' '.join(f'{{#highlite}}{n}{{#message}}' for n, _ in shown)
             )
             if len(cmds_list) > len(shown):
                 msg += ' {#message}... use {#highlite}/admin helpall'
@@ -1308,13 +1315,13 @@ async def chat_admin(aseco: 'Aseco', command: dict):
         await _reply(aseco, login, msg)
 
     elif sub == 'helpall':
-        visible = _all_visible_commands_for_player(aseco, admin)
-        rows = [[f'/{name}', help_text] for name, help_text in visible]
+        visible = _visible_admin_commands_for_player(aseco, admin)
+        rows = [[name, help_text] for name, help_text in visible]
 
         pages = [rows[i:i+14] for i in range(0, max(len(rows), 1), 14)]
         admin.msgs = [[
             1,
-            'Available commands:',
+            'Available /admin subcommands:',
             [1.2, 0.3, 0.9],
             ['Icons128x128_1', 'ProfileAdvanced', 0.02]
         ]]
@@ -2075,6 +2082,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
         for i, pl in enumerate(online, 1):
             login_l = pl.login.lower()
+            role_level = _role_level(aseco, pl.login)
 
             ignore_cell = (
                 _action_cell('$f93Unignore', ML_UNIGNORE_BASE + i)
@@ -2100,9 +2108,14 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 else _action_cell('$09fForce', ML_FORCESPEC_BASE + i)
             )
 
+            if role_level > 0:
+                player_cell = f'{{#black}}{strip_colors(pl.nickname)}$z / {{#logina}}{pl.login}'
+            else:
+                player_cell = f'{{#black}}{strip_colors(pl.nickname)}$z / {{#login}}{pl.login}'
+
             rows.append([
                 f'{i:02d}.',
-                f'{{#black}}{strip_colors(pl.nickname)}$z / {{#login}}{pl.login}',
+                player_cell,
                 _action_cell('$ff3Warn', ML_WARN_BASE + i),
                 ignore_cell,
                 _action_cell('$c3fKick', ML_KICK_BASE + i),
