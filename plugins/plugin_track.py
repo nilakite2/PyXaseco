@@ -14,6 +14,7 @@ import time as _time
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import format_text, format_time, format_time_h, strip_colors
 from pyxaseco.models import Gameinfo
+from pyxaseco.plugins.plugin_tmxinfo import build_public_tmx_track_url as _build_public_tmx_track_url
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -37,14 +38,14 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onChat_time',     chat_time)
 
 
-def _tmx_linked_name(challenge) -> str:
+def _tmx_linked_name(aseco: 'Aseco', challenge) -> str:
     name = strip_colors(challenge.name)
-    tmx = getattr(challenge, 'tmx', None)
-    if tmx and getattr(tmx, 'name', '') and getattr(tmx, 'prefix', '') and getattr(tmx, 'id', None):
-        return (
-            f'$l[https://{tmx.prefix}.tm-exchange.com/main.aspx?action=trackshow&id={tmx.id}]'
-            f'{name}$l'
-        )
+    try:
+        pageurl = _build_public_tmx_track_url(aseco, challenge=challenge)
+    except Exception:
+        pageurl = ''
+    if pageurl:
+        return f'$l[{pageurl}]{name}$l'
     return name
 
 
@@ -81,7 +82,7 @@ async def time_gameinfo(aseco: 'Aseco', challenge):
     if not aseco.settings.show_curtrack:
         return
 
-    name = _tmx_linked_name(challenge)
+    name = _tmx_linked_name(aseco, challenge)
     is_stnt = aseco.server.gameinfo and aseco.server.gameinfo.mode == Gameinfo.STNT
     author_time = (getattr(getattr(challenge, 'gbx', None), 'author_score', 0)
                    if is_stnt else format_time(challenge.authortime))
@@ -98,7 +99,7 @@ async def time_endrace(aseco: 'Aseco', _params):
     if not aseco.settings.show_playtime or is_ta or is_stnt:
         return
 
-    name = _tmx_linked_name(aseco.server.challenge)
+    name = _tmx_linked_name(aseco, aseco.server.challenge)
     start_t = getattr(aseco.server.challenge, 'starttime', aseco.server.starttime)
     playtime  = format_time_h((int(_time.time()) - start_t) * 1000, False)
     totaltime = format_time_h((int(_time.time()) - aseco.server.starttime) * 1000, False)
@@ -138,7 +139,7 @@ async def chat_track(aseco: 'Aseco', command: dict):
 
 async def chat_playtime(aseco: 'Aseco', command: dict):
     global _replays_total
-    name = _tmx_linked_name(aseco.server.challenge)
+    name = _tmx_linked_name(aseco, aseco.server.challenge)
     start_t   = getattr(aseco.server.challenge, 'starttime', aseco.server.starttime)
     playtime  = int(_time.time()) - start_t
     totaltime = int(_time.time()) - aseco.server.starttime

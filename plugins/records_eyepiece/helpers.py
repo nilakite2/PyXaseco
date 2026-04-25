@@ -1,34 +1,23 @@
 from __future__ import annotations
 
 import logging
-import aiohttp
 from typing import Any
 
 from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
+from pyxaseco.plugins.plugin_tmxinfo import (
+    get_tmx_image_for_uid as _plugin_get_tmx_image_for_uid,
+    get_tmx_section as _plugin_get_tmx_section,
+    get_tmx_trackinfo_for_uid as _plugin_get_tmx_trackinfo_for_uid,
+    resolve_tmx_track_id as _plugin_resolve_tmx_track_id,
+    tmx_prefix_for_section as _plugin_tmx_prefix_for_section,
+    tmx_public_host_for_prefix as _plugin_tmx_public_host_for_prefix,
+    tmx_site_for_prefix as _plugin_tmx_site_for_prefix,
+)
 
 from .config import _state
 
 logger = logging.getLogger(__name__)
-
-
-TMX_PREFIXES = {
-    'TMNF': 'tmnforever',
-    'TMU': 'united',
-    'TMN': 'nations',
-    'TMO': 'original',
-    'TMS': 'sunrise',
-}
-
-TMX_HOST_ALIASES = {
-    'TMNF': 'tmnf.exchange',
-    'TMU': 'tmuf.exchange',
-    'TMN': 'nations.tm-exchange.com',
-    'TMO': 'original.tm-exchange.com',
-    'TMS': 'sunrise.tm-exchange.com',
-}
-
-TMX_SITE_ORDER = ['TMNF', 'TMU', 'TMN', 'TMO', 'TMS']
 
 
 def _clip(text: str, _n: int) -> str:
@@ -83,78 +72,29 @@ def _helper_cache(aseco) -> dict[str, Any]:
 
 
 async def _get_tmx_section(aseco) -> str:
-    try:
-        game = aseco.server.get_game()
-    except Exception:
-        game = aseco.server.getGame() if hasattr(aseco.server, 'getGame') else ''
-    if game == 'TMF':
-        return 'TMNF' if getattr(aseco.server, 'packmask', '') == 'Stadium' else 'TMU'
-    return game
+    return await _plugin_get_tmx_section(aseco)
 
 
 def _tmx_prefix_for_section(section: str) -> str:
-    return TMX_PREFIXES.get((section or '').upper(), 'tmnforever')
+    return _plugin_tmx_prefix_for_section(section)
 
 
 def _tmx_site_for_prefix(prefix: str) -> str:
-    for site, pref in TMX_PREFIXES.items():
-        if pref == prefix:
-            return site
-    return 'TMNF'
+    return _plugin_tmx_site_for_prefix(prefix)
 
 
 def _tmx_public_host_for_prefix(prefix: str) -> str:
-    site = _tmx_site_for_prefix(prefix)
-    return TMX_HOST_ALIASES.get(site, 'tmnf.exchange')
-
-
-async def _tmx_get_json(url: str):
-    try:
-        timeout = aiohttp.ClientTimeout(total=8)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    return None
-                return await resp.json(content_type=None)
-    except Exception as e:
-        logger.debug('[Eyepiece/Helpers] TMX request failed for %s: %r', url, e)
-        return None
+    return _plugin_tmx_public_host_for_prefix(prefix)
 
 
 async def _resolve_tmx_track_id(aseco, uid: str, preferred_section: str | None = None) -> tuple[int | None, str | None]:
     uid = str(uid or '').strip()
     if not uid:
         return None, None
-
     cache = _helper_cache(aseco)['tmx_trackid']
-    if uid in cache:
-        return cache[uid]
-
-    order: list[str] = []
-    pref = (preferred_section or '').upper()
-    if pref in TMX_PREFIXES:
-        order.append(pref)
-    for site in TMX_SITE_ORDER:
-        if site not in order:
-            order.append(site)
-
-    for site in order:
-        prefix = _tmx_prefix_for_section(site)
-        url = f'https://{prefix}.tm-exchange.com/api/tracks?fields=TrackId&uid={uid}'
-        data = await _tmx_get_json(url)
-        if not isinstance(data, dict):
-            continue
-        results = data.get('Results', [])
-        if results and isinstance(results[0], dict) and results[0].get('TrackId') is not None:
-            try:
-                pair = (int(results[0]['TrackId']), prefix)
-                cache[uid] = pair
-                return pair
-            except Exception:
-                pass
-
-    cache[uid] = (None, None)
-    return None, None
+    if uid not in cache:
+        cache[uid] = await _plugin_resolve_tmx_track_id(uid, preferred_section)
+    return cache[uid]
 
 
 def _no_screenshot_image() -> str:
@@ -162,143 +102,19 @@ def _no_screenshot_image() -> str:
 
 
 async def _get_tmx_image_for_uid(aseco, uid: str) -> str:
-    uid = str(uid or '').strip()
-    if not uid:
-        return _no_screenshot_image()
-
-    section = await _get_tmx_section(aseco)
-    track_id, prefix = await _resolve_tmx_track_id(aseco, uid, section)
-    if not track_id or not prefix:
-        return _no_screenshot_image()
-
-    public_host = _tmx_public_host_for_prefix(prefix)
-    return f'https://{public_host}/get.aspx?action=trackscreen&id={track_id}&.jpg'
+    image = await _plugin_get_tmx_image_for_uid(aseco, uid)
+    return image or _no_screenshot_image()
 
 
 async def _get_tmx_trackinfo_for_uid(aseco, uid: str, mode: int) -> dict:
     uid = str(uid or '').strip()
     if not uid:
         return {}
-
     info_cache = _helper_cache(aseco)['tmx_trackinfo']
     cache_key = (uid, mode)
-    if cache_key in info_cache:
-        return dict(info_cache[cache_key])
-
-    section = await _get_tmx_section(aseco)
-    track_id, prefix = await _resolve_tmx_track_id(aseco, uid, section)
-    if not track_id or not prefix:
-        info_cache[cache_key] = {}
-        return {}
-
-    url = (
-        f'https://{prefix}.tm-exchange.com/api/tracks'
-        f'?fields=TrackId,TrackName,UId,AuthorTime,GoldTarget,SilverTarget,BronzeTarget,'
-        f'PrimaryType,Style,Routes,Difficulty,Environment,Mood,Awards'
-        f'&id={track_id}'
-    )
-    data = await _tmx_get_json(url)
-    if not isinstance(data, dict):
-        info_cache[cache_key] = {}
-        return {}
-
-    results = data.get('Results', [])
-    if not results or not isinstance(results[0], dict):
-        info_cache[cache_key] = {}
-        return {}
-
-    t = results[0]
-
-    type_map = {
-        0: 'Race',
-        1: 'Puzzle',
-        2: 'Platform',
-        3: 'Stunts',
-        4: 'Shortcut',
-        5: 'Laps',
-    }
-    style_map = {
-        0: 'Normal',
-        1: 'Stunt',
-        2: 'Maze',
-        3: 'Offroad',
-        4: 'Laps',
-        5: 'Fullspeed',
-        6: 'LOL',
-        7: 'Tech',
-        8: 'SpeedTech',
-        9: 'RPG',
-        10: 'PressForward',
-        11: 'Trial',
-        12: 'Grass',
-    }
-    mood_map = {
-        0: 'Sunrise',
-        1: 'Day',
-        2: 'Sunset',
-        3: 'Night',
-    }
-    route_map = {
-        0: 'Single',
-        1: 'Multiple',
-        2: 'Symmetrical',
-    }
-    diff_map = {
-        0: 'Beginner',
-        1: 'Intermediate',
-        2: 'Expert',
-        3: 'Lunatic',
-    }
-    env_map = {
-        1: 'Snow',
-        2: 'Desert',
-        3: 'Rally',
-        4: 'Island',
-        5: 'Coast',
-        6: 'Bay',
-        7: 'Stadium',
-    }
-
-    public_host = _tmx_public_host_for_prefix(prefix)
-    site = _tmx_site_for_prefix(prefix)
-
-    replayurl = ''
-    try:
-        replays_url = f'https://{prefix}.tm-exchange.com/api/replays?fields=ReplayId&trackId={track_id}&best=1'
-        rdata = await _tmx_get_json(replays_url)
-        if isinstance(rdata, dict):
-            rres = rdata.get('Results', [])
-            if rres and isinstance(rres[0], dict):
-                rid = _safe_int(rres[0].get('ReplayId'), 0)
-                if rid > 0:
-                    replayurl = f'{public_host}/recordgbx/{rid}'
-    except Exception:
-        pass
-
-    out = {
-        'authortime': _fmt_track_value(mode, t.get('AuthorTime', 0)),
-        'goldtime': _fmt_track_value(mode, t.get('GoldTarget', 0)),
-        'silvertime': _fmt_track_value(mode, t.get('SilverTarget', 0)),
-        'bronzetime': _fmt_track_value(mode, t.get('BronzeTarget', 0)),
-        'authortime_ms': _safe_int(t.get('AuthorTime'), 0),
-        'goldtime_ms': _safe_int(t.get('GoldTarget'), 0),
-        'silvertime_ms': _safe_int(t.get('SilverTarget'), 0),
-        'bronzetime_ms': _safe_int(t.get('BronzeTarget'), 0),
-        'env': env_map.get(t.get('Environment'), ''),
-        'mood': mood_map.get(t.get('Mood'), ''),
-        'type': type_map.get(t.get('PrimaryType'), ''),
-        'style': style_map.get(t.get('Style'), ''),
-        'diffic': diff_map.get(t.get('Difficulty'), ''),
-        'routes': route_map.get(t.get('Routes'), ''),
-        'awards': str(t.get('Awards', '') or ''),
-        'section': site,
-        'imageurl': f'https://{public_host}/get.aspx?action=trackscreen&id={track_id}&.jpg',
-        'pageurl': f'{public_host}/trackshow/{track_id}',
-        'dloadurl': f'{public_host}/trackgbx/{track_id}',
-        'replayurl': replayurl,
-    }
-    info_cache[cache_key] = dict(out)
-    return out
+    if cache_key not in info_cache:
+        info_cache[cache_key] = await _plugin_get_tmx_trackinfo_for_uid(aseco, uid, mode)
+    return dict(info_cache[cache_key])
 
 
 async def _get_challenge_info_for_file(aseco, filename: str) -> dict:

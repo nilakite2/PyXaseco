@@ -16,6 +16,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pyxaseco.helpers import strip_colors
+from pyxaseco.plugins.plugin_tmxinfo import (
+    build_public_tmx_track_url as _build_public_tmx_track_url,
+    normalise_tmx_web_url as _normalise_tmx_web_url,
+    tmx_public_host_for_section as _tmx_public_host_for_section,
+)
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -80,22 +85,6 @@ REMINDER_BUTTONS = [
 ]
 
 GM_TAG = {0: "rounds", 1: "time_attack", 2: "team", 3: "laps", 4: "stunts", 5: "cup", 7: "score"}
-
-TMX_HOST_ALIASES = {
-    "TMNF": "tmnf.exchange",
-    "TMU": "tmuf.exchange",
-    "TMN": "nations.tm-exchange.com",
-    "TMO": "original.tm-exchange.com",
-    "TMS": "sunrise.tm-exchange.com",
-}
-
-TMX_PREFIX_HOSTS = {
-    "tmnforever": "tmnf.exchange",
-    "united": "tmuf.exchange",
-    "nations": "nations.tm-exchange.com",
-    "original": "original.tm-exchange.com",
-    "sunrise": "sunrise.tm-exchange.com",
-}
 
 NUMBER_FORMATS = {
     "english": {"decimal_sep": ".", "thousands_sep": ","},
@@ -473,47 +462,21 @@ def _track_page_url(aseco: Aseco) -> str:
 
 
 def _normalise_web_url(url: str) -> str:
-    val = str(url or "").strip()
-    if not val:
-        return ""
-    if val.startswith("https://"):
-        return "http://" + val[len("https://"):]
-    if val.startswith("http://"):
-        return val
-    return f"http://{val.lstrip('/')}"
-
-
-def _tmx_public_host(aseco: Aseco) -> str:
-    game = aseco.server.get_game()
-    if game == "TMF":
-        section = "TMNF" if getattr(aseco.server, "packmask", "") == "Stadium" else "TMU"
-    else:
-        section = game
-    return TMX_HOST_ALIASES.get((section or "").upper(), "tmnf.exchange")
+    return _normalise_tmx_web_url(url)
 
 
 def _tmx_page_url(aseco: Aseco) -> str:
-    # First try challenge object attributes set by plugin_tmxinfo
     ch = getattr(aseco.server, "challenge", None)
-    for attr in ("tmx", "mx"):
-        obj = getattr(ch, attr, None)
-        if obj is not None:
-            pageurl = getattr(obj, "pageurl", "") or ""
-            if pageurl:
-                return _normalise_web_url(pageurl).replace("&", "&amp;")
-            obj_id = str(getattr(obj, "id", "") or "").strip()
-            if obj_id.isdigit():
-                return f"http://{_tmx_public_host(aseco)}/trackshow/{obj_id}"
-    tmx_id = str(getattr(ch, "tmx_id", "") or "").strip()
+    tmx_id = str(getattr(ch, "tmx_id", "") or _karma.get("data", {}).get("tmx", "") or "").strip()
     if tmx_id.isdigit():
-        prefix = str(getattr(ch, "tmx_prefix", "") or "").strip().lower()
-        host = TMX_PREFIX_HOSTS.get(prefix, _tmx_public_host(aseco))
-        return f"http://{host}/trackshow/{tmx_id}"
-    # Fall back to TMX track ID stored in karma data
-    tmx_id = str(_karma.get("data", {}).get("tmx", "") or "").strip()
-    if tmx_id and tmx_id.isdigit():
-        return f"http://{_tmx_public_host(aseco)}/trackshow/{tmx_id}"
-    return f"http://{_tmx_public_host(aseco)}"
+        return _build_public_tmx_track_url(
+            aseco,
+            challenge=ch,
+            track_id=tmx_id,
+            prefix=str(getattr(ch, "tmx_prefix", "") or "").strip(),
+            html_amp=True,
+        )
+    return _build_public_tmx_track_url(aseco, challenge=ch, html_amp=True)
 
 
 def _ensure_player_state(player: Any) -> None:
@@ -1605,7 +1568,7 @@ def _create_karma_message(login: str, force_display: bool = False, include_vote_
             vote,
         )
         if vote != 0:
-            cmd = {3: '+++', 2: '++', 1: '+', -1: '-', -2: '--', -3: '---'}[vote]
+            cmd = {3: '/+++', 2: '/++', 1: '/+', -1: '/-', -2: '/--', -3: '/---'}[vote]
             message += _cfg.msg_karma_your_vote.replace('{1}', _vote_label(vote)).replace('{2}', cmd)
         else:
             message += _cfg.msg_karma_not_voted

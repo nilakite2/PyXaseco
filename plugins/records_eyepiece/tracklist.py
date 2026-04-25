@@ -37,6 +37,18 @@ TL_NEXT_BASE = 9181000    # next page: TL_NEXT_BASE + page + 1
 TL_JB_BASE = 9182000      # jukebox: TL_JB_BASE + global_idx (1-based)
 TL_DROP_BASE = 2000       # drop jb: -(TL_DROP_BASE + jb_pos)
 
+_TRACK_ENV_IMAGES = {
+    'stadium': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-stadium-enabled.png',
+    'bay': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-bay-enabled.png',
+    'coast': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-coast-enabled.png',
+    'desert': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-desert-enabled.png',
+    'speed': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-desert-enabled.png',
+    'island': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-island-enabled.png',
+    'rally': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-rally-enabled.png',
+    'alpine': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-enabled.png',
+    'snow': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-enabled.png',
+}
+
 
 # ---------------------------------------------------------------------------
 # Data fetch helpers
@@ -341,9 +353,10 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
 
         p.append(f'<frame posn="{x_off:.2f} -{y_off:.2f} 1">')
 
-        env_upper = env.upper()
-        if env_upper == 'STADIUM':
-            p.append('<quad posn="0.7 -0.35 0.06" sizen="3 1.96" style="Icons128x128_1" substyle="Challenge"/>')
+        env_key = _track_environment(track)
+        env_image = _TRACK_ENV_IMAGES.get(env_key)
+        if env_image:
+            p.append(f'<quad posn="0.7 -0.28 0.06" sizen="3 2.2" image="{env_image}"/>')
         else:
             p.append('<quad posn="0.7 -0.35 0.06" sizen="3 1.96" style="Icons128x128_1" substyle="Challenge"/>')
 

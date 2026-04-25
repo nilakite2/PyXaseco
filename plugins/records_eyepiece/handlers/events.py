@@ -441,8 +441,11 @@ async def _on_tracklist_changed(aseco: 'Aseco', _data=None):
     _state.player_dedi_digest.clear()
     _state.player_live_digest.clear()
     await _redraw_all(aseco)
-    from ..widgets.bar_widgets import _draw_trackcount_all
-    await _draw_trackcount_all(aseco)
+    from ..widgets.bar_widgets import _draw_trackcount_all, _hide_trackcount
+    if _state.challenge_show_next:
+        await _hide_trackcount(aseco)
+    else:
+        await _draw_trackcount_all(aseco)
 
 
 async def _on_player_wins(aseco: 'Aseco', _player=None):

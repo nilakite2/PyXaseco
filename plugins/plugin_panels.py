@@ -80,6 +80,7 @@ _records_cache = {
 }
 
 _last_records_snapshot = ("", "", "")
+_EMPTY_RECORD_VALUE = "---.--"
 
 def register(aseco: "Aseco"):
     aseco.register_event("onStartup", panels_default)
@@ -648,19 +649,19 @@ def _get_player_local_pb(aseco: "Aseco", login: str) -> str:
                 return format_time(rec.score)
     except Exception:
         pass
-    return "---.--"
+    return _EMPTY_RECORD_VALUE
 
 def set_records_panel(which: str, value: str):
     if which not in _records_cache:
         return
-    if which == "tmx" and not value:
-        value = "---.--"
+    if not value:
+        value = _EMPTY_RECORD_VALUE
     logger.debug("[Panels] set_records_panel %s = %r", which, value)
     _records_cache[which] = value
 
 def _update_records_cache(aseco: "Aseco"):
-    _records_cache["local"] = ""
-    _records_cache["dedi"] = ""
+    _records_cache["local"] = _EMPTY_RECORD_VALUE
+    _records_cache["dedi"] = _EMPTY_RECORD_VALUE
 
     try:
         if aseco.server.records.count() > 0:
@@ -679,7 +680,7 @@ def _update_records_cache(aseco: "Aseco"):
         pass
 
     if not _records_cache["tmx"]:
-        _records_cache["tmx"] = ""
+        _records_cache["tmx"] = _EMPTY_RECORD_VALUE
 
 
 def _get_donation_values() -> list[int]:

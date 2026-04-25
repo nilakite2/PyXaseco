@@ -166,6 +166,8 @@ async def _draw_trackcount_all(aseco: 'Aseco') -> None:
     cfg = _state.trackcount
     if not cfg.enabled:
         return
+    if _state.challenge_show_next:
+        return
 
     try:
         # server.tracklist is per-player state, not server-wide.
@@ -213,6 +215,8 @@ async def _hide_trackcount(aseco: 'Aseco') -> None:
 async def _draw_gamemode_all(aseco: 'Aseco') -> None:
     cfg = _state.gamemode
     if not cfg.enabled:
+        return
+    if _state.challenge_show_next:
         return
 
     mode = _effective_mode(aseco)
@@ -277,6 +281,8 @@ async def _draw_visitors_all(aseco: 'Aseco') -> None:
     cfg = _state.visitors
     if not cfg.enabled:
         return
+    if _state.challenge_show_next:
+        return
 
     count = _state.visitor_count
 
@@ -336,6 +342,8 @@ async def _draw_playerspectator_all(aseco: 'Aseco') -> None:
     cfg = _state.player_spectator
     if not cfg.enabled:
         return
+    if _state.challenge_show_next:
+        return
 
     players = aseco.server.players.all()
     n_spec = sum(1 for p in players if _is_spectator(p))
@@ -390,6 +398,8 @@ async def _hide_playerspectator(aseco: 'Aseco') -> None:
 async def _draw_ladderlimit_all(aseco: 'Aseco') -> None:
     cfg = _state.ladderlimit
     if not cfg.enabled:
+        return
+    if _state.challenge_show_next:
         return
 
     lmin = getattr(aseco.server, 'laddermin', 0) or 0
@@ -501,6 +511,8 @@ async def _draw_tmexchange_all(aseco: 'Aseco') -> None:
     cfg = _state.tmexchange
     if not cfg.enabled:
         return
+    if _state.challenge_show_next:
+        return
 
     ch = getattr(aseco.server, 'challenge', None)
     tmx_id = getattr(ch, 'tmx_id', None) if ch else None
@@ -575,6 +587,8 @@ async def _hide_tmexchange(aseco: 'Aseco') -> None:
 async def _draw_toplist_all(aseco: 'Aseco') -> None:
     cfg = _state.toplist
     if not cfg.enabled:
+        return
+    if _state.challenge_show_next:
         return
 
     xml = (
@@ -895,6 +909,8 @@ async def _hide_eyepiece_score(aseco: 'Aseco') -> None:
 # ---------------------------------------------------------------------------
 
 async def _draw_rampage_buttons_all(aseco: 'Aseco') -> None:
+    if _state.challenge_show_next:
+        return
     xml = (
         f'<manialink id="{ML_RAMPAGE_DISCORD}">'
         f'<frame posn="39.5 48 0" action="{ACT_RAMPAGE_DISCORD}">'
@@ -907,8 +923,8 @@ async def _draw_rampage_buttons_all(aseco: 'Aseco') -> None:
         f' action="{ACT_RAMPAGE_DISCORD}"'
         f' style="Icons128x128_1" substyle="Buddies"'
         f' url="discord.gg/CwFNmzKX8G"/>'
-        f'<label posn="2.3 -3.4 0.1" sizen="3.65 2" halign="center" text="Join"/>'
-        f'<label posn="2.3 -4.9 0.1" sizen="6.35 2" halign="center" textcolor="fc0f" scale="0.6" text="Discord"/>'
+        f'<label posn="2.3 -3.4 0.1" sizen="3.65 2" halign="center" text="$zJoin"/>'
+        f'<label posn="2.3 -4.9 0.1" sizen="6.35 2" halign="center" textcolor="fc0f" scale="0.6" text="$zDiscord"/>'
         f'</frame>'
         f'</manialink>'
         f'<manialink id="{ML_RAMPAGE_FORCE}">'
@@ -919,8 +935,8 @@ async def _draw_rampage_buttons_all(aseco: 'Aseco') -> None:
         f' style="BgsPlayerCard" substyle="ProgressBar"/>'
         f'<quad posn="0.7 -0.2 0.002" sizen="3.2 3.2"'
         f' style="Icons128x128_1" substyle="Vehicles"/>'
-        f'<label posn="2.3 -3.4 0.1" sizen="3.65 2" halign="center" text="Force"/>'
-        f'<label posn="2.3 -4.9 0.1" sizen="6.35 2" halign="center" textcolor="fc0f" scale="0.6" text="Play"/>'
+        f'<label posn="2.3 -3.4 0.1" sizen="3.65 2" halign="center" text="$zForce"/>'
+        f'<label posn="2.3 -4.9 0.1" sizen="6.35 2" halign="center" textcolor="fc0f" scale="0.6" text="$zPlay"/>'
         f'</frame>'
         f'</manialink>'
     )

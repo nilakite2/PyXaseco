@@ -21,10 +21,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-try:
-    from pyxaseco.plugins.records_eyepiece.helpers import _get_tmx_image_for_uid
-except Exception:
-    _get_tmx_image_for_uid = None
+
+def _literal_ml_text(value):
+    """Prefix plain labels so TMF renders them literally instead of localizing them."""
+    if not isinstance(value, str):
+        return value
+    if value.startswith('$') or value.startswith('{#'):
+        return value
+    return '$z' + value
+
+
+def _literal_ml_link(url: str, label: str) -> str:
+    """Build a TMF-safe literal clickable label."""
+    return f'$z$l[{url}]{label}$l'
 
 
 async def _display_manialink_track(
@@ -163,6 +172,11 @@ TMX_PREFIXES = {
 TMX_SITE_ORDER = ["TMNF", "TMU", "TMN", "TMO", "TMS"]
 
 _tmxdata = None  # cached TMX data for current track
+_tmx_helper_cache: dict[str, dict] = {
+    "trackid": {},
+    "trackinfo": {},
+    "image": {},
+}
 
 
 def register(aseco: "Aseco"):
@@ -194,6 +208,79 @@ def _tmx_site_for_prefix(prefix: str) -> str:
 def _tmx_public_host_for_prefix(prefix: str) -> str:
     site = _tmx_site_for_prefix(prefix)
     return TMX_HOST_ALIASES.get(site, f"{prefix}.tm-exchange.com")
+
+
+def normalise_tmx_web_url(url: str, *, html_amp: bool = False) -> str:
+    val = str(url or "").strip()
+    if not val:
+        return ""
+    if val.startswith("https://"):
+        val = "http://" + val[len("https://"):]
+    elif not val.startswith("http://"):
+        val = f"http://{val.lstrip('/')}"
+    return val.replace("&", "&amp;") if html_amp else val
+
+
+async def get_tmx_section(aseco: "Aseco") -> str:
+    return await _get_tmx_section(aseco)
+
+
+async def resolve_tmx_track_id(uid: str, preferred_section: str | None = None) -> tuple[int | None, str | None]:
+    return await _resolve_tmx_track_id(uid, preferred_section)
+
+
+def tmx_prefix_for_section(section: str) -> str:
+    return _tmx_prefix_for_section(section)
+
+
+def tmx_site_for_prefix(prefix: str) -> str:
+    return _tmx_site_for_prefix(prefix)
+
+
+def tmx_public_host_for_prefix(prefix: str) -> str:
+    return _tmx_public_host_for_prefix(prefix)
+
+
+def tmx_public_host_for_section(section: str) -> str:
+    return TMX_HOST_ALIASES.get((section or "").upper(), "tmnf.exchange")
+
+
+def build_public_tmx_track_url(
+    aseco: "Aseco",
+    challenge=None,
+    *,
+    track_id: int | str | None = None,
+    prefix: str = "",
+    pageurl: str = "",
+    html_amp: bool = False,
+) -> str:
+    if pageurl:
+        return normalise_tmx_web_url(pageurl, html_amp=html_amp)
+
+    ch = challenge if challenge is not None else getattr(aseco.server, "challenge", None)
+    for attr in ("tmx", "mx"):
+        obj = getattr(ch, attr, None)
+        if obj is None:
+            continue
+        obj_pageurl = getattr(obj, "pageurl", "") or ""
+        if obj_pageurl:
+            return normalise_tmx_web_url(obj_pageurl, html_amp=html_amp)
+        obj_id = str(getattr(obj, "id", "") or "").strip()
+        if obj_id.isdigit():
+            host = _tmx_public_host_for_prefix(prefix or str(getattr(obj, "prefix", "") or "").strip())
+            return normalise_tmx_web_url(f"{host}/trackshow/{obj_id}", html_amp=html_amp)
+
+    chosen_id = str(track_id or getattr(ch, "tmx_id", "") or "").strip()
+    chosen_prefix = str(prefix or getattr(ch, "tmx_prefix", "") or "").strip()
+    if chosen_id.isdigit():
+        host = _tmx_public_host_for_prefix(chosen_prefix) if chosen_prefix else tmx_public_host_for_section(
+            getattr(aseco.server, "get_game", lambda: "TMF")() if hasattr(aseco.server, "get_game") else getattr(aseco.server, "game", "TMF")
+        )
+        return normalise_tmx_web_url(f"{host}/trackshow/{chosen_id}", html_amp=html_amp)
+
+    return normalise_tmx_web_url(tmx_public_host_for_section(
+        getattr(aseco.server, "get_game", lambda: "TMF")() if hasattr(aseco.server, "get_game") else getattr(aseco.server, "game", "TMF")
+    ), html_amp=html_amp)
 
 
 async def _tmx_get_json(url: str):
@@ -386,6 +473,9 @@ def _parse_tmx_track_result(t: dict, prefix: str, replays: list[dict]) -> dict:
         "replayurl": replays[0].get("url", "") if replays else "",
         "author_time": int(t.get("AuthorTime", 0) or 0),
         "author_score": t.get("AuthorScore"),
+        "gold_target": int(t.get("GoldTarget", 0) or 0),
+        "silver_target": int(t.get("SilverTarget", 0) or 0),
+        "bronze_target": int(t.get("BronzeTarget", 0) or 0),
     }
 
 
@@ -449,6 +539,64 @@ async def _fetch_tmx_info(uid_or_id: str, section: str, with_records: bool) -> d
 
     replays = await _fetch_tmx_replays(track_id, prefix) if with_records else []
     return _parse_tmx_track_result(results[0], prefix, replays)
+
+
+async def get_tmx_image_for_uid(aseco: "Aseco", uid: str) -> str:
+    key = str(uid or "").strip()
+    if not key:
+        return ""
+    cached = _tmx_helper_cache["image"].get(key)
+    if cached is not None:
+        return cached
+    section = await _get_tmx_section(aseco)
+    track_id, prefix = await _resolve_tmx_track_id(key, section)
+    if not track_id or not prefix:
+        _tmx_helper_cache["image"][key] = ""
+        return ""
+    host = _tmx_public_host_for_prefix(prefix)
+    image = f"https://{host}/get.aspx?action=trackscreen&id={track_id}&.jpg"
+    _tmx_helper_cache["image"][key] = image
+    return image
+
+
+async def get_tmx_trackinfo_for_uid(aseco: "Aseco", uid: str, mode: int) -> dict:
+    key = (str(uid or "").strip(), int(mode))
+    if not key[0]:
+        return {}
+    cached = _tmx_helper_cache["trackinfo"].get(key)
+    if cached is not None:
+        return dict(cached)
+
+    section = await _get_tmx_section(aseco)
+    data = await _fetch_tmx_info(key[0], section, True)
+    if not data:
+        _tmx_helper_cache["trackinfo"][key] = {}
+        return {}
+
+    out = {
+        "authortime": str(data.get("author_score", "")) if mode == Gameinfo.STNT else format_time(int(data.get("author_time", 0) or 0)),
+        "goldtime": format_time(int(data.get("gold_target", 0) or 0)) if data.get("gold_target") else "",
+        "silvertime": format_time(int(data.get("silver_target", 0) or 0)) if data.get("silver_target") else "",
+        "bronzetime": format_time(int(data.get("bronze_target", 0) or 0)) if data.get("bronze_target") else "",
+        "authortime_ms": int(data.get("author_time", 0) or 0),
+        "goldtime_ms": int(data.get("gold_target", 0) or 0),
+        "silvertime_ms": int(data.get("silver_target", 0) or 0),
+        "bronzetime_ms": int(data.get("bronze_target", 0) or 0),
+        "env": str(data.get("envir", "") or ""),
+        "mood": str(data.get("mood", "") or ""),
+        "type": str(data.get("type", "") or ""),
+        "style": str(data.get("style", "") or ""),
+        "diffic": str(data.get("diffic", "") or ""),
+        "routes": str(data.get("routes", "") or ""),
+        "awards": str(data.get("awards", "") or ""),
+        "section": str(data.get("section", "") or ""),
+        "imageurl": str(data.get("imageurl", "") or ""),
+        "pageurl": str(data.get("pageurl", "") or ""),
+        "dloadurl": str(data.get("dloadurl", "") or ""),
+        "replayurl": str(data.get("replayurl", "") or ""),
+    }
+    _tmx_helper_cache["trackinfo"][key] = dict(out)
+    return out
 
 
 async def _tmx_worldrec(aseco: "Aseco", challenge):
@@ -542,29 +690,29 @@ async def chat_tmxinfo(aseco: "Aseco", command: dict):
         )
         return
 
-    header = f'TMX Info for: {{#black}}{data["name"]}'
+    header = f'{_literal_ml_text("TMX Info for:")} {{#black}}{data["name"]}'
     stats = [
-        ["TMX ID", f'{{#black}}{data["id"]}', "Type/Style", f'{{#black}}{data["type"]}$g / {{#black}}{data["style"]}'],
-        ["Section", f'{{#black}}{data["section"]}', "Env/Mood", f'{{#black}}{data["envir"]}$g / {{#black}}{data["mood"]}'],
-        ["UID", f'{{#black}}$n{data["uid"]}', "Routes", f'{{#black}}{data["routes"]}'],
-        ["Author", f'{{#black}}{data["author"]}', "Difficulty", f'{{#black}}{data["diffic"]}'],
-        ["Uploaded", f'{{#black}}{data["uploaded"]}', "Awards", f'{{#black}}{data["awards"]}'],
-        ["Updated", f'{{#black}}{data["updated"]}', "LB Rating", f'{{#black}}{data["lbrating"]}'],
-        ["TMX Page", f'{{#black}}$l[{data["pageurl"]}]Open$l' if data.get("pageurl") else "<none>", "Replay", (f'{{#black}}$l[{data["replayurl"]}]Download$l' if data.get("replayurl") else "<none>")],
+        [_literal_ml_text("TMX ID"), f'{{#black}}{data["id"]}', _literal_ml_text("Type/Style"), f'{{#black}}{data["type"]}$g / {{#black}}{data["style"]}'],
+        [_literal_ml_text("Section"), f'{{#black}}{data["section"]}', _literal_ml_text("Env/Mood"), f'{{#black}}{data["envir"]}$g / {{#black}}{data["mood"]}'],
+        [_literal_ml_text("UID"), f'{{#black}}$n{data["uid"]}', _literal_ml_text("Routes"), f'{{#black}}{data["routes"]}'],
+        [_literal_ml_text("Author"), f'{{#black}}{data["author"]}', _literal_ml_text("Difficulty"), f'{{#black}}{data["diffic"]}'],
+        [_literal_ml_text("Uploaded"), f'{{#black}}{data["uploaded"]}', _literal_ml_text("Awards"), f'{{#black}}{data["awards"]}'],
+        [_literal_ml_text("Updated"), f'{{#black}}{data["updated"]}', _literal_ml_text("LB Rating"), f'{{#black}}{data["lbrating"]}'],
+        [_literal_ml_text("TMX Page"), f'{{#black}}{_literal_ml_link(data["pageurl"], "Open")}' if data.get("pageurl") else _literal_ml_text("<none>"), _literal_ml_text("Replay"), (f'{{#black}}{_literal_ml_link(data["replayurl"], "Download")}' if data.get("replayurl") else _literal_ml_text("<none>"))],
     ]
 
     if aseco.server.get_game() == "TMF":
         imageurl = data.get("imageurl", "")
-        if not imageurl and _get_tmx_image_for_uid is not None:
+        if not imageurl:
             try:
-                imageurl = await _get_tmx_image_for_uid(aseco, data.get("uid", ""))
+                imageurl = await get_tmx_image_for_uid(aseco, data.get("uid", ""))
             except Exception:
                 imageurl = ""
         links = [
             imageurl,
             False,
-            f'$l[{data["pageurl"]}]Visit TMX Page' if data.get("pageurl") else "",
-            f'$l[{data["dloadurl"]}]Download Track' if data.get("dloadurl") else "",
+            _literal_ml_link(data["pageurl"], "Visit TMX Page") if data.get("pageurl") else "",
+            _literal_ml_link(data["dloadurl"], "Download Track") if data.get("dloadurl") else "",
         ]
         await _display_manialink_track(
             aseco,
@@ -621,7 +769,7 @@ async def chat_tmxrecs(aseco: "Aseco", command: dict):
 
     is_stunts = getattr(aseco.server.gameinfo, "mode", -1) == Gameinfo.STNT
 
-    header = f'TMX Top-10 Records: {{#black}}{data["name"]}'
+    header = f'{_literal_ml_text("TMX Top-10 Records:")} {{#black}}{data["name"]}'
     rows = [
         [
             f"{i + 1:02d}.",

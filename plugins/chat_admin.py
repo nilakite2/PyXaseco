@@ -73,8 +73,14 @@ def register(aseco: 'Aseco'):
     
     aseco.add_chat_command('admin', 'Provides admin commands (see: /admin help)')
     aseco.add_chat_command('ad', 'Provides admin commands (see: /ad help)')
+    aseco.add_chat_command('listmasters', 'Displays current masteradmin list')
+    aseco.add_chat_command('listadmins', 'Displays current admin list')
+    aseco.add_chat_command('listops', 'Displays current operator list')
     aseco.register_event('onChat_admin', chat_admin)
     aseco.register_event('onChat_ad', chat_admin)
+    aseco.register_event('onChat_listmasters', chat_listmasters)
+    aseco.register_event('onChat_listadmins', chat_listadmins)
+    aseco.register_event('onChat_listops', chat_listops)
 
     admin_cmds = [
         # --- HELP ---
@@ -453,14 +459,23 @@ def _auth_check(aseco: 'Aseco', admin, sub: str):
     sub = (sub or '').strip().lower()
 
     public_admin_commands = {'help', 'helpall', 'listmasters', 'listadmins', 'listops'}
+    masteradmin_only = {'addadmin', 'removeadmin'}
+    admin_or_master_only = {'addop', 'removeop'}
 
     if sub in public_admin_commands:
         level = _role_level(aseco, login)
         return _role_name(level), _role_name(level)
 
-    if sub == 'pyres':
+    if sub == 'pyres' or sub in masteradmin_only:
         if _login_in_role_list(getattr(aseco.settings, 'masteradmin_list', {}), login):
             return 'MasterAdmin', 'MasterAdmin'
+        return None, None
+
+    if sub in admin_or_master_only:
+        if _login_in_role_list(getattr(aseco.settings, 'masteradmin_list', {}), login):
+            return 'MasterAdmin', 'MasterAdmin'
+        if _login_in_role_list(getattr(aseco.settings, 'admin_list', {}), login):
+            return 'Admin', 'Admin'
         return None, None
 
     if _login_in_role_list(getattr(aseco.settings, 'masteradmin_list', {}), login):
@@ -786,6 +801,10 @@ async def _get_player_param(aseco: 'Aseco', admin, arg: str, offline: bool = Fal
         return None
 
     if offline:
+        db_player = await _get_offline_player_from_db(aseco, value)
+        if db_player:
+            return db_player
+
         class _OfflinePlayer:
             def __init__(self, login: str):
                 self.login = login
@@ -798,6 +817,138 @@ async def _get_player_param(aseco: 'Aseco', admin, arg: str, offline: bool = Fal
         f'{{#server}}> {{#error}}Player not found: {{#highlite}}{value}'
     )
     return None
+
+
+async def _get_offline_player_from_db(aseco: 'Aseco', value: str):
+    value = (value or '').strip()
+    if not value:
+        return None
+
+    try:
+        try:
+            from pyxaseco.plugins.plugin_localdatabase import get_pool
+        except ImportError:
+            from pyxaseco_plugins.plugin_localdatabase import get_pool
+
+        pool = await get_pool()
+        if not pool:
+            return None
+
+        value_l = value.lower()
+        like = f'%{value}%'
+
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    'SELECT Login, NickName FROM players WHERE Login=%s LIMIT 1',
+                    (value,)
+                )
+                row = await cur.fetchone()
+                if row:
+                    rows = [row]
+                else:
+                    await cur.execute(
+                        'SELECT Login, NickName FROM players '
+                        'WHERE Login LIKE %s OR NickName LIKE %s '
+                        'ORDER BY UpdatedAt DESC LIMIT 50',
+                        (like, like)
+                    )
+                    rows = await cur.fetchall()
+    except Exception:
+        return None
+
+    if not rows:
+        return None
+
+    candidates = []
+    for row in rows:
+        if isinstance(row, dict):
+            login = str(row.get('Login') or '').strip()
+            nickname = str(row.get('NickName') or '').strip()
+        else:
+            login = str(row[0] or '').strip()
+            nickname = str(row[1] or '').strip()
+        if not login:
+            continue
+        candidates.append((login, nickname))
+
+    if not candidates:
+        return None
+
+    exact_login = [item for item in candidates if item[0].lower() == value_l]
+    if len(exact_login) == 1:
+        login, nickname = exact_login[0]
+    else:
+        stripped_exact = [
+            item for item in candidates
+            if strip_colors(item[1]).strip().lower() == value_l
+        ]
+        if len(stripped_exact) == 1:
+            login, nickname = stripped_exact[0]
+        else:
+            partial = [
+                item for item in candidates
+                if value_l in item[0].lower() or value_l in strip_colors(item[1]).lower()
+            ]
+            if len(partial) != 1:
+                return None
+            login, nickname = partial[0]
+
+    class _OfflinePlayer:
+        def __init__(self, login: str, nickname: str):
+            self.login = login
+            self.nickname = nickname or login
+
+    return _OfflinePlayer(login, nickname)
+
+
+async def _admin_display_name(aseco: 'Aseco', login: str) -> str:
+    login = (login or '').strip()
+    if not login:
+        return ''
+
+    player = aseco.server.players.get_player(login)
+    if player and getattr(player, 'nickname', ''):
+        nickname = strip_colors(player.nickname).strip()
+        if nickname:
+            return nickname
+
+    try:
+        try:
+            from pyxaseco.plugins.plugin_localdatabase import get_pool
+        except ImportError:
+            from pyxaseco_plugins.plugin_localdatabase import get_pool
+
+        pool = await get_pool()
+        if not pool:
+            return login
+
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    'SELECT NickName FROM players WHERE Login=%s LIMIT 1',
+                    (login,)
+                )
+                row = await cur.fetchone()
+    except Exception:
+        return login
+
+    if isinstance(row, dict):
+        nickname = row.get('NickName', '')
+    elif row:
+        nickname = row[0]
+    else:
+        nickname = ''
+
+    nickname = strip_colors(str(nickname or '')).strip()
+    return nickname or login
+
+
+async def _admin_display_names(aseco: 'Aseco', logins: list[str]) -> list[str]:
+    names: list[str] = []
+    for item in logins:
+        names.append(await _admin_display_name(aseco, item))
+    return names
 
 
 async def _find_track_uid_by_filename(aseco: 'Aseco', fname: str) -> str:
@@ -874,9 +1025,14 @@ async def _erase_track_from_localdb(aseco: 'Aseco', uid: str):
                 if challenge_id:
                     await cur.execute('DELETE FROM records WHERE ChallengeId=%s', (challenge_id,))
                     await cur.execute('DELETE FROM rs_times WHERE challengeID=%s', (challenge_id,))
-                    await cur.execute('DELETE FROM rs_karma WHERE ChallengeId=%s OR uid=%s', (challenge_id, uid))
+                    await cur.execute('DELETE FROM rs_karma WHERE ChallengeId=%s', (challenge_id,))
                 else:
+                    challenge_id = 0
+
+                try:
                     await cur.execute('DELETE FROM rs_karma WHERE uid=%s', (uid,))
+                except Exception:
+                    pass
 
                 await cur.execute('DELETE FROM custom_tracktimes WHERE challenge_uid=%s', (uid,))
                 await cur.execute('DELETE FROM challenges WHERE Uid=%s', (uid,))
@@ -931,6 +1087,24 @@ def _playerlist_get_ip(admin, idx1: int) -> str | None:
     if 0 <= idx0 < len(items):
         return str(items[idx0])
     return None
+
+
+async def _dispatch_public_admin_subcommand(aseco: 'Aseco', command: dict, sub: str):
+    forwarded = dict(command)
+    forwarded['params'] = sub
+    await chat_admin(aseco, forwarded)
+
+
+async def chat_listmasters(aseco: 'Aseco', command: dict):
+    await _dispatch_public_admin_subcommand(aseco, command, 'listmasters')
+
+
+async def chat_listadmins(aseco: 'Aseco', command: dict):
+    await _dispatch_public_admin_subcommand(aseco, command, 'listadmins')
+
+
+async def chat_listops(aseco: 'Aseco', command: dict):
+    await _dispatch_public_admin_subcommand(aseco, command, 'listops')
 
 def _is_unlocked(admin) -> bool:
     return bool(getattr(admin, 'unlocked', False))
@@ -2133,7 +2307,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
             )
             return
 
-        target = await _get_player_param(aseco, admin, arg)
+        target = await _get_player_param(aseco, admin, arg, offline=True)
         if target:
             if _role_level(aseco, target.login) >= 3:
                 await _reply(
@@ -2162,10 +2336,11 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 _write_adminops_xml(aseco)
 
             aseco.console('{1} [{2}] added admin [{3}]', logtitle, login, target.login)
+            target_name = await _admin_display_name(aseco, target.login)
             await _reply(
                 aseco,
                 login,
-                f'{{#server}}> Added admin: {{#highlite}}{target.login}'
+                f'{{#server}}> Added admin: {{#highlite}}{target_name}'
             )
 
     elif sub == 'removeadmin':
@@ -2179,14 +2354,6 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
         target = await _get_player_param(aseco, admin, arg, offline=True)
         if target:
-            if _role_level(aseco, target.login) >= 3:
-                await _reply(
-                    aseco,
-                    login,
-                    f'{{#server}}> {{#error}}Cannot remove MasterAdmin access from {{#highlite}}{target.login}{{#error}} using /admin removeadmin.'
-                )
-                return
-
             admins = aseco.settings.admin_list.get('TMLOGIN', [])
             removed = False
 
@@ -2198,10 +2365,11 @@ async def chat_admin(aseco: 'Aseco', command: dict):
             if removed:
                 _write_adminops_xml(aseco)
                 aseco.console('{1} [{2}] removed admin [{3}]', logtitle, login, target.login)
+                target_name = await _admin_display_name(aseco, target.login)
                 await _reply(
                     aseco,
                     login,
-                    f'{{#server}}> Removed admin: {{#highlite}}{target.login}'
+                    f'{{#server}}> Removed admin: {{#highlite}}{target_name}'
                 )
             else:
                 await _reply(
@@ -2219,7 +2387,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
             )
             return
 
-        target = await _get_player_param(aseco, admin, arg)
+        target = await _get_player_param(aseco, admin, arg, offline=True)
         if target:
             target_level = _role_level(aseco, target.login)
             if target_level >= 2:
@@ -2237,10 +2405,11 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 _write_adminops_xml(aseco)
 
             aseco.console('{1} [{2}] added operator [{3}]', logtitle, login, target.login)
+            target_name = await _admin_display_name(aseco, target.login)
             await _reply(
                 aseco,
                 login,
-                f'{{#server}}> Added operator: {{#highlite}}{target.login}'
+                f'{{#server}}> Added operator: {{#highlite}}{target_name}'
             )
 
     elif sub == 'removeop':
@@ -2254,7 +2423,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
         target = await _get_player_param(aseco, admin, arg, offline=True)
         if target:
-            if _role_level(aseco, target.login) >= 2:
+            if _viewer_role_level(aseco, admin) < 3 and _role_level(aseco, target.login) >= 2:
                 await _reply(
                     aseco,
                     login,
@@ -2273,10 +2442,11 @@ async def chat_admin(aseco: 'Aseco', command: dict):
             if removed:
                 _write_adminops_xml(aseco)
                 aseco.console('{1} [{2}] removed operator [{3}]', logtitle, login, target.login)
+                target_name = await _admin_display_name(aseco, target.login)
                 await _reply(
                     aseco,
                     login,
-                    f'{{#server}}> Removed operator: {{#highlite}}{target.login}'
+                    f'{{#server}}> Removed operator: {{#highlite}}{target_name}'
                 )
             else:
                 await _reply(
@@ -2287,21 +2457,24 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub == 'listmasters':
         masters = aseco.settings.masteradmin_list.get('TMLOGIN', [])
+        master_names = await _admin_display_names(aseco, masters)
         await _reply(aseco, login,
                      '{#server}> MasterAdmins: ' +
-                     ', '.join(f'{{#highlite}}{m}{{#message}}' for m in masters))
+                     ', '.join(f'{{#highlite}}{m}{{#message}}' for m in master_names))
 
     elif sub == 'listadmins':
         admins = aseco.settings.admin_list.get('TMLOGIN', [])
+        admin_names = await _admin_display_names(aseco, admins)
         await _reply(aseco, login,
                      '{#server}> Admins: ' +
-                     ', '.join(f'{{#highlite}}{a}{{#message}}' for a in admins))
+                     ', '.join(f'{{#highlite}}{a}{{#message}}' for a in admin_names))
 
     elif sub == 'listops':
         ops = aseco.settings.operator_list.get('TMLOGIN', [])
+        op_names = await _admin_display_names(aseco, ops)
         await _reply(aseco, login,
                      '{#server}> Operators: ' +
-                     ', '.join(f'{{#highlite}}{o}{{#message}}' for o in ops))
+                     ', '.join(f'{{#highlite}}{o}{{#message}}' for o in op_names))
 
     elif sub == 'adminability':
         if not _is_masteradmin_player(aseco, admin):

@@ -328,7 +328,7 @@ def register(aseco: 'Aseco'):
 
     aseco.add_chat_command('timeleft',
                            'Change or query time left: /timeleft [[+|-]MINUTES]|[pause|resume]')
-    aseco.add_chat_command('tl',      'Quickly set remaining time to 5 minutes')
+    aseco.add_chat_command('tl',      'Quickly set remaining time: /tl [MINUTES] (default: 5)')
     aseco.add_chat_command('timeset', 'Sets custom timelimit in minutes for this track')
 
     aseco.register_event('onChat_timeleft', chat_timeleft)
@@ -365,7 +365,8 @@ async def chat_timeleft(aseco: 'Aseco', command: dict):
 
 async def chat_tl(aseco: 'Aseco', command: dict):
     if _flexitime:
-        await _flexitime.command_timeleft(command, emergency=True)
+        params = (command.get('params') or '').strip()
+        await _flexitime.command_timeleft(command, emergency=(params == ''))
 
 
 async def chat_timeset(aseco: 'Aseco', command: dict):

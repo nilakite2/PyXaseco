@@ -8,6 +8,7 @@ Jukebox system: track queuing, /y voting for TMX adds and chat votes,
 from __future__ import annotations
 import logging
 import asyncio
+import importlib
 import json
 import pathlib
 import re
@@ -22,28 +23,26 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.helpers import format_text, format_time, strip_colors, display_manialink, display_manialink_multi
 
+try:
+    from pyxaseco.plugins.plugin_tmxinfo import (
+        get_tmx_section as _plugin_get_tmx_section,
+        tmx_prefix_for_section as _plugin_tmx_prefix_for_section,
+        tmx_public_host_for_section as _plugin_tmx_public_host_for_section,
+    )
+except ImportError:
+    from pyxaseco_plugins.plugin_tmxinfo import (
+        get_tmx_section as _plugin_get_tmx_section,
+        tmx_prefix_for_section as _plugin_tmx_prefix_for_section,
+        tmx_public_host_for_section as _plugin_tmx_public_host_for_section,
+    )
+
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
 logger = logging.getLogger(__name__)
 
-TMX_HOST_ALIASES = {
-    'tmnf': 'tmnf.exchange',
-    'tmu':  'tmuf.exchange',
-    'tmo':  'original.tm-exchange.com',
-    'tms':  'sunrise.tm-exchange.com',
-    'tmn':  'nations.tm-exchange.com',
-}
-
-DEFAULT_TMX_HOST = TMX_HOST_ALIASES['tmnf']
 TMX_DOWNLOAD_DIR = 'TMX'
-TMX_SEARCH_PREFIXES = {
-    'TMO': 'original',
-    'TMS': 'sunrise',
-    'TMN': 'nations',
-    'TMU': 'united',
-    'TMNF': 'tmnforever',
-}
+TMX_SECTION_CHOICES = ('TMNF', 'TMU', 'TMN', 'TMO', 'TMS')
 
 # ---------------------------------------------------------------------------
 # Module-level state (exported to other plugins)
@@ -106,7 +105,7 @@ def register(aseco: 'Aseco'):
 
 def _get_rasp_msg(aseco: 'Aseco', key: str) -> str:
     try:
-        from pyxaseco.plugins.plugin_rasp import _rasp
+        _rasp = getattr(_plugin_module('plugin_rasp'), '_rasp')
         msgs = _rasp.get('messages', {})
         items = msgs.get(key.upper(), ['{#server}> {#error}' + key])
         return items[0] if items else '{#server}> {#error}' + key
@@ -117,7 +116,7 @@ def _get_rasp_msg(aseco: 'Aseco', key: str) -> str:
 async def _jb_broadcast(aseco: 'Aseco', msg: str, at_score: bool = False):
     if jukebox_in_window:
         try:
-            from pyxaseco.plugins.helpers import send_window_message
+            send_window_message = getattr(_plugin_module('helpers'), 'send_window_message')
             await send_window_message(aseco, msg, at_score)
             return
         except Exception:
@@ -193,7 +192,7 @@ def _load_runtime_settings():
     global autosave_matchsettings
 
     try:
-        import pyxaseco.plugins.plugin_rasp as rasp_mod
+        rasp_mod = _plugin_module('plugin_rasp')
     except Exception:
         return
 
@@ -299,6 +298,11 @@ async def _find_server_track_by_uid_or_filename(aseco: 'Aseco', uid: str, filena
 
     want_uid = (uid or '').strip()
     want_file = (filename or '').replace('\\', '/').strip().lower()
+    want_file_alt = want_file
+    if want_file.startswith('challenges/'):
+        want_file_alt = want_file[len('challenges/'):].lstrip('/')
+    elif want_file:
+        want_file_alt = f'challenges/{want_file}'
 
     for t in tracks:
         t_uid = (t.get('UId', '') or t.get('Uid', '') or '').strip()
@@ -306,7 +310,7 @@ async def _find_server_track_by_uid_or_filename(aseco: 'Aseco', uid: str, filena
 
         if want_uid and t_uid == want_uid:
             return t
-        if want_file and t_file == want_file:
+        if want_file and (t_file == want_file or t_file == want_file_alt):
             return t
 
     return None
@@ -383,17 +387,12 @@ def _safe_track_filename(track_name: str, track_id: int) -> str:
     return f'{safe_name}_({track_id}).Challenge.Gbx'
 
 
-def _default_tmx_section(aseco: 'Aseco') -> str:
-    game = str(getattr(getattr(aseco, 'server', None), 'game', '') or '').upper()
-    if game == 'TMF':
-        return 'TMNF' if getattr(aseco.server, 'packmask', '') == 'Stadium' else 'TMU'
-    if game in ('TMN', 'TMS', 'TMO'):
-        return game
-    return 'TMNF'
+async def _default_tmx_section(aseco: 'Aseco') -> str:
+    return await _plugin_get_tmx_section(aseco)
 
 
 def _tmx_api_url(section: str, endpoint: str, **params) -> str:
-    prefix = TMX_SEARCH_PREFIXES.get((section or '').upper())
+    prefix = _plugin_tmx_prefix_for_section(section)
     if not prefix:
         raise ValueError(f'Unsupported TMX section: {section}')
 
@@ -657,7 +656,7 @@ async def _search_tmx_tracks_api(
 
 
 def _legacy_tmx_url(section: str, *, recent: bool = False, name: str = '', author: str = '', page: int = 0) -> str:
-    prefix = TMX_SEARCH_PREFIXES.get((section or '').upper())
+    prefix = _plugin_tmx_prefix_for_section(section)
     if not prefix:
         raise ValueError(f'Unsupported TMX section: {section}')
 
@@ -794,14 +793,15 @@ def parse_tmx_reference(ref: str, source: str = '') -> tuple[str, int]:
 
     if ref.isdigit():
         if source:
-            if source not in TMX_HOST_ALIASES:
+            source = source.upper()
+            if source not in TMX_SECTION_CHOICES:
                 raise ValueError(f'Unsupported TMX source: {source}')
-            return TMX_HOST_ALIASES[source], int(ref)
-        return DEFAULT_TMX_HOST, int(ref)
+            return _plugin_tmx_public_host_for_section(source), int(ref)
+        return _plugin_tmx_public_host_for_section('TMNF'), int(ref)
 
     parsed = urllib.parse.urlparse(ref)
     host = parsed.netloc.lower()
-    if host not in TMX_HOST_ALIASES.values():
+    if host not in {_plugin_tmx_public_host_for_section(section) for section in TMX_SECTION_CHOICES}:
         raise ValueError(f'Unsupported TMX host: {host}')
 
     path = parsed.path.strip('/')
@@ -900,6 +900,7 @@ async def admin_add_tmx_track(
 
     try:
         abs_path, rel_insert, host, track_id, metadata = await download_tmx_track(ref, tracks_root, source)
+        server_file = _challenge_file_value(rel_insert)
 
         uid = metadata.get('uid', '').strip()
         if not uid:
@@ -928,14 +929,14 @@ async def admin_add_tmx_track(
         # Insert into dedicated server
         try:
             method = 'AddChallenge' if use_add_challenge else 'InsertChallenge'
-            await aseco.client.query_ignore_result(method, rel_insert)
-            await aseco.release_event('onTracklistChanged', ['add', rel_insert])
+            await aseco.client.query_ignore_result(method, server_file)
+            await aseco.release_event('onTracklistChanged', ['add', server_file])
         except Exception as e:
             try:
                 abs_path.unlink(missing_ok=True)
             except Exception:
                 pass
-            logger.warning('[TMX] %s failed for %s: %s', method, rel_insert, e)
+            logger.warning('[TMX] %s failed for %s: %s', method, server_file, e)
             raise
 
         # Ensure MatchSettings.txt contains the track
@@ -960,7 +961,7 @@ async def admin_add_tmx_track(
 
         # Now wait for the track to become visible in live GetChallengeList
         for _ in range(15):
-            server_track = await _find_server_track_by_uid_or_filename(aseco, uid, rel_insert)
+            server_track = await _find_server_track_by_uid_or_filename(aseco, uid, server_file)
             if server_track:
                 break
             await asyncio.sleep(0.2)
@@ -975,14 +976,14 @@ async def admin_add_tmx_track(
             logger.warning(
                 '[TMX] Track added on disk/MatchSettings but still not visible in live GetChallengeList: uid=%s file=%s',
                 uid,
-                rel_insert
+                server_file
             )
 
         # Sync LocalDB challenge row and capture the exact live filename/name/author/env
-        server_filename = rel_insert
+        server_filename = server_file
 
         try:
-            from pyxaseco.plugins.plugin_localdatabase import get_pool
+            get_pool = getattr(_plugin_module('plugin_localdatabase'), 'get_pool')
             pool = await get_pool()
             if pool:
                 name = metadata.get('name', '')
@@ -1019,7 +1020,7 @@ async def admin_add_tmx_track(
                 if not server_track:
                     logger.warning(
                         '[TMX] Track added on disk but not visible yet in live GetChallengeList: uid=%s file=%s',
-                        uid, rel_insert
+                        uid, server_file
                     )
 
                 live_filename = server_filename
@@ -1039,7 +1040,7 @@ async def admin_add_tmx_track(
                 await aseco.release_event('onJukeboxChanged', ['add', jukebox[uid]])
                 logger.debug(
                     '[TMX] Admin add: auto-jukeboxed %s uid=%s server_filename=%s',
-                    rel_insert,
+                    server_file,
                     uid,
                     live_filename
                 )
@@ -1203,7 +1204,8 @@ async def _init_jbhistory(aseco: 'Aseco', _data):
 
 async def _rasp_endrace(aseco: 'Aseco', _data):
     global jukebox_check, tmxplaying, replays_counter, replays_total
-    from pyxaseco.plugins.plugin_rasp_votes import tmxadd
+    rasp_votes = _plugin_module('plugin_rasp_votes')
+    tmxadd = rasp_votes.tmxadd
 
     if aseco.server.isrelay:
         return
@@ -1217,7 +1219,7 @@ async def _rasp_endrace(aseco: 'Aseco', _data):
         await _jb_broadcast(aseco, msg, True)
         tmxadd.clear()
         try:
-            from pyxaseco.plugins.plugin_rasp_votes import _vote_panels_off
+            _vote_panels_off = getattr(rasp_votes, '_vote_panels_off')
             await _vote_panels_off(aseco)
         except Exception:
             pass
@@ -1412,8 +1414,11 @@ async def _rasp_newtrack(aseco: 'Aseco', data):
 async def chat_y(aseco: 'Aseco', command: dict):
     global jukebox, plrvotes_ref
 
-    from pyxaseco.plugins.plugin_rasp_votes import chatvote, tmxadd, plrvotes
-    from pyxaseco.plugins.plugin_rasp_votes import allow_spec_voting
+    rasp_votes = _plugin_module('plugin_rasp_votes')
+    chatvote = rasp_votes.chatvote
+    tmxadd = rasp_votes.tmxadd
+    plrvotes = rasp_votes.plrvotes
+    allow_spec_voting = rasp_votes.allow_spec_voting
 
     player = command['author']
     login = player.login
@@ -1468,7 +1473,7 @@ async def chat_y(aseco: 'Aseco', command: dict):
                               votes_needed,
                               '' if votes_needed == 1 else 's',
                               chatvote.get('desc', ''))
-            from pyxaseco.plugins.plugin_rasp_votes import vote_in_window
+            vote_in_window = rasp_votes.vote_in_window
             if vote_in_window:
                 await _jb_broadcast(aseco, msg)
             else:
@@ -1478,7 +1483,7 @@ async def chat_y(aseco: 'Aseco', command: dict):
         else:
             # Pass — execute vote action
             msg = format_text(_get_rasp_msg(aseco, 'VOTE_PASS'), chatvote.get('desc', ''))
-            from pyxaseco.plugins.plugin_rasp_votes import vote_in_window
+            vote_in_window = rasp_votes.vote_in_window
             if vote_in_window:
                 await _jb_broadcast(aseco, msg)
             else:
@@ -1493,7 +1498,7 @@ async def chat_y(aseco: 'Aseco', command: dict):
                 aseco.console('Vote by {1} forced round end!', vlogin)
 
             elif vtype == 1:  # ladder
-                from pyxaseco.plugins.plugin_rasp_votes import ladder_fast_restart
+                ladder_fast_restart = rasp_votes.ladder_fast_restart
                 uid = aseco.server.challenge.uid
                 if ladder_fast_restart:
                     await aseco.client.query_ignore_result('ChallengeRestart')
@@ -1608,7 +1613,7 @@ async def chat_list(aseco: 'Aseco', command: dict):
 
     if p0 == 'best':
         try:
-            from pyxaseco.plugins.chat_records2 import _disp_recs as disp_recs
+            disp_recs = getattr(_plugin_module('chat_records2'), '_disp_recs')
             await disp_recs(aseco, {'author': player, 'params': ''}, best=True)
         except Exception:
             await _reply(aseco, login, '{#server}> {#error}Record list unavailable.')
@@ -1616,7 +1621,7 @@ async def chat_list(aseco: 'Aseco', command: dict):
 
     if p0 == 'worst':
         try:
-            from pyxaseco.plugins.chat_records2 import _disp_recs as disp_recs
+            disp_recs = getattr(_plugin_module('chat_records2'), '_disp_recs')
             await disp_recs(aseco, {'author': player, 'params': ''}, best=False)
         except Exception:
             await _reply(aseco, login, '{#server}> {#error}Record list unavailable.')
@@ -1681,7 +1686,7 @@ def _show_or_error(aseco, player, login):
 async def _get_best_local_times(aseco: 'Aseco') -> dict:
     """Return {uid: best_score_ms} for every track from the local records table."""
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        get_pool = getattr(_plugin_module('plugin_localdatabase'), 'get_pool')
         pool = await get_pool()
         if not pool:
             return {}
@@ -1710,7 +1715,7 @@ async def _get_player_track_stats(aseco: 'Aseco', player) -> dict:
     if not pid:
         return {}
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        get_pool = getattr(_plugin_module('plugin_localdatabase'), 'get_pool')
         pool = await get_pool()
         if not pool:
             return {}
@@ -1748,12 +1753,12 @@ def _set_paginated_msgs(player, header: str, widths: list, columns: list, rows: 
                         icon: list | None = None, page_size: int = 15):
     """Populate player.msgs with a header block and paginated table pages."""
     player.msgs = [[1, header, widths, icon or ['Icons128x128_1', 'NewTrack', 0.02]]]
-    page = [columns]
+    page = [[_literal_ml_text(col) for col in columns]]
     for row in rows:
         page.append(row)
         if len(page) - 1 >= page_size:
             player.msgs.append(page)
-            page = [columns]
+            page = [[_literal_ml_text(col) for col in columns]]
     if len(page) > 1:
         player.msgs.append(page)
 
@@ -1766,6 +1771,28 @@ def _append_tracklist_entry(player, row: dict, uid: str):
         'filename': row.get('FileName', ''),
         'uid': uid,
     })
+
+
+def _literal_ml_text(value):
+    """Prefix plain header labels so TMF renders them literally instead of localizing them."""
+    if not isinstance(value, str):
+        return value
+    if value.startswith('$') or value.startswith('{#'):
+        return value
+    return '$z' + value
+
+
+def _plugin_module(module_name: str):
+    """Load sibling plugin module from either supported runtime namespace."""
+    errors: list[Exception] = []
+    for full_name in (f'pyxaseco_plugins.{module_name}', f'pyxaseco.plugins.{module_name}'):
+        try:
+            return importlib.import_module(full_name)
+        except ImportError as exc:
+            errors.append(exc)
+    if errors:
+        raise errors[-1]
+    raise ImportError(module_name)
 
 
 def _format_list_author(author: str, tid: int, clickable: bool):
@@ -1970,6 +1997,77 @@ async def _get_challenges_no_recent(aseco: 'Aseco', player):
     )
 
 
+async def _get_challenges_no_vote(aseco: 'Aseco', player):
+    """Tracks the player did not yet karma-vote on."""
+    player.tracklist = []
+    pid = getattr(player, 'id', 0)
+    if not pid:
+        return
+
+    voted_uids: set[str] = set()
+    try:
+        get_pool = getattr(_plugin_module('plugin_localdatabase'), 'get_pool')
+        pool = await get_pool()
+    except Exception:
+        pool = None
+
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        'SELECT c.Uid '
+                        'FROM rs_karma k '
+                        'LEFT JOIN challenges c ON (c.Id = k.ChallengeId) '
+                        'WHERE k.PlayerId = %s AND c.Uid IS NOT NULL',
+                        (pid,)
+                    )
+                    rows = await cur.fetchall()
+            voted_uids.update(str(row[0]) for row in rows if row and row[0])
+        except Exception:
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            'SELECT uid FROM rs_karma WHERE PlayerId = %s AND uid IS NOT NULL',
+                            (pid,)
+                        )
+                        rows = await cur.fetchall()
+                voted_uids.update(str(row[0]) for row in rows if row and row[0])
+            except Exception as e:
+                logger.debug('[List] _get_challenges_no_vote: %s', e)
+
+    tracks = await _get_challenges_cache(aseco)
+    rec_ranks = await _get_player_rec_ranks(aseco, player)
+    maxrecs = _get_maxrecs(aseco)
+    clickable = getattr(aseco.settings, 'clickable_lists', False)
+    rows = []
+    tid = 1
+
+    for row in tracks:
+        uid = row.get('UId', '')
+        if not uid or uid in voted_uids:
+            continue
+        _append_tracklist_entry(player, row, uid)
+        rank = rec_ranks.get(uid, 0)
+        rec_str = f'{rank:02d}.' if 1 <= rank <= maxrecs else '-- '
+        rows.append([
+            f'{tid:03d}.',
+            rec_str,
+            _fmt_track_name(row.get('Name', ''), uid, tid, clickable),
+            _format_list_author(row.get('Author', ''), tid, clickable),
+        ])
+        tid += 1
+
+    _set_paginated_msgs(
+        player,
+        "Tracks You Didn't Vote For:",
+        [1.08, 0.12, 0.1, 0.58, 0.28],
+        ['Id', 'Rec', 'Name', 'Author'],
+        rows,
+    )
+
+
 async def _get_all_challenges(aseco: 'Aseco', player, wildcard: str = '*'):
     """
     Port of getAllChallenges() from rasp.funcs.php.
@@ -1990,7 +2088,8 @@ async def _get_all_challenges(aseco: 'Aseco', player, wildcard: str = '*'):
 
     best_times = await _get_best_local_times(aseco)
 
-    msg  = [['Id', 'Rec', 'Name', 'Time', 'Author']]
+    msg  = [[_literal_ml_text('Id'), _literal_ml_text('Rec'), _literal_ml_text('Name'),
+             _literal_ml_text('Time'), _literal_ml_text('Author')]]
     tid  = 1
     lines = 0
     player.msgs = [[1, header, [1.2, 0.12, 0.1, 0.52, 0.16, 0.28],
@@ -2038,7 +2137,8 @@ async def _get_all_challenges(aseco: 'Aseco', player, wildcard: str = '*'):
         if lines >= 15:
             player.msgs.append(msg)
             lines = 0
-            msg = [['Id', 'Rec', 'Name', 'Time', 'Author']]
+            msg = [[_literal_ml_text('Id'), _literal_ml_text('Rec'), _literal_ml_text('Name'),
+                    _literal_ml_text('Time'), _literal_ml_text('Author')]]
 
     if len(msg) > 1:
         player.msgs.append(msg)
@@ -2064,7 +2164,8 @@ async def _get_challenges_by_length(aseco: 'Aseco', player, shortest: bool):
 
     label = 'Shortest' if shortest else 'Longest'
     header = f'{label} Tracks On This Server:'
-    msg   = [['Id', 'Name', 'Time', 'Author', 'AuthTime']]
+    msg   = [[_literal_ml_text('Id'), _literal_ml_text('Name'), _literal_ml_text('Time'),
+              _literal_ml_text('Author'), _literal_ml_text('AuthTime')]]
     tid   = 1
     lines = 0
     player.msgs = [[1, header, [1.36, 0.12, 0.52, 0.16, 0.28, 0.16],
@@ -2091,7 +2192,8 @@ async def _get_challenges_by_length(aseco: 'Aseco', player, shortest: bool):
         if lines >= 15:
             player.msgs.append(msg)
             lines = 0
-            msg = [['Id', 'Name', 'Time', 'Author', 'AuthTime']]
+            msg = [[_literal_ml_text('Id'), _literal_ml_text('Name'), _literal_ml_text('Time'),
+                    _literal_ml_text('Author'), _literal_ml_text('AuthTime')]]
 
     if len(msg) > 1:
         player.msgs.append(msg)
@@ -2102,7 +2204,7 @@ async def _get_challenges_by_add(aseco: 'Aseco', player, newest: bool, count: in
     player.tracklist = []
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        get_pool = getattr(_plugin_module('plugin_localdatabase'), 'get_pool')
         pool = await get_pool()
     except Exception:
         pool = None
@@ -2114,7 +2216,8 @@ async def _get_challenges_by_add(aseco: 'Aseco', player, newest: bool, count: in
     clickable = getattr(aseco.settings, 'clickable_lists', False)
     label     = 'Newest' if newest else 'Oldest'
     header    = f'{label} Tracks On This Server:'
-    msg       = [['Id', 'Name', 'Time', 'Author']]
+    msg       = [[_literal_ml_text('Id'), _literal_ml_text('Name'),
+                  _literal_ml_text('Time'), _literal_ml_text('Author')]]
     tid       = 1
     lines     = 0
     player.msgs = [[1, header, [1.2, 0.12, 0.52, 0.16, 0.28],
@@ -2162,7 +2265,8 @@ async def _get_challenges_by_add(aseco: 'Aseco', player, newest: bool, count: in
         if lines >= 15:
             player.msgs.append(msg)
             lines = 0
-            msg = [['Id', 'Name', 'Time', 'Author']]
+            msg = [[_literal_ml_text('Id'), _literal_ml_text('Name'),
+                    _literal_ml_text('Time'), _literal_ml_text('Author')]]
         if added >= count:
             break
 
@@ -2197,7 +2301,7 @@ async def _get_player_rec_ranks(aseco: 'Aseco', player) -> dict:
     if not pid:
         return {}
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        get_pool = getattr(_plugin_module('plugin_localdatabase'), 'get_pool')
         pool = await get_pool()
         if not pool:
             return {}
@@ -2235,7 +2339,7 @@ async def _get_player_rec_ranks(aseco: 'Aseco', player) -> dict:
 
 def _get_maxrecs(aseco: 'Aseco') -> int:
     try:
-        from pyxaseco.plugins.plugin_rasp import _rasp
+        _rasp = getattr(_plugin_module('plugin_rasp'), '_rasp')
         return _rasp.get('maxrecs', 50)
     except Exception:
         return 50
@@ -2356,13 +2460,96 @@ async def chat_jukebox(aseco: 'Aseco', command: dict):
 async def chat_autojuke(aseco: 'Aseco', command: dict):
     player = command['author']
     login = player.login
-    param = str(command.get('params') or '').strip()
-    if param.isdigit() and int(param) >= 0:
-        # Redirect to /jukebox #
-        command['params'] = param
-        await chat_jukebox(aseco, command)
-    else:
-        await _reply(aseco, login, '{#server}> {#error}Usage: /autojuke <#>')
+    param = (command.get('params') or '').strip()
+    params = param.split() if param else []
+
+    if aseco.server.isrelay:
+        msg = format_text(aseco.get_chat_message('NOTONRELAY'))
+        await _reply(aseco, login, msg)
+        return
+
+    selection = params[0].lower() if params else ''
+    player.tracklist = []
+
+    if selection == 'help':
+        header = '{#black}/autojuke$g will jukebox a track from /list selection:'
+        data = [
+            ['...', '{#black}help', 'Displays this help information'],
+            ['...', '{#black}nofinish', "Selects tracks you haven't completed"],
+            ['...', '{#black}norank', "Selects tracks you don't have a rank on"],
+            ['...', '{#black}nogold', "Selects tracks you didn't beat gold time on"],
+            ['...', '{#black}noauthor', "Selects tracks you didn't beat author time on"],
+            ['...', '{#black}norecent', "Selects tracks you didn't play recently"],
+            ['...', '{#black}longest$g/{#black}shortest', 'Selects the longest/shortest tracks'],
+            ['...', '{#black}newest$g/{#black}oldest', 'Selects the newest/oldest tracks'],
+            ['...', '{#black}novote', "Selects tracks you didn't karma vote for"],
+            [],
+            ['The jukeboxed track is the first one from the chosen selection'],
+            ['that is not in the track history.'],
+        ]
+        display_manialink(
+            aseco,
+            login,
+            header,
+            ['Icons64x64_1', 'TrackInfo', -0.01],
+            data,
+            [1.1, 0.05, 0.3, 0.75],
+            'OK',
+        )
+        return
+
+    try:
+        if selection == 'nofinish':
+            await _get_challenges_no_finish(aseco, player)
+        elif selection == 'norank':
+            await _get_challenges_no_rank(aseco, player)
+        elif selection == 'nogold':
+            await _get_challenges_no_target(aseco, player, author=False)
+        elif selection == 'noauthor':
+            await _get_challenges_no_target(aseco, player, author=True)
+        elif selection == 'norecent':
+            await _get_challenges_no_recent(aseco, player)
+        elif selection == 'longest':
+            await _get_challenges_by_length(aseco, player, shortest=False)
+        elif selection == 'shortest':
+            await _get_challenges_by_length(aseco, player, shortest=True)
+        elif selection == 'newest':
+            await _get_challenges_by_add(aseco, player, newest=True, count=buffersize + 1)
+        elif selection == 'oldest':
+            await _get_challenges_by_add(aseco, player, newest=False, count=buffersize + 1)
+        elif selection == 'novote':
+            await _get_challenges_no_vote(aseco, player)
+        else:
+            await _reply(aseco, login, '{#server}> {#error}Invalid selection, try again!')
+            return
+    except Exception as exc:
+        logger.debug('[Autojuke] %s filter failed: %s', selection or '<empty>', exc)
+        await _reply(aseco, login, '{#server}> {#error}Selection unavailable, try again!')
+        return
+
+    if not getattr(player, 'tracklist', None):
+        await _reply(aseco, login, '{#server}> {#error}No tracks found, try again!')
+        return
+
+    chosen_idx = 0
+    for idx, track in enumerate(player.tracklist, 1):
+        uid = str(track.get('uid', '') or '')
+        if uid and uid not in jukebox and uid not in jb_buffer:
+            chosen_idx = idx
+            break
+
+    if not chosen_idx:
+        name = selection or 'Selected'
+        await _reply(
+            aseco,
+            login,
+            f'{{#server}}> {{#highlite}}{name}{{#error}} tracks currently unavailable, try again later!'
+        )
+        return
+
+    command = dict(command)
+    command['params'] = str(chosen_idx)
+    await chat_jukebox(aseco, command)
 
 
 # ---------------------------------------------------------------------------
@@ -2382,7 +2569,39 @@ async def chat_add(aseco: 'Aseco', command: dict):
         await _reply(aseco, login, _get_rasp_msg(aseco, 'NO_ADD'))
         return
 
-    import pyxaseco.plugins.plugin_rasp_votes as rasp_votes
+    args = raw.split()
+    if not args:
+        await _reply(aseco, login, '{#server}> {#error}You must include a TMX Track_ID!')
+        return
+
+    section = await _default_tmx_section(aseco)
+    if len(args) >= 2 and args[-1].upper() in TMX_SECTION_CHOICES:
+        section = args.pop().upper()
+
+    ref = args[0]
+
+    if aseco.allow_ability(player, 'add'):
+        ok, info = await admin_add_tmx_track(
+            aseco,
+            ref,
+            login,
+            section,
+            use_add_challenge=True,
+        )
+        if ok:
+            msg = format_text(
+                '{#server}>> {#admin}{1}$z$s {#highlite}{2}$z$s '
+                '{#admin}adds track: {#highlite}{3} {#admin}from TMX',
+                getattr(player, 'title', 'Admin'),
+                player.nickname,
+                info,
+            )
+            await _jb_broadcast(aseco, msg)
+        else:
+            await _reply(aseco, login, f'{{#server}}> {{#error}}Could not add {ref}: {info}')
+        return
+
+    rasp_votes = _plugin_module('plugin_rasp_votes')
 
     _raw_ss = getattr(player, 'spectatorstatus', None)
     _player_is_spec = ((int(_raw_ss) % 10) != 0) if _raw_ss is not None else bool(player.isspectator)
@@ -2394,16 +2613,6 @@ async def chat_add(aseco: 'Aseco', command: dict):
         await _reply(aseco, login, _get_rasp_msg(aseco, 'VOTE_ALREADY'))
         return
 
-    args = raw.split()
-    if not args:
-        await _reply(aseco, login, '{#server}> {#error}You must include a TMX Track_ID!')
-        return
-
-    section = _default_tmx_section(aseco)
-    if len(args) >= 2 and args[-1].upper() in TMX_SEARCH_PREFIXES:
-        section = args.pop().upper()
-
-    ref = args[0]
     tracks_root = pathlib.Path(
         getattr(
             aseco.settings,
@@ -2449,7 +2658,8 @@ async def chat_add(aseco: 'Aseco', command: dict):
         await _reply(aseco, login, '{#server}> {#error}No such track on TMX!')
         return
 
-    server_track = await _find_server_track_by_uid_or_filename(aseco, uid, rel_insert)
+    server_file = _challenge_file_value(rel_insert)
+    server_track = await _find_server_track_by_uid_or_filename(aseco, uid, server_file)
     if server_track:
         try:
             abs_path.unlink(missing_ok=True)
@@ -2475,7 +2685,7 @@ async def chat_add(aseco: 'Aseco', command: dict):
         return
 
     try:
-        ok = await aseco.client.query('CheckChallengeForCurrentServerParams', rel_insert)
+        ok = await aseco.client.query('CheckChallengeForCurrentServerParams', server_file)
         reason = ''
     except Exception as e:
         ok = False
@@ -2495,7 +2705,7 @@ async def chat_add(aseco: 'Aseco', command: dict):
 
     rasp_votes.tmxadd.clear()
     rasp_votes.tmxadd.update({
-        'filename': rel_insert,
+        'filename': server_file,
         'votes': rasp_votes._required_votes(aseco, rasp_votes.vote_ratios[5]),
         'name': name,
         'environment': environment,
@@ -2509,7 +2719,7 @@ async def chat_add(aseco: 'Aseco', command: dict):
     rasp_votes.r_expire_num = 0
     rasp_votes.ta_show_num = 0
     try:
-        from pyxaseco.plugins.plugin_track import time_playing
+        time_playing = getattr(_plugin_module('plugin_track'), 'time_playing')
         rasp_votes.ta_expire_start = time_playing(aseco)
     except Exception:
         rasp_votes.ta_expire_start = 0.0
@@ -2539,7 +2749,7 @@ async def chat_history(aseco: 'Aseco', command: dict):
                      '{#server}> {#error}No track history available!')
         return
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        get_pool = getattr(_plugin_module('plugin_localdatabase'), 'get_pool')
         pool = await get_pool()
         msg = _get_rasp_msg(aseco, 'HISTORY')
         for i, uid in enumerate(reversed(jb_buffer[-10:]), 1):
@@ -2568,7 +2778,7 @@ async def chat_xlist(aseco: 'Aseco', command: dict):
     login = player.login
     raw = str(command.get('params') or '').strip()
     params = raw.split() if raw else []
-    section = _default_tmx_section(aseco)
+    section = await _default_tmx_section(aseco)
 
     if not params or params[0].lower() == 'help':
         header = '{#black}/xlist$g will show tracks on TMX:'
@@ -2589,7 +2799,7 @@ async def chat_xlist(aseco: 'Aseco', command: dict):
         )
         return
 
-    if params[-1].upper() in TMX_SEARCH_PREFIXES:
+    if params[-1].upper() in TMX_SECTION_CHOICES:
         section = params.pop().upper()
 
     if params and params[0].lower() == 'tag':
@@ -2624,14 +2834,27 @@ async def chat_xlist(aseco: 'Aseco', command: dict):
     adminadd = bool(aseco.allow_ability(player, 'add'))
     clickable = getattr(aseco.settings, 'clickable_lists', False)
     player.tracklist = []
-    header = f'Tracks On TMX Section {{#black}}{section}$g:'
+    header = f'{_literal_ml_text("Tracks On TMX Section")} {{#black}}{section}$g:'
 
     if adminadd:
         widths = [1.55, 0.12, 0.16, 0.6, 0.1, 0.4, 0.17]
-        columns = ['Id', 'TMX', 'Name (click to /add)', '$nAdmin', 'Author', 'Env']
+        columns = [
+            _literal_ml_text('Id'),
+            _literal_ml_text('TMX'),
+            _literal_ml_text('Name (click to /add)'),
+            '$z$nAdmin',
+            _literal_ml_text('Author'),
+            _literal_ml_text('Env'),
+        ]
     else:
         widths = [1.45, 0.12, 0.16, 0.6, 0.4, 0.17]
-        columns = ['Id', 'TMX', 'Name (click to /add)', 'Author', 'Env']
+        columns = [
+            _literal_ml_text('Id'),
+            _literal_ml_text('TMX'),
+            _literal_ml_text('Name (click to /add)'),
+            _literal_ml_text('Author'),
+            _literal_ml_text('Env'),
+        ]
 
     player.msgs = [[1, header, widths, ['Icons128x128_1', 'LoadTrack', 0.02]]]
     page = [columns]
@@ -2654,7 +2877,8 @@ async def chat_xlist(aseco: 'Aseco', command: dict):
         })
 
         if adminadd:
-            add_cell = ['Add', tid + 6200] if (clickable and tid <= 500) else 'Add'
+            add_label = _literal_ml_text('Add')
+            add_cell = [add_label, tid + 6200] if (clickable and tid <= 500) else add_label
             page.append([f'{tid:03d}.', tmxid, name_cell, add_cell, author_cell, row['environment']])
         else:
             page.append([f'{tid:03d}.', tmxid, name_cell, author_cell, row['environment']])
@@ -2692,7 +2916,7 @@ async def _event_jukebox(aseco: 'Aseco', answer: list):
         tracklist = getattr(player, 'tracklist', [])
         if track_idx < len(tracklist):
             try:
-                from pyxaseco.plugins.plugin_mania_karma import chat_karma
+                chat_karma = getattr(_plugin_module('plugin_mania_karma'), 'chat_karma')
                 aseco.console('player {1} clicked /karma {2}', login, track_idx + 1)
                 await chat_karma(aseco, {'author': player, 'params': str(track_idx + 1)})
             except ImportError:
@@ -2710,7 +2934,7 @@ async def _event_jukebox(aseco: 'Aseco', answer: list):
         if aseco.allow_ability(player, 'dropjukebox'):
             aseco.console('player {1} clicked /admin dropjukebox {2}', login, idx + 1)
             try:
-                from pyxaseco.plugins.chat_admin import chat_admin
+                chat_admin = getattr(_plugin_module('chat_admin'), 'chat_admin')
                 await chat_admin(aseco, {'author': player, 'params': f'dropjukebox {idx + 1}'})
             except Exception:
                 pass
@@ -2725,7 +2949,7 @@ async def _event_jukebox(aseco: 'Aseco', answer: list):
         if idx < len(tracklist):
             track = tracklist[idx]
             try:
-                from pyxaseco.plugins.plugin_tmxinfo import chat_tmxinfo
+                chat_tmxinfo = getattr(_plugin_module('plugin_tmxinfo'), 'chat_tmxinfo')
                 aseco.console('player {1} clicked command "/tmxinfo {2} {3}"',
                               login, track.get('id', ''), track.get('section', ''))
                 await chat_tmxinfo(
@@ -2753,7 +2977,7 @@ async def _event_jukebox(aseco: 'Aseco', answer: list):
         if idx < len(tracklist):
             track = tracklist[idx]
             try:
-                from pyxaseco.plugins.chat_admin import chat_admin
+                chat_admin = getattr(_plugin_module('chat_admin'), 'chat_admin')
                 aseco.console('player {1} clicked command "/admin add {2} {3}"',
                               login, track.get('id', ''), track.get('section', ''))
                 await chat_admin(
