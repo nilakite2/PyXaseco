@@ -103,7 +103,8 @@ async def _on_player_connect2(aseco: 'Aseco', player: 'Player'):
     await _draw_dedi_all(aseco)
     await _refresh_server_limits(aseco)
     await _refresh_visitor_count(aseco)
-    await _draw_playerspectator_all(aseco)
+    if not _state.challenge_show_next:
+        await _draw_playerspectator_all(aseco)
     if _state.challenge_show_next:
         await draw_all_score_bars(aseco)
     else:
@@ -136,7 +137,8 @@ async def _on_player_disconnect(aseco: 'Aseco', player: 'Player'):
     await _draw_dedi_all(aseco)
     from ..widgets.bar_widgets import _refresh_server_limits, _draw_playerspectator_all
     await _refresh_server_limits(aseco)
-    await _draw_playerspectator_all(aseco)
+    if not _state.challenge_show_next:
+        await _draw_playerspectator_all(aseco)
 
 
 async def _on_player_info_changed(aseco: 'Aseco', player: 'Player'):
@@ -147,7 +149,8 @@ async def _on_player_info_changed(aseco: 'Aseco', player: 'Player'):
     # player/spectator pos_y shift is applied immediately.
     await _draw_cp_player(aseco, player.login)
     await _draw_cpdelta_player(aseco, player.login)
-    await _draw_playerspectator_all(aseco)
+    if not _state.challenge_show_next:
+        await _draw_playerspectator_all(aseco)
 
 
 async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):

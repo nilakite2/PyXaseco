@@ -376,7 +376,7 @@ async def build_top_nations_widget(aseco: 'Aseco') -> str:
         count = int(row[0] or 0)
         code  = _FLAGFIX.get(str(row[1] or '').upper(), str(row[1] or '').upper())
         y     = lh * i + 3.0
-        flag_y = -(lh * i - 0.3) if i > 0 else 0.3
+        flag_y = -(y - 0.3)
         name  = escape(_country_name(aseco, code))
         p.append(
             f'<label posn="4 -{y:.2f} 0.002" sizen="3.4 1.7"'

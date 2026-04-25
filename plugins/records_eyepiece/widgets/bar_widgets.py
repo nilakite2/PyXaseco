@@ -958,14 +958,14 @@ async def draw_all_score_bars(aseco: 'Aseco') -> None:
     await _draw_next_gamemode_all(aseco)
     await _draw_eyepiece_score_all(aseco)
     await _draw_favorite_all(aseco, score=True)
-    await _draw_rampage_buttons_all(aseco)
     await _draw_clock_all(aseco)
 
 
 async def hide_all_race_bars(aseco: 'Aseco') -> None:
     """Broadcast empty MLs for all race-state bar widgets (at score)."""
     for ml_id in (ML_TRACKCOUNT, ML_GAMEMODE, ML_VISITORS, ML_PLAYERSPECTATOR,
-                  ML_LADDERLIMIT, ML_CURRENTRANKING, ML_TMEXCHANGE, ML_TOPLIST):
+                  ML_LADDERLIMIT, ML_CURRENTRANKING, ML_TMEXCHANGE, ML_TOPLIST,
+                  ML_RAMPAGE_DISCORD, ML_RAMPAGE_FORCE):
         await _broadcast(aseco, _empty(ml_id))
 
 

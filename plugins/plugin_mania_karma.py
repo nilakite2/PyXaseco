@@ -69,6 +69,16 @@ VOTE_SCORES = {
     "waste": 0,
 }
 
+REMINDER_BUTTONS = [
+    (0.0, ACT_VOTE_P3, "$390", "fantastic", "+++"),
+    (7.3, ACT_VOTE_P2, "$390", "beautiful", "++"),
+    (14.6, ACT_VOTE_P1, "$390", "good", "+"),
+    (21.9, ACT_VOTE_UNDECIDED, "$888", "undecided", "???"),
+    (29.2, ACT_VOTE_N1, "$D02", "bad", "-"),
+    (36.5, ACT_VOTE_N2, "$D02", "poor", "--"),
+    (43.8, ACT_VOTE_N3, "$D02", "waste", "---"),
+]
+
 GM_TAG = {0: "rounds", 1: "time_attack", 2: "team", 3: "laps", 4: "stunts", 5: "cup", 7: "score"}
 
 TMX_HOST_ALIASES = {
@@ -516,6 +526,16 @@ def _ensure_player_state(player: Any) -> None:
     mk.setdefault("LotteryPayout", 0)
 
 
+def _effective_vote(login: str) -> int:
+    pending = int(_karma.get("new", {}).get("players", {}).get(login, 0) or 0)
+    if pending != 0:
+        return pending
+    gvote = int(_karma["global"]["players"].get(login, {}).get("vote", 0) or 0)
+    if gvote != 0:
+        return gvote
+    return int(_karma["local"]["players"].get(login, {}).get("vote", 0) or 0)
+
+
 # ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
@@ -766,6 +786,7 @@ async def _api_auth(aseco: Aseco) -> bool:
         f"&zone={urllib.parse.quote(zone)}"
         f"&nation={urllib.parse.quote(_cfg.nation)}"
     )
+    logger.debug("[ManiaKarma] auth url: %s", url)
     body = await _api_get(url, _cfg.connect_timeout)
     if not body:
         _api_connected = False
@@ -777,6 +798,15 @@ async def _api_auth(aseco: Aseco) -> bool:
         if status == 200:
             _api_authcode = xml.findtext("authcode") or ""
             _cfg.api_url = xml.findtext("api_url") or _cfg.api_auth_url
+            import_done = str(xml.findtext("import_done") or "").strip().lower()
+            if import_done in {"true", "false"}:
+                _cfg.import_done = (import_done == "true")
+            logger.debug(
+                "[ManiaKarma] auth response: status=%s import_done=%s api_url=%s",
+                status,
+                _cfg.import_done,
+                _cfg.api_url,
+            )
             _api_connected = True
             _retrytime = 0
             return True
@@ -1093,8 +1123,7 @@ def _build_widget_cups(mode: int) -> str:
 
 def _build_player_marker(player: Any, mode: int) -> str:
     _ensure_player_state(player)
-    pdata = _karma["global"]["players"].get(player.login, {"vote": 0})
-    vote = int(pdata.get("vote", 0) or 0)
+    vote = _effective_vote(player.login)
     finished = int(player.data["ManiaKarma"].get("FinishedMapCount", 0) or 0)
     locked = _cfg.require_finish > 0 and finished < _cfg.require_finish and vote == 0
     preset: dict[int, tuple[str, int]] = {}
@@ -1465,6 +1494,15 @@ async def _show_reminder_window(aseco: Aseco, players: str | list[str]) -> None:
         return
     state = 'score' if _cfg.current_state == 7 else 'race'
     rcfg = _cfg.reminder_score if state == 'score' else _cfg.reminder_race
+    labels = {
+        "fantastic": _cfg.msg_fantastic.capitalize(),
+        "beautiful": _cfg.msg_beautiful.capitalize(),
+        "good": _cfg.msg_good.capitalize(),
+        "undecided": _cfg.msg_undecided.capitalize(),
+        "bad": _cfg.msg_bad.capitalize(),
+        "poor": _cfg.msg_poor.capitalize(),
+        "waste": _cfg.msg_waste.capitalize(),
+    }
     xml = [
         '<?xml version="1.0" encoding="UTF-8"?><manialinks>',
         f'<manialink id="{ML_REMINDER}">',
@@ -1473,12 +1511,21 @@ async def _show_reminder_window(aseco: Aseco, players: str | list[str]) -> None:
         f'<label posn="16.5 0.3 1" sizen="18 1.8" textsize="2" scale="0.8" halign="right" textcolor="FFFF" text="{_cfg.msg_reminder_at_score}"/>',
         '<label posn="16.5 -1.5 1" sizen="14 0.2" textsize="1" scale="0.8" halign="right" textcolor="FFFF" text="powered by mania-karma.com"/>',
         '<frame posn="19.2 0.45 1">',
-        '<quad posn="0 0.15 0" sizen="7.5 3.75" style="Bgs1InRace" substyle="BgIconBorder"/>',
-        f'<label posn="3.75 -0.5 0" sizen="7 0" textsize="1" halign="center" text="$888{_cfg.msg_undecided.capitalize()}"/>',
-        '<label posn="3.75 -1.8 0" sizen="10 0" textsize="1" halign="center" text="$888-/+"/>',
         '</frame>',
         '<frame posn="33 0.3 1">',
     ]
+    for pos_x, action, color, label_key, vote_text in REMINDER_BUTTONS:
+        command_text = vote_text if vote_text == "???" else f'/{vote_text}'
+        command_scale = '0.7' if vote_text == "???" else '0.85'
+        command_y = '-2.0' if vote_text == "???" else '-1.75'
+        xml.insert(
+            -2,
+            f'<frame posn="{pos_x} 0" action="{action}">'
+            f'<quad posn="0 0.15 0" sizen="6.4 3.75" action="{action}" style="Bgs1InRace" substyle="BgIconBorder"/>'
+            f'<label posn="3.2 -0.5 0" sizen="6.2 0" halign="center" textsize="1" action="{action}" text="{color}{labels[label_key]}"/>'
+            f'<label posn="3.2 {command_y} 0" sizen="10 0" halign="center" textsize="1" scale="{command_scale}" action="{action}" text="{color}{command_text}"/>'
+            f'</frame>'
+        )
     if _cfg.img_tmx_logo_normal:
         xml.append(f'<quad posn="41.25 0.08 0" sizen="7 4" image="{_cfg.img_tmx_logo_normal}" imagefocus="{_cfg.img_tmx_logo_focus}" url="{_tmx_page_url(aseco)}"/>')
     xml.extend(['</frame>', '</frame>', '</manialink>', '</manialinks>'])
@@ -1494,8 +1541,7 @@ async def _show_reminder_window(aseco: Aseco, players: str | list[str]) -> None:
 async def _show_mx_window(aseco: Aseco, player: Any) -> None:
     if _cfg.current_state != 7:
         return
-    pdata = _karma["global"]["players"].get(player.login, {"vote": 0})
-    vote = int(pdata.get("vote", 0) or 0)
+    vote = _effective_vote(player.login)
     voted = {
         3: '$390' + _cfg.msg_fantastic.capitalize(), 2: '$390' + _cfg.msg_beautiful.capitalize(), 1: '$390' + _cfg.msg_good.capitalize(),
         -1: '$D02' + _cfg.msg_bad.capitalize(), -2: '$D02' + _cfg.msg_poor.capitalize(), -3: '$D02' + _cfg.msg_waste.capitalize(),
@@ -1544,14 +1590,22 @@ async def _close_reminder_window(aseco: Aseco, player: Any | None = None) -> Non
 # messaging helpers
 # ---------------------------------------------------------------------------
 
-def _create_karma_message(login: str, force_display: bool = False) -> str | bool:
+def _create_karma_message(login: str, force_display: bool = False, include_vote_status: bool = True) -> str | bool:
     message = ""
     if _cfg.show_karma or force_display:
         message = _cfg.msg_karma_message.replace('{1}', strip_colors(str(_current_map.get('name', '')))).replace('{2}', str(_karma['global']['votes']['karma']))
-    if _cfg.show_votes or force_display:
-        vote = int(_karma['global']['players'].get(login, {}).get('vote', 0) or 0)
+    if include_vote_status and (_cfg.show_votes or force_display):
+        vote = _effective_vote(login)
+        logger.debug(
+            "[ManiaKarma] create message login=%s pending=%s global=%s local=%s effective=%s",
+            login,
+            int(_karma.get("new", {}).get("players", {}).get(login, 0) or 0),
+            int(_karma['global']['players'].get(login, {}).get('vote', 0) or 0),
+            int(_karma['local']['players'].get(login, {}).get('vote', 0) or 0),
+            vote,
+        )
         if vote != 0:
-            cmd = {3: '/+++', 2: '/++', 1: '/+', -1: '/-', -2: '/--', -3: '/---'}[vote]
+            cmd = {3: '+++', 2: '++', 1: '+', -1: '-', -2: '--', -3: '---'}[vote]
             message += _cfg.msg_karma_your_vote.replace('{1}', _vote_label(vote)).replace('{2}', cmd)
         else:
             message += _cfg.msg_karma_not_voted
@@ -1571,7 +1625,7 @@ def _create_karma_message(login: str, force_display: bool = False) -> str | bool
 
 
 async def _send_map_karma_message(aseco: Aseco, login: str | None) -> None:
-    message = _create_karma_message(login or '', False)
+    message = _create_karma_message(login or '', False, include_vote_status=bool(login))
     if not message:
         return
     if login:
@@ -1650,7 +1704,7 @@ async def _handle_player_vote(aseco: Aseco, player: Any, vote: int) -> None:
                 continue
             if _cfg.require_finish > 0 and int(pl.data['ManiaKarma'].get('FinishedMapCount', 0) or 0) < _cfg.require_finish:
                 continue
-            if int(_karma['global']['players'].get(pl.login, {}).get('vote', 0) or 0) != 0:
+            if _effective_vote(pl.login) != 0:
                 continue
             if _is_spectator(aseco, pl):
                 continue
@@ -1847,6 +1901,8 @@ async def _mk_onShutdown(aseco: Aseco, _data=None) -> None:
 async def _mk_onChat(aseco: Aseco, chat: list) -> None:
     if len(chat) < 3 or chat[0] == getattr(aseco.server, 'id', None):
         return
+    if len(chat) > 3 and bool(chat[3]):
+        return
     text = str(chat[2]).strip()
     if text not in ('+++', '++', '+', '-', '--', '---'):
         return
@@ -1972,7 +2028,7 @@ async def _mk_onPlayerFinish(aseco: Aseco, finish_item: Any) -> None:
         await _send_widget_combination(aseco, ['player_marker'], player)
 
     if _cfg.remind_to_vote in ('FINISHED', 'ALWAYS'):
-        voted = int(_karma['global']['players'].get(player.login, {}).get('vote', 0) or 0)
+        voted = _effective_vote(player.login)
         if voted == 0 and (_cfg.require_finish <= 0 or int(player.data['ManiaKarma']['FinishedMapCount']) >= _cfg.require_finish):
             if _cfg.reminder_window_display in ('FINISHED', 'ALWAYS'):
                 await _show_reminder_window(aseco, [player.login])
@@ -2098,7 +2154,7 @@ async def _mk_onEndRace1(aseco: Aseco, _data: Any) -> None:
             _ensure_player_state(p)
             if _cfg.require_finish > 0 and int(p.data['ManiaKarma'].get('FinishedMapCount', 0) or 0) < _cfg.require_finish:
                 continue
-            if int(_karma['global']['players'].get(p.login, {}).get('vote', 0) or 0) == 0:
+            if _effective_vote(p.login) == 0:
                 remind.append(p.login)
                 p.data['ManiaKarma']['ReminderWindow'] = True
             elif _cfg.score_mx_window:
@@ -2112,7 +2168,7 @@ async def _mk_onEndRace1(aseco: Aseco, _data: Any) -> None:
         for p in _players_all(aseco):
             if _is_spectator(aseco, p):
                 continue
-            if int(_karma['global']['players'].get(p.login, {}).get('vote', 0) or 0) != 0:
+            if _effective_vote(p.login) != 0:
                 await _show_mx_window(aseco, p)
 
 

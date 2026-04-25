@@ -73,9 +73,9 @@ def register(aseco: 'Aseco'):
     
     aseco.add_chat_command('admin', 'Provides admin commands (see: /admin help)')
     aseco.add_chat_command('ad', 'Provides admin commands (see: /ad help)')
+    aseco.register_event('onChat_admin', chat_admin)
     aseco.register_event('onChat_ad', chat_admin)
-    
-    # Also register as top-level for convenience
+
     admin_cmds = [
         # --- HELP ---
         ('help',          'Shows all available /admin commands', True),
@@ -248,52 +248,11 @@ def register(aseco: 'Aseco'):
         ('shutdown',      'Shuts down XASECO', True),
         ('shutdownall',   'Shuts down Server & XASECO', True),
     ]
-    # Commands that must NOT be registered as top-level admin aliases
-    # because they already exist as normal/public chat commands elsewhere.
-    conflicting_public_cmds = {
         # Commands registered by other plugins — must not get admin aliases
-        'help',       # chat_help.py
-        'helpall',    # chat_help.py
-        'players',    # chat_players.py
 
-        'rt',           # Python-only alias for removethis
 
-        # Standard conflicting commands already handled elsewhere
-        'endround',
-        'replay',
-        'skip',
-        'kick',
-        'ignore',
-        'cancel',
-        'panel',
-        'style',
-        'admpanel',
-        'donpanel',
-        'recpanel',
-        'votepanel',
-    }
-
-    for name, help_text, is_admin in admin_cmds:
-        if name not in conflicting_public_cmds:
-            aseco.add_chat_command(name, help_text, is_admin)
-
-    aseco.register_event('onChat_admin', chat_admin)
-
-    # Register direct aliases only for non-conflicting admin subcommands
-    for name, _, is_admin in admin_cmds:
-        if is_admin and name not in conflicting_public_cmds:
-            aseco.register_event(f'onChat_{name}', _make_subcmd_handler(name))
 
     _read_adminops_xml(aseco)
-
-
-def _make_subcmd_handler(sub: str):
-    async def _handler(aseco: 'Aseco', command: dict):
-        command = dict(command)
-        params_rest = (command.get('params') or '').strip()
-        command['params'] = f'{sub} {params_rest}'.strip()
-        await chat_admin(aseco, command)
-    return _handler
 
 
 async def _admin_startup(aseco: 'Aseco', _param=None):
@@ -2587,10 +2546,6 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                         chattitle, admin.nickname, jb_phrase, track_name
                     )
                     await _broadcast(aseco, msg)
-
-                    # Announce to admin
-                    await _reply(aseco, login,
-                                 f'{{#server}}> {{#message}}Added: {{#highlite}}{track_name}')
                 else:
                     await _reply(aseco, login,
                                  f'{{#server}}> {{#error}}Could not add {trkid}: {info}')
