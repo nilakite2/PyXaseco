@@ -39,6 +39,39 @@ maxrecs = 500
 minrank = 3
 maxavg  = 10
 
+# Vote feature flags shared with plugin_rasp_votes
+feature_votes = True
+vote_in_window = False
+allow_spec_startvote = False
+allow_spec_voting = False
+disable_upon_admin = False
+disable_while_sb = False
+allow_kickvotes = True
+allow_admin_kick = False
+allow_ignorevotes = True
+allow_admin_ignore = False
+ladder_fast_restart = False
+auto_vote_starter = True
+max_laddervotes = 1
+max_replayvotes = 1
+max_skipvotes = 1
+replays_limit = 0
+vote_ratios = [0.5, 0.5, 0.5, 0.5, 0.6, 0.5, 0.5]
+r_expire_limit = [1, 3, 3, 3, 3, 3, 3]
+r_show_reminder = True
+r_points_limits = False
+ta_expire_limit = [120, 240, 240, 180, 180, 180, 180]
+ta_show_reminder = True
+ta_show_interval = 60
+ta_time_limits = False
+r_ladder_max = 0.5
+r_replay_min = 0.5
+r_skip_max = 0.8
+ta_ladder_max = 0.5
+ta_replay_min = 0.5
+ta_skip_max = 0.8
+global_explain = 1
+
 # Messages loaded from rasp.xml
 _rasp_messages: dict = {}
 
@@ -78,6 +111,14 @@ def register(aseco: 'Aseco'):
 
 async def rasp_startup(aseco: 'Aseco', _param):
     global _rasp_messages, maxrecs, _rasp
+    global feature_votes, vote_in_window, allow_spec_startvote, allow_spec_voting
+    global disable_upon_admin, disable_while_sb, allow_kickvotes, allow_admin_kick
+    global allow_ignorevotes, allow_admin_ignore, ladder_fast_restart, auto_vote_starter
+    global max_laddervotes, max_replayvotes, max_skipvotes, replays_limit, vote_ratios
+    global r_expire_limit, r_show_reminder, r_points_limits
+    global ta_expire_limit, ta_show_reminder, ta_show_interval, ta_time_limits
+    global r_ladder_max, r_replay_min, r_skip_max
+    global ta_ladder_max, ta_replay_min, ta_skip_max, global_explain
 
     rasp_xml = aseco._base_dir / 'rasp.xml'
     aseco.console('[RASP] Loading config file [{1}]', str(rasp_xml))
@@ -88,6 +129,82 @@ async def rasp_startup(aseco: 'Aseco', _param):
 
     msgs = data.get('RASP', {}).get('MESSAGES', [{}])
     _rasp_messages = msgs[0] if msgs else {}
+
+    votes_cfg = data.get('RASP', {}).get('VOTES', [{}])
+    votes = votes_cfg[0] if votes_cfg else {}
+
+    def _cfg_bool(block: dict, key: str, default: bool) -> bool:
+        raw = block.get(key.upper(), [str(default).lower()])
+        val = raw[0] if raw else str(default).lower()
+        return str(val).strip().lower() == 'true'
+
+    def _cfg_int(block: dict, key: str, default: int) -> int:
+        raw = block.get(key.upper(), [default])
+        val = raw[0] if raw else default
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            return default
+
+    def _cfg_float(block: dict, key: str, default: float) -> float:
+        raw = block.get(key.upper(), [default])
+        val = raw[0] if raw else default
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default
+
+    def _cfg_float_list(block: dict, key: str, default: list[float]) -> list[float]:
+        raw = block.get(key.upper(), [])
+        if not raw:
+            return list(default)
+        try:
+            vals = [float(x) for x in str(raw[0]).replace(',', ' ').split() if x.strip()]
+        except (TypeError, ValueError):
+            return list(default)
+        return vals if len(vals) == len(default) else list(default)
+
+    def _cfg_int_list(block: dict, key: str, default: list[int]) -> list[int]:
+        raw = block.get(key.upper(), [])
+        if not raw:
+            return list(default)
+        try:
+            vals = [int(x) for x in str(raw[0]).replace(',', ' ').split() if x.strip()]
+        except (TypeError, ValueError):
+            return list(default)
+        return vals if len(vals) == len(default) else list(default)
+
+    feature_votes = _cfg_bool(votes, 'feature_votes', feature_votes)
+    vote_in_window = _cfg_bool(votes, 'vote_in_window', vote_in_window)
+    allow_spec_startvote = _cfg_bool(votes, 'allow_spec_startvote', allow_spec_startvote)
+    allow_spec_voting = _cfg_bool(votes, 'allow_spec_voting', allow_spec_voting)
+    disable_upon_admin = _cfg_bool(votes, 'disable_upon_admin', disable_upon_admin)
+    disable_while_sb = _cfg_bool(votes, 'disable_while_sb', disable_while_sb)
+    allow_kickvotes = _cfg_bool(votes, 'allow_kickvotes', allow_kickvotes)
+    allow_admin_kick = _cfg_bool(votes, 'allow_admin_kick', allow_admin_kick)
+    allow_ignorevotes = _cfg_bool(votes, 'allow_ignorevotes', allow_ignorevotes)
+    allow_admin_ignore = _cfg_bool(votes, 'allow_admin_ignore', allow_admin_ignore)
+    ladder_fast_restart = _cfg_bool(votes, 'ladder_fast_restart', ladder_fast_restart)
+    auto_vote_starter = _cfg_bool(votes, 'auto_vote_starter', auto_vote_starter)
+    max_laddervotes = _cfg_int(votes, 'max_laddervotes', max_laddervotes)
+    max_replayvotes = _cfg_int(votes, 'max_replayvotes', max_replayvotes)
+    max_skipvotes = _cfg_int(votes, 'max_skipvotes', max_skipvotes)
+    replays_limit = _cfg_int(votes, 'replays_limit', replays_limit)
+    vote_ratios = _cfg_float_list(votes, 'vote_ratios', vote_ratios)
+    r_expire_limit = _cfg_int_list(votes, 'r_expire_limit', r_expire_limit)
+    r_show_reminder = _cfg_bool(votes, 'r_show_reminder', r_show_reminder)
+    r_points_limits = _cfg_bool(votes, 'r_points_limits', r_points_limits)
+    ta_expire_limit = _cfg_int_list(votes, 'ta_expire_limit', ta_expire_limit)
+    ta_show_reminder = _cfg_bool(votes, 'ta_show_reminder', ta_show_reminder)
+    ta_show_interval = _cfg_int(votes, 'ta_show_interval', ta_show_interval)
+    ta_time_limits = _cfg_bool(votes, 'ta_time_limits', ta_time_limits)
+    r_ladder_max = _cfg_float(votes, 'r_ladder_max', r_ladder_max)
+    r_replay_min = _cfg_float(votes, 'r_replay_min', r_replay_min)
+    r_skip_max = _cfg_float(votes, 'r_skip_max', r_skip_max)
+    ta_ladder_max = _cfg_float(votes, 'ta_ladder_max', ta_ladder_max)
+    ta_replay_min = _cfg_float(votes, 'ta_replay_min', ta_replay_min)
+    ta_skip_max = _cfg_float(votes, 'ta_skip_max', ta_skip_max)
+    global_explain = _cfg_int(votes, 'global_explain', global_explain)
 
     # Apply maxrecs from settings
     maxrecs = int(data.get('RASP', {}).get('MAXRECS', [500])[0]) if 'RASP' in data else 500
@@ -104,6 +221,37 @@ async def rasp_startup(aseco: 'Aseco', _param):
         'maxrecs': maxrecs,
         'minrank': minrank,
         'maxavg': maxavg,
+        'feature_votes': feature_votes,
+        'vote_in_window': vote_in_window,
+        'allow_spec_startvote': allow_spec_startvote,
+        'allow_spec_voting': allow_spec_voting,
+        'disable_upon_admin': disable_upon_admin,
+        'disable_while_sb': disable_while_sb,
+        'allow_kickvotes': allow_kickvotes,
+        'allow_admin_kick': allow_admin_kick,
+        'allow_ignorevotes': allow_ignorevotes,
+        'allow_admin_ignore': allow_admin_ignore,
+        'ladder_fast_restart': ladder_fast_restart,
+        'auto_vote_starter': auto_vote_starter,
+        'max_laddervotes': max_laddervotes,
+        'max_replayvotes': max_replayvotes,
+        'max_skipvotes': max_skipvotes,
+        'replays_limit': replays_limit,
+        'vote_ratios': vote_ratios,
+        'r_expire_limit': r_expire_limit,
+        'r_show_reminder': r_show_reminder,
+        'r_points_limits': r_points_limits,
+        'ta_expire_limit': ta_expire_limit,
+        'ta_show_reminder': ta_show_reminder,
+        'ta_show_interval': ta_show_interval,
+        'ta_time_limits': ta_time_limits,
+        'r_ladder_max': r_ladder_max,
+        'r_replay_min': r_replay_min,
+        'r_skip_max': r_skip_max,
+        'ta_ladder_max': ta_ladder_max,
+        'ta_replay_min': ta_replay_min,
+        'ta_skip_max': ta_skip_max,
+        'global_explain': global_explain,
     }
 
     aseco.console('[RASP] Checking database structure...')

@@ -69,6 +69,13 @@ global_explain: int = 1
 disabled_scoreboard: bool = False
 
 
+def _plugin_module(module_name: str):
+    try:
+        return __import__(f'pyxaseco.plugins.{module_name}', fromlist=['*'])
+    except ImportError:
+        return __import__(f'pyxaseco_plugins.{module_name}', fromlist=['*'])
+
+
 
 def _is_spectator(player) -> bool:
     """
@@ -218,7 +225,8 @@ async def _reply(aseco: 'Aseco', login: str, msg: str):
 
 def _get_rasp_msg(aseco: 'Aseco', key: str) -> str:
     try:
-        from pyxaseco.plugins.plugin_rasp import _rasp
+        _rasp_mod = _plugin_module('plugin_rasp')
+        _rasp = getattr(_rasp_mod, '_rasp', {})
         msgs = _rasp.get('messages', {}) if isinstance(_rasp, dict) else getattr(_rasp, 'messages', {})
         items = msgs.get(key, ['{#server}> {#error}' + key])
         return items[0] if items else '{#server}> {#error}' + key
@@ -333,7 +341,7 @@ async def _init_votes(aseco: 'Aseco', _data):
     disabled_scoreboard = False
 
     try:
-        import pyxaseco.plugins.plugin_rasp as _rasp_mod
+        _rasp_mod = _plugin_module('plugin_rasp')
         s = _rasp_mod
         feature_votes        = getattr(s, 'feature_votes', feature_votes)
         vote_ratios          = getattr(s, 'vote_ratios', vote_ratios)

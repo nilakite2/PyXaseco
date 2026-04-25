@@ -1,5 +1,38 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <rasp>
+  <votes>
+    <feature_votes>false</feature_votes>
+    <vote_in_window>false</vote_in_window>
+    <allow_spec_startvote>false</allow_spec_startvote>
+    <allow_spec_voting>false</allow_spec_voting>
+    <disable_upon_admin>false</disable_upon_admin>
+    <disable_while_sb>false</disable_while_sb>
+    <allow_kickvotes>true</allow_kickvotes>
+    <allow_admin_kick>false</allow_admin_kick>
+    <allow_ignorevotes>true</allow_ignorevotes>
+    <allow_admin_ignore>false</allow_admin_ignore>
+    <ladder_fast_restart>false</ladder_fast_restart>
+    <auto_vote_starter>true</auto_vote_starter>
+    <max_laddervotes>1</max_laddervotes>
+    <max_replayvotes>1</max_replayvotes>
+    <max_skipvotes>1</max_skipvotes>
+    <replays_limit>0</replays_limit>
+    <vote_ratios>0.5 0.5 0.5 0.5 0.6 0.5 0.5</vote_ratios>
+    <r_expire_limit>1 3 3 3 3 3 3</r_expire_limit>
+    <r_show_reminder>true</r_show_reminder>
+    <r_points_limits>false</r_points_limits>
+    <ta_expire_limit>120 240 240 180 180 180 180</ta_expire_limit>
+    <ta_show_reminder>true</ta_show_reminder>
+    <ta_show_interval>60</ta_show_interval>
+    <ta_time_limits>false</ta_time_limits>
+    <r_ladder_max>0.5</r_ladder_max>
+    <r_replay_min>0.5</r_replay_min>
+    <r_skip_max>0.8</r_skip_max>
+    <ta_ladder_max>0.5</ta_ladder_max>
+    <ta_replay_min>0.5</ta_replay_min>
+    <ta_skip_max>0.8</ta_skip_max>
+    <global_explain>1</global_explain>
+  </votes>
   <messages>
     <!-- rank/pb messages -->
     <rank>{#server}> {#record}Your server rank is {#rank}{1}{#record}/{#highlite}{2}{#record} Average: {#highlite}{3}</rank>
