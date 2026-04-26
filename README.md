@@ -1,4 +1,4 @@
-# PyXaseco Public Alpha 0.1.0
+# PyXaseco 1.0-Alpha
 
 PyXaseco is a Python 3.12 controller for **TrackMania Forever** servers, inspired by XASECO and focused on practical parity for day-to-day server administration, records, widgets, chat commands, etc..
 
@@ -6,7 +6,7 @@ This public alpha includes the Python core, XML-based configuration, a broad plu
 
 ## Status
 
-This is an **alpha release**.
+This is an **stable Alpha release**.
 
 It is intended for:
 - private servers
@@ -15,6 +15,7 @@ It is intended for:
 - plugin migration and iteration
 
 It is not presented as a fully finished drop-in replacement for every historical XASECO setup.
+But it integrates with existing .xml configs and past Xaseco DB instances.
 
 ## Highlights
 
