@@ -3110,12 +3110,55 @@ async def chat_admin(aseco: 'Aseco', command: dict):
             )
 
     elif sub == 'call':
-        if not args:
+        if not args or args[0].lower() == 'help':
             await _reply(
                 aseco,
                 login,
-                '{#server}> {#error}Usage: {#highlite}/admin call <MethodName> [arg1] [arg2] ...'
+                '{#server}> {#message}Usage: {#highlite}/admin call <MethodName> [arg1] [arg2] ...'
             )
+            await _reply(
+                aseco,
+                login,
+                '{#server}> {#message}Use {#highlite}/admin call list{#message} to view available server methods.'
+            )
+            await _reply(
+                aseco,
+                login,
+                '{#server}> {#message}Arguments support booleans, integers, floats and quoted strings automatically.'
+            )
+        elif args[0].lower() == 'list':
+            try:
+                methods = await aseco.client.query('system.listMethods') or []
+                methods = [str(m) for m in methods if m]
+                methods.sort(key=str.lower)
+                if not methods:
+                    await _reply(
+                        aseco,
+                        login,
+                        '{#server}> {#error}No server methods were returned.'
+                    )
+                else:
+                    admin.msgs = [[
+                        1,
+                        'Available server call methods:',
+                        [0.95],
+                        ['Icons128x128_1', 'ProfileAdvanced', 0.02],
+                    ]]
+                    page = []
+                    for idx, name in enumerate(methods, start=1):
+                        page.append([name])
+                        if idx % 15 == 0:
+                            admin.msgs.append(page)
+                            page = []
+                    if page:
+                        admin.msgs.append(page)
+                    display_manialink_multi(aseco, admin)
+            except Exception as e:
+                await _reply(
+                    aseco,
+                    login,
+                    f'{{#server}}> {{#error}}Could not list server methods: {e}'
+                )
         else:
             method = args[0]
             call_args = [_parse_call_arg(x) for x in args[1:]]
