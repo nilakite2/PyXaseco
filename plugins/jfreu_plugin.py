@@ -561,10 +561,7 @@ async def player_connect(aseco: 'Aseco', player: 'Player'):
         _state.white, _state.yellow, _state.red,
         _state.blue, _state.green, _state.admin)
 
-    nation = player.nation
-    if len(nation) > 14:
-        from pyxaseco.plugins.plugin_localdatabase import map_country
-        nation = map_country(nation)
+    nation = _normalize_join_nation(player)
 
     ban_mins = _is_banned(player.login)
     if ban_mins:
@@ -599,10 +596,7 @@ async def _autokick(aseco: 'Aseco', player: 'Player') -> bool:
         _state.white, _state.yellow, _state.red,
         _state.blue, _state.green, _state.admin)
 
-    nation = player.nation
-    if len(nation) > 14:
-        from pyxaseco.plugins.plugin_localdatabase import map_country
-        nation = map_country(nation)
+    nation = _normalize_join_nation(player)
 
     rank = getattr(player, 'ladderrank', 0)
     limit = _state.autolimit if _state.autorank else _state.limit
@@ -715,6 +709,23 @@ async def _show_join_message(aseco: 'Aseco', player: 'Player', nation: str):
 
     await aseco.client.query_ignore_result(
         'ChatSendServerMessage', aseco.format_colors(msg))
+
+
+def _normalize_join_nation(player: 'Player') -> str:
+    nation = (getattr(player, 'nation', '') or '').strip()
+    zone = (getattr(player, 'zone', '') or '').strip()
+
+    if zone.startswith('World|'):
+        zone = zone[6:]
+
+    if zone and ('|' in zone or (len(nation) <= 3 and zone.upper() != nation.upper())):
+        return zone
+
+    if len(nation) > 14:
+        from pyxaseco.plugins.plugin_localdatabase import map_country
+        return map_country(nation)
+
+    return nation or zone
 
 
 def _get_title(aseco: 'Aseco', player: 'Player', adm: str, blu: str) -> str:

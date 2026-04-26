@@ -163,10 +163,58 @@ class Player:
         self.teamname = ladder.get('TeamName', '')
 
         # TMF path: "World|France|..." — strip leading "World|"
-        path = info.get('Path', '')
-        self.zone = path[6:] if path.startswith('World|') else path
-        parts = path.split('|')
-        self.nation = parts[1] if len(parts) > 1 else ''
+        raw_nation = (info.get('Nation', '') or '').strip()
+        raw_zone = (info.get('Zone', '') or info.get('Location', '') or '').strip()
+        path = (info.get('Path', '') or '').strip()
+
+        def _clean_zone(text: str) -> str:
+            return text[6:] if text.startswith('World|') else text
+
+        def _zone_score(text: str) -> int:
+            parts = [part.strip() for part in text.split('|') if part.strip()]
+            if not parts:
+                return -100
+            score = 0
+            if len(parts) > 1:
+                score += 10
+            if len(parts[0]) > 3:
+                score += 5
+            if ' ' in parts[0]:
+                score += 3
+            if parts[0].isalpha() and len(parts[0]) <= 3:
+                score -= 8
+            return score
+
+        zone_candidates = [cand for cand in (_clean_zone(raw_zone), _clean_zone(path)) if cand]
+        path_zone = max(zone_candidates, key=_zone_score) if zone_candidates else ''
+        path_parts = path_zone.split('|') if path_zone else []
+
+        if (
+            len(path_parts) >= 2
+            and len(path_parts[0]) <= 3
+            and path_parts[0].isalpha()
+            and ' ' in path_parts[1]
+        ):
+            path_parts = path_parts[1:]
+            path_zone = '|'.join(path_parts)
+
+        path_has_better_nation = bool(
+            path_parts and (
+                len(path_parts[0]) > 3 or
+                ' ' in path_parts[0] or
+                len(path_parts) > 1
+            )
+        )
+
+        if path_has_better_nation:
+            self.zone = path_zone
+            self.nation = path_parts[0] if path_parts else ''
+        elif raw_nation:
+            self.zone = raw_nation
+            self.nation = raw_nation
+        else:
+            self.zone = path_zone
+            self.nation = path_parts[0] if path_parts else ''
 
         player_rankings = ladder.get('PlayerRankings', [{}])
         if player_rankings:
