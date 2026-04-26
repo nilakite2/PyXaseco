@@ -176,6 +176,7 @@ _tmx_helper_cache: dict[str, dict] = {
     "trackid": {},
     "trackinfo": {},
     "image": {},
+    "trackmeta": {},
 }
 
 
@@ -596,6 +597,31 @@ async def get_tmx_trackinfo_for_uid(aseco: "Aseco", uid: str, mode: int) -> dict
         "replayurl": str(data.get("replayurl", "") or ""),
     }
     _tmx_helper_cache["trackinfo"][key] = dict(out)
+    return out
+
+
+async def get_tmx_trackmeta_for_uid(aseco: "Aseco", uid: str) -> dict:
+    key = str(uid or "").strip()
+    if not key:
+        return {}
+
+    cached = _tmx_helper_cache["trackmeta"].get(key)
+    if cached is not None:
+        return dict(cached)
+
+    section = await _get_tmx_section(aseco)
+    data = await _fetch_tmx_info(key, section, False)
+    if not data:
+        _tmx_helper_cache["trackmeta"][key] = {}
+        return {}
+
+    out = {
+        "id": int(data.get("id", 0) or 0),
+        "uploaded": str(data.get("uploaded", "") or ""),
+        "pageurl": str(data.get("pageurl", "") or ""),
+        "section": str(data.get("section", "") or ""),
+    }
+    _tmx_helper_cache["trackmeta"][key] = dict(out)
     return out
 
 

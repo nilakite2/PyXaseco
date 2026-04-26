@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Optional
 import aiomysql
 
 from pyxaseco.core.config import parse_xml_file
+from pyxaseco.core.challenges_cache import ensure_schema as ensure_challenges_extra_schema
+from pyxaseco.core.challenges_cache import schedule_backfill as schedule_challenges_extra_backfill
 from pyxaseco.helpers import strip_colors, format_text
 from pyxaseco.models import Record, Player, Challenge
 
@@ -144,7 +146,9 @@ async def ldb_connect(aseco: 'Aseco', _param):
 
     aseco.console('[LocalDB] Checking database structure...')
     await _ensure_tables(aseco)
+    await ensure_challenges_extra_schema(_pool)
     aseco.console('[LocalDB] ...Structure OK!')
+    await schedule_challenges_extra_backfill(aseco, _pool)
 
 
 async def _open_pool() -> aiomysql.Pool:

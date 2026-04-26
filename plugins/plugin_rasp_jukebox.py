@@ -1008,6 +1008,21 @@ async def admin_add_tmx_track(
                                 'ON DUPLICATE KEY UPDATE Name=VALUES(Name), Author=VALUES(Author), Environment=VALUES(Environment)',
                                 (uid, name, author, env)
                             )
+                    try:
+                        from pyxaseco.core.challenges_cache import upsert_for_track
+                        await upsert_for_track(
+                            aseco,
+                            pool,
+                            track=server_track,
+                            uid=uid,
+                            name=name,
+                            author=author,
+                            environment=env,
+                            filename=server_filename,
+                            tmx_id=track_id,
+                        )
+                    except Exception as cache_exc:
+                        logger.warning('[TMX] Could not sync challenges_extra row: %s', cache_exc)
         except Exception as e:
             logger.warning('[TMX] Inserted track but could not sync LocalDB challenge row: %s', e)
 
@@ -1590,6 +1605,7 @@ async def chat_list(aseco: 'Aseco', command: dict):
             ['...', '{#black}norank',          "Shows tracks you don't have a rank on"],
             ['...', '{#black}nogold',          "Shows tracks you didn't beat gold time on"],
             ['...', '{#black}noauthor',        "Shows tracks you didn't beat author time on"],
+            ['...', '{#black}recent',          "Shows tracks you played recently"],
             ['...', '{#black}norecent',        "Shows tracks you didn't play recently"],
             ['...', '{#black}best$g/{#black}worst',
                                                'Shows tracks with your best/worst records'],
@@ -1613,21 +1629,23 @@ async def chat_list(aseco: 'Aseco', command: dict):
 
     if p0 == 'best':
         try:
-            disp_recs = getattr(_plugin_module('chat_records2'), '_disp_recs')
-            await disp_recs(aseco, {'author': player, 'params': ''}, best=True)
-        except Exception:
+            await _get_challenges_by_rank(aseco, player, best=True)
+        except Exception as exc:
+            logger.debug('[List] best filter failed: %s', exc)
             await _reply(aseco, login, '{#server}> {#error}Record list unavailable.')
+        _show_or_error(aseco, player, login)
         return
 
     if p0 == 'worst':
         try:
-            disp_recs = getattr(_plugin_module('chat_records2'), '_disp_recs')
-            await disp_recs(aseco, {'author': player, 'params': ''}, best=False)
-        except Exception:
+            await _get_challenges_by_rank(aseco, player, best=False)
+        except Exception as exc:
+            logger.debug('[List] worst filter failed: %s', exc)
             await _reply(aseco, login, '{#server}> {#error}Record list unavailable.')
+        _show_or_error(aseco, player, login)
         return
 
-    if p0 in ('nofinish', 'norank', 'nogold', 'noauthor', 'norecent'):
+    if p0 in ('nofinish', 'norank', 'nogold', 'noauthor', 'recent', 'norecent'):
         try:
             if p0 == 'nofinish':
                 await _get_challenges_no_finish(aseco, player)
@@ -1637,6 +1655,8 @@ async def chat_list(aseco: 'Aseco', command: dict):
                 await _get_challenges_no_target(aseco, player, author=False)
             elif p0 == 'noauthor':
                 await _get_challenges_no_target(aseco, player, author=True)
+            elif p0 == 'recent':
+                await _get_challenges_recent(aseco, player)
             else:
                 await _get_challenges_no_recent(aseco, player)
         except Exception as exc:
@@ -1709,6 +1729,13 @@ async def _get_best_local_times(aseco: 'Aseco') -> dict:
         return {}
 
 
+def _format_track_value(score: int, is_stnt: bool) -> str:
+    score = int(score or 0)
+    if score <= 0:
+        return '--:--' if not is_stnt else '--'
+    return str(score) if is_stnt else format_time(score)
+
+
 async def _get_player_track_stats(aseco: 'Aseco', player) -> dict:
     """Return per-track best score and most recent play date for one player."""
     pid = getattr(player, 'id', 0)
@@ -1752,6 +1779,9 @@ async def _get_player_track_stats(aseco: 'Aseco', player) -> dict:
 def _set_paginated_msgs(player, header: str, widths: list, columns: list, rows: list,
                         icon: list | None = None, page_size: int = 15):
     """Populate player.msgs with a header block and paginated table pages."""
+    widths = list(widths)
+    if len(widths) > 1:
+        widths[0] = round(sum(widths[1:]) + 0.06, 3)
     player.msgs = [[1, header, widths, icon or ['Icons128x128_1', 'NewTrack', 0.02]]]
     page = [[_literal_ml_text(col) for col in columns]]
     for row in rows:
@@ -1845,7 +1875,9 @@ async def _get_challenges_no_finish(aseco: 'Aseco', player):
     player.tracklist = []
     tracks = await _get_challenges_cache(aseco)
     finished = set((await _get_player_track_stats(aseco, player)).keys())
+    best_times = await _get_best_local_times(aseco)
     clickable = getattr(aseco.settings, 'clickable_lists', False)
+    is_stnt = getattr(aseco.server.gameinfo, 'mode', -1) == 4
     rows = []
     tid = 1
     for row in tracks:
@@ -1853,18 +1885,22 @@ async def _get_challenges_no_finish(aseco: 'Aseco', player):
         if not uid or uid in finished:
             continue
         _append_tracklist_entry(player, row, uid)
+        top1_str = _format_track_value(best_times.get(uid, 0), is_stnt)
+        author_str = _format_track_value(int(row.get('AuthorTime', 0) or 0), is_stnt)
         rows.append([
             f'{tid:03d}.',
             '-- ',
             _fmt_track_name(row.get('Name', ''), uid, tid, clickable),
+            top1_str,
+            author_str,
             _format_list_author(row.get('Author', ''), tid, clickable),
         ])
         tid += 1
     _set_paginated_msgs(
         player,
         "Tracks You Haven't Completed:",
-        [1.08, 0.12, 0.1, 0.58, 0.28],
-        ['Id', 'Rec', 'Name', 'Author'],
+        [1.44, 0.12, 0.1, 0.44, 0.16, 0.16, 0.28],
+        ['Id', 'Rec', 'Name', 'Top1 Local', 'Author Time', 'Author'],
         rows,
     )
 
@@ -1876,8 +1912,10 @@ async def _get_challenges_no_rank(aseco: 'Aseco', player):
     track_by_uid = {row.get('UId', ''): row for row in tracks}
     stats = await _get_player_track_stats(aseco, player)
     rec_ranks = await _get_player_rec_ranks(aseco, player)
+    best_times = await _get_best_local_times(aseco)
     maxrecs = _get_maxrecs(aseco)
     clickable = getattr(aseco.settings, 'clickable_lists', False)
+    is_stnt = getattr(aseco.server.gameinfo, 'mode', -1) == 4
     rows = []
     tid = 1
     for row in tracks:
@@ -1889,18 +1927,22 @@ async def _get_challenges_no_rank(aseco: 'Aseco', player):
             continue
         src = track_by_uid.get(uid, row)
         _append_tracklist_entry(player, src, uid)
+        top1_str = _format_track_value(best_times.get(uid, 0), is_stnt)
+        author_str = _format_track_value(int(src.get('AuthorTime', 0) or 0), is_stnt)
         rows.append([
             f'{tid:03d}.',
             '-- ',
             _fmt_track_name(src.get('Name', ''), uid, tid, clickable),
+            top1_str,
+            author_str,
             _format_list_author(src.get('Author', ''), tid, clickable),
         ])
         tid += 1
     _set_paginated_msgs(
         player,
         "Tracks You Have No Rank On:",
-        [1.08, 0.12, 0.1, 0.58, 0.28],
-        ['Id', 'Rec', 'Name', 'Author'],
+        [1.44, 0.12, 0.1, 0.44, 0.16, 0.16, 0.28],
+        ['Id', 'Rec', 'Name', 'Top1 Local', 'Author Time', 'Author'],
         rows,
     )
 
@@ -1911,6 +1953,7 @@ async def _get_challenges_no_target(aseco: 'Aseco', player, author: bool):
     is_stnt = getattr(aseco.server.gameinfo, 'mode', -1) == 4
     tracks = await _get_challenges_cache(aseco)
     stats = await _get_player_track_stats(aseco, player)
+    best_times = await _get_best_local_times(aseco)
     clickable = getattr(aseco.settings, 'clickable_lists', False)
     rows = []
     tid = 1
@@ -1943,6 +1986,7 @@ async def _get_challenges_no_target(aseco: 'Aseco', player, author: bool):
             f'{tid:03d}.',
             _fmt_track_name(row.get('Name', ''), uid, tid, clickable),
             _format_list_author(row.get('Author', ''), tid, clickable),
+            _format_track_value(stats[uid]['best'], is_stnt),
             _format_diff(diff, is_stnt),
         ])
         tid += 1
@@ -1950,8 +1994,8 @@ async def _get_challenges_no_target(aseco: 'Aseco', player, author: bool):
     _set_paginated_msgs(
         player,
         title,
-        [1.18, 0.12, 0.56, 0.28, 0.16],
-        ['Id', 'Name', 'Author', 'Time'],
+        [1.32, 0.12, 0.48, 0.24, 0.16, 0.16],
+        ['Id', 'Name', 'Author', 'PB Rec.', 'Delta'],
         rows,
     )
 
@@ -1993,6 +2037,96 @@ async def _get_challenges_no_recent(aseco: 'Aseco', player):
         "Tracks You Didn't Play Recently:",
         [1.30, 0.12, 0.1, 0.52, 0.28, 0.18],
         ['Id', 'Rec', 'Name', 'Author', 'Date'],
+        rows,
+    )
+
+
+async def _get_challenges_recent(aseco: 'Aseco', player):
+    """Tracks ordered by most recent play date first."""
+    player.tracklist = []
+    tracks = await _get_challenges_cache(aseco)
+    track_by_uid = {row.get('UId', ''): row for row in tracks}
+    stats = await _get_player_track_stats(aseco, player)
+    rec_ranks = await _get_player_rec_ranks(aseco, player)
+    best_times = await _get_best_local_times(aseco)
+    maxrecs = _get_maxrecs(aseco)
+    clickable = getattr(aseco.settings, 'clickable_lists', False)
+    is_stnt = getattr(aseco.server.gameinfo, 'mode', -1) == 4
+
+    rows = []
+    tid = 1
+    ordered = sorted(
+        ((uid, data) for uid, data in stats.items() if uid in track_by_uid),
+        key=lambda item: item[1].get('last_date', 0),
+        reverse=True,
+    )
+    for uid, _data in ordered:
+        row = track_by_uid[uid]
+        _append_tracklist_entry(player, row, uid)
+        rank = rec_ranks.get(uid, 0)
+        rec_str = f'{rank:02d}.' if 1 <= rank <= maxrecs else '-- '
+        top1_str = _format_track_value(best_times.get(uid, 0), is_stnt)
+        author_time = int(row.get('AuthorTime', 0) or 0)
+        author_str = _format_track_value(author_time, is_stnt)
+        rows.append([
+            f'{tid:03d}.',
+            rec_str,
+            _fmt_track_name(row.get('Name', ''), uid, tid, clickable),
+            top1_str,
+            author_str,
+        ])
+        tid += 1
+
+    _set_paginated_msgs(
+        player,
+        'Tracks You Played Recently:',
+        [1.34, 0.12, 0.1, 0.52, 0.18, 0.18],
+        ['Id', 'Rec', 'Name', 'Top1 Local', 'Author Time'],
+        rows,
+    )
+
+
+async def _get_challenges_by_rank(aseco: 'Aseco', player, best: bool):
+    """Tracks ordered by the player's local rank, with delta to local Top1."""
+    player.tracklist = []
+    tracks = await _get_challenges_cache(aseco)
+    track_by_uid = {row.get('UId', ''): row for row in tracks}
+    rec_ranks = await _get_player_rec_ranks(aseco, player)
+    stats = await _get_player_track_stats(aseco, player)
+    best_times = await _get_best_local_times(aseco)
+    clickable = getattr(aseco.settings, 'clickable_lists', False)
+    is_stnt = getattr(aseco.server.gameinfo, 'mode', -1) == 4
+
+    ordered = [
+        (uid, rank) for uid, rank in rec_ranks.items()
+        if uid in track_by_uid and uid in stats and int(rank or 0) > 0
+    ]
+    ordered.sort(key=lambda item: item[1], reverse=not best)
+
+    rows = []
+    tid = 1
+    for uid, rank in ordered:
+        row = track_by_uid[uid]
+        player_best = int(stats[uid].get('best', 0) or 0)
+        top1_best = int(best_times.get(uid, 0) or 0)
+        if player_best <= 0 or top1_best <= 0:
+            continue
+        diff = (top1_best - player_best) if is_stnt else (player_best - top1_best)
+        _append_tracklist_entry(player, row, uid)
+        rows.append([
+            f'{tid:03d}.',
+            f'{int(rank):02d}.',
+            _fmt_track_name(row.get('Name', ''), uid, tid, clickable),
+            _format_track_value(top1_best, is_stnt),
+            _format_diff(max(0, diff), is_stnt),
+        ])
+        tid += 1
+
+    _set_paginated_msgs(
+        player,
+        f'Tracks With Your {"Best" if best else "Worst"} Records:',
+        [1.16, 0.12, 0.1, 0.60, 0.18, 0.16],
+        ['Id', 'Rec', 'Name', 'Top1 Local', 'Delta'],
         rows,
     )
 
@@ -2088,11 +2222,12 @@ async def _get_all_challenges(aseco: 'Aseco', player, wildcard: str = '*'):
 
     best_times = await _get_best_local_times(aseco)
 
+    player_stats = await _get_player_track_stats(aseco, player)
     msg  = [[_literal_ml_text('Id'), _literal_ml_text('Rec'), _literal_ml_text('Name'),
-             _literal_ml_text('Time'), _literal_ml_text('Author')]]
+             _literal_ml_text('Top1 Local'), _literal_ml_text('PB Rec.'), _literal_ml_text('Author')]]
     tid  = 1
     lines = 0
-    player.msgs = [[1, header, [1.2, 0.12, 0.1, 0.52, 0.16, 0.28],
+    player.msgs = [[1, header, [1.34, 0.12, 0.1, 0.46, 0.16, 0.16, 0.28],
                     ['Icons128x128_1', 'NewTrack', 0.02]]]
 
     for row in tracks:
@@ -2129,16 +2264,18 @@ async def _get_all_challenges(aseco: 'Aseco', player, wildcard: str = '*'):
         maxrecs = _get_maxrecs(aseco)
         rec_str = f'{rank:02d}.' if (1 <= rank <= maxrecs) else '-- '
 
-        best_ms  = best_times.get(uid, 0)
-        time_str = format_time(best_ms) if best_ms else '--:--'
-        msg.append([f'{tid:03d}.', rec_str, trackname, time_str, trackauthor])
+        best_ms = best_times.get(uid, 0)
+        pb_ms = player_stats.get(uid, {}).get('best', 0)
+        top1_str = _format_track_value(best_ms, getattr(aseco.server.gameinfo, 'mode', -1) == 4)
+        pb_str = _format_track_value(pb_ms, getattr(aseco.server.gameinfo, 'mode', -1) == 4)
+        msg.append([f'{tid:03d}.', rec_str, trackname, top1_str, pb_str, trackauthor])
         tid += 1
         lines += 1
         if lines >= 15:
             player.msgs.append(msg)
             lines = 0
             msg = [[_literal_ml_text('Id'), _literal_ml_text('Rec'), _literal_ml_text('Name'),
-                    _literal_ml_text('Time'), _literal_ml_text('Author')]]
+                    _literal_ml_text('Top1 Local'), _literal_ml_text('PB Rec.'), _literal_ml_text('Author')]]
 
     if len(msg) > 1:
         player.msgs.append(msg)
@@ -2164,11 +2301,11 @@ async def _get_challenges_by_length(aseco: 'Aseco', player, shortest: bool):
 
     label = 'Shortest' if shortest else 'Longest'
     header = f'{label} Tracks On This Server:'
-    msg   = [[_literal_ml_text('Id'), _literal_ml_text('Name'), _literal_ml_text('Time'),
-              _literal_ml_text('Author'), _literal_ml_text('AuthTime')]]
+    msg   = [[_literal_ml_text('Id'), _literal_ml_text('Name'), _literal_ml_text('Top1 Local'),
+              _literal_ml_text('Author'), _literal_ml_text('Author Time')]]
     tid   = 1
     lines = 0
-    player.msgs = [[1, header, [1.36, 0.12, 0.52, 0.16, 0.28, 0.16],
+    player.msgs = [[1, header, [1.30, 0.12, 0.52, 0.16, 0.28, 0.16],
                     ['Icons128x128_1', 'NewTrack', 0.02]]]
 
     for uid, row in sorted_tracks:
@@ -2192,8 +2329,8 @@ async def _get_challenges_by_length(aseco: 'Aseco', player, shortest: bool):
         if lines >= 15:
             player.msgs.append(msg)
             lines = 0
-            msg = [[_literal_ml_text('Id'), _literal_ml_text('Name'), _literal_ml_text('Time'),
-                    _literal_ml_text('Author'), _literal_ml_text('AuthTime')]]
+            msg = [[_literal_ml_text('Id'), _literal_ml_text('Name'), _literal_ml_text('Top1 Local'),
+                    _literal_ml_text('Author'), _literal_ml_text('Author Time')]]
 
     if len(msg) > 1:
         player.msgs.append(msg)
@@ -2212,15 +2349,17 @@ async def _get_challenges_by_add(aseco: 'Aseco', player, newest: bool, count: in
     tracks     = await _get_challenges_cache(aseco)
     track_by_uid = {row.get('UId', ''): row for row in tracks}
     best_times = await _get_best_local_times(aseco)
+    player_stats = await _get_player_track_stats(aseco, player)
+    is_stnt = getattr(aseco.server.gameinfo, 'mode', -1) == 4
 
     clickable = getattr(aseco.settings, 'clickable_lists', False)
     label     = 'Newest' if newest else 'Oldest'
     header    = f'{label} Tracks On This Server:'
     msg       = [[_literal_ml_text('Id'), _literal_ml_text('Name'),
-                  _literal_ml_text('Time'), _literal_ml_text('Author')]]
+                  _literal_ml_text('Top1 Local'), _literal_ml_text('PB Rec.'), _literal_ml_text('Author')]]
     tid       = 1
     lines     = 0
-    player.msgs = [[1, header, [1.2, 0.12, 0.52, 0.16, 0.28],
+    player.msgs = [[1, header, [1.26, 0.12, 0.48, 0.16, 0.16, 0.28],
                     ['Icons128x128_1', 'NewTrack', 0.02]]]
 
     ordered_uids = []
@@ -2229,7 +2368,15 @@ async def _get_challenges_by_add(aseco: 'Aseco', player, newest: bool, count: in
             async with pool.acquire() as conn:
                 async with conn.cursor() as cur:
                     order = 'DESC' if newest else 'ASC'
-                    await cur.execute(f'SELECT Uid FROM challenges ORDER BY Id {order}')
+                    await cur.execute(
+                        f'''
+                        SELECT c.Uid
+                        FROM challenges c
+                        LEFT JOIN challenges_extra x ON (x.Challenge_Id = c.Id)
+                        WHERE c.Uid IS NOT NULL
+                        ORDER BY COALESCE(x.AddedAt, '2000-01-01 00:00:00') {order}, c.Id {order}
+                        '''
+                    )
                     rows = await cur.fetchall()
                     ordered_uids = [r[0] for r in rows if r[0] in track_by_uid]
         except Exception:
@@ -2257,16 +2404,16 @@ async def _get_challenges_by_add(aseco: 'Aseco', player, newest: bool, count: in
 
         trackname   = _fmt_track_name(name, uid, tid, clickable)
         trackauthor = [author, -(100 + tid)] if (clickable and tid <= 1900) else author
-        best_ms = best_times.get(uid, 0)
-        time_str = format_time(best_ms) if best_ms else '--:--'
+        top1_str = _format_track_value(best_times.get(uid, 0), is_stnt)
+        pb_str = _format_track_value(player_stats.get(uid, {}).get('best', 0), is_stnt)
 
-        msg.append([f'{tid:03d}.', trackname, time_str, trackauthor])
+        msg.append([f'{tid:03d}.', trackname, top1_str, pb_str, trackauthor])
         tid += 1; lines += 1; added += 1
         if lines >= 15:
             player.msgs.append(msg)
             lines = 0
             msg = [[_literal_ml_text('Id'), _literal_ml_text('Name'),
-                    _literal_ml_text('Time'), _literal_ml_text('Author')]]
+                    _literal_ml_text('Top1 Local'), _literal_ml_text('PB Rec.'), _literal_ml_text('Author')]]
         if added >= count:
             break
 
@@ -2289,10 +2436,34 @@ async def _get_challenges_cache(aseco: 'Aseco') -> list:
     """Fetch full track list from server (mirrors getChallengesCache)."""
     try:
         tracks = await aseco.client.query('GetChallengeList', 5000, 0) or []
-        return [dict(t) for t in tracks]
+        rows = [dict(t) for t in tracks]
     except Exception as e:
         logger.debug('[List] GetChallengeList failed: %s', e)
         return []
+
+    try:
+        get_pool = getattr(_plugin_module('plugin_localdatabase'), 'get_pool')
+        pool = await get_pool()
+        if pool:
+            from pyxaseco.core.challenges_cache import get_metadata_map
+            meta_by_uid = await get_metadata_map(pool)
+            for row in rows:
+                uid = str(row.get('UId', '') or row.get('Uid', '') or '').strip()
+                if not uid:
+                    continue
+                meta = meta_by_uid.get(uid)
+                if not meta:
+                    continue
+                if int(row.get('AuthorTime', 0) or 0) <= 0 and int(meta.get('author_time', 0) or 0) > 0:
+                    row['AuthorTime'] = int(meta.get('author_time', 0) or 0)
+                if int(row.get('GoldTime', 0) or 0) <= 0 and int(meta.get('gold_time', 0) or 0) > 0:
+                    row['GoldTime'] = int(meta.get('gold_time', 0) or 0)
+                row['AddedAt'] = meta.get('added_at') or ''
+                row['DbId'] = int(meta.get('challenge_id', 0) or 0)
+    except Exception as e:
+        logger.debug('[List] challenges_extra enrich failed: %s', e)
+
+    return rows
 
 
 async def _get_player_rec_ranks(aseco: 'Aseco', player) -> dict:

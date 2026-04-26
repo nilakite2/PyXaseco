@@ -13,6 +13,26 @@ if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
 
+def _display_country(pl) -> str:
+    nation = (getattr(pl, 'nation', '') or '').strip()
+    zone = (getattr(pl, 'zone', '') or '').strip()
+
+    while zone.startswith('World|'):
+        zone = zone[6:]
+
+    zone_country = zone.split('|', 1)[0].strip() if zone else ''
+
+    country = nation
+    if zone_country and len(nation) <= 3:
+        country = zone_country
+
+    if len(country) > 14:
+        mapped = map_country(country)
+        return mapped
+
+    return country
+
+
 def register(aseco: 'Aseco'):
     aseco.add_chat_command('players', 'Displays current list of nicks/logins')
     aseco.register_event('onChat_players',              chat_players)
@@ -43,9 +63,7 @@ async def chat_players(aseco: 'Aseco', command: dict):
         if aseco.settings.clickable_lists and pid <= 200:
             nick_display = [nick_display, pid + 2000]
 
-        nat = pl.nation
-        if len(nat) > 14:
-            nat = map_country(nat)
+        nat = _display_country(pl)
 
         entries.append([f'{pid:02d}.', nick_display, '{#black}' + nat])
         pid += 1

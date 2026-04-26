@@ -1037,6 +1037,12 @@ async def _erase_track_from_localdb(aseco: 'Aseco', uid: str):
                     challenge_id = 0
 
                 try:
+                    from pyxaseco.core.challenges_cache import remove_for_uid
+                    await remove_for_uid(pool, uid)
+                except Exception:
+                    pass
+
+                try:
                     await cur.execute('DELETE FROM rs_karma WHERE uid=%s', (uid,))
                 except Exception:
                     pass
@@ -2842,7 +2848,20 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                                             metadata.get('environment', '')
                                         )
                                     )
-    
+                            try:
+                                from pyxaseco.core.challenges_cache import upsert_for_track
+                                await upsert_for_track(
+                                    aseco,
+                                    pool,
+                                    uid=uid,
+                                    name=metadata.get('name', ''),
+                                    author=metadata.get('author', ''),
+                                    environment=metadata.get('environment', ''),
+                                    filename=rel_insert,
+                                )
+                            except Exception as cache_exc:
+                                aseco.console('[Admin] addlocal challenges_extra warning: {1}', str(cache_exc))
+
                         # Reload tracklist from MatchSettings.txt
                         try:
                             await aseco.client.query_ignore_result(
