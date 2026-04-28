@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pyxaseco.models import Gameinfo
+
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
     from pyxaseco.models import Player
@@ -48,10 +50,13 @@ _config = BestCpsConfig()
 
 
 def register(aseco: 'Aseco'):
+    _load_config(aseco)
     aseco.register_event('onSync', _bestcps_sync)
     aseco.register_event('onPlayerConnect', _bestcps_player_connect)
     aseco.register_event('onCheckpoint', _bestcps_checkpoint)
     aseco.register_event('onCheckpoint', _bestcps_refresh)
+    aseco.register_event('onBeginRound', _bestcps_begin_round)
+    aseco.register_event('onEndRace', _bestcps_end_race)
     aseco.register_event('onNewChallenge', _bestcps_new_challenge)
     aseco.register_event('onPlayerFinish', _bestcps_player_finish)
     aseco.register_event('onPlayerManialinkPageAnswer', _bestcps_click)
@@ -61,7 +66,15 @@ def register(aseco: 'Aseco'):
 
 
 def _config_path(aseco: 'Aseco') -> Path:
-    return Path(getattr(aseco, '_base_dir', '.')).resolve() / 'bestcps.xml'
+    candidates = [
+        Path(getattr(aseco, '_base_dir', '.')).resolve() / 'bestcps.xml',
+        Path.cwd().resolve() / 'bestcps.xml',
+        Path(__file__).resolve().parent.parent / 'bestcps.xml',
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
 
 
 def _parse_int(text: str, default: int) -> int:
@@ -102,6 +115,15 @@ def _load_config(aseco: 'Aseco'):
             pos_x_counter=_parse_float(pos_counter.findtext('x_counter', '0') if pos_counter is not None else '0', 0.0),
             pos_y_counter=_parse_float(pos_counter.findtext('y_counter', '-35') if pos_counter is not None else '-35', -35.0),
         )
+        logger.info(
+            '[BestCps] Config loaded from %s (x=%s, y=%s, number=%s, newline=%s, orientation=%s)',
+            path,
+            _config.pos_x,
+            _config.pos_y,
+            _config.number,
+            _config.newline,
+            _config.orientation,
+        )
     except Exception as e:
         logger.warning('[BestCps] Could not parse %s: %s', path, e)
         _config = BestCpsConfig()
@@ -116,6 +138,10 @@ def _format_cp_time(ms: int) -> str:
 
 def _esc(value: str) -> str:
     return html.escape(str(value or ''), quote=True)
+
+
+def _is_score_mode(aseco: 'Aseco') -> bool:
+    return getattr(getattr(aseco.server, 'gameinfo', None), 'mode', -1) == getattr(Gameinfo, 'SCOR', 7)
 
 
 async def _send_widget_xml(aseco: 'Aseco', login: str, xml: str):
@@ -157,11 +183,16 @@ async def _send_toggle(aseco: 'Aseco', login: str | None = None):
 
 
 def _build_widget_xml() -> str:
+    cell_width_h = 14.3
+    column_step_h = 14.3
+    time_label_width_h = 5.9
+    nick_label_width_h = 6.8
+    cell_width_v = 16.8
+
     xml = ['<?xml version="1.0" encoding="UTF-8"?>']
     xml.append(f'<manialink id="{WIDGET_ID}">')
     xml.append(f'<frame posn="{_config.pos_x} {_config.pos_y}">')
-    textsize = '0.5' if _config.orientation == 0 else '1'
-    xml.append(f'<format textsize="{textsize}"/>')
+    xml.append('<format textsize="1"/>')
 
     entries = [(place, _tab_cp_time[cp_index]) for place, cp_index in enumerate(sorted(_tab_cp_time), start=1)]
     count = len(entries)
@@ -169,7 +200,7 @@ def _build_widget_xml() -> str:
     if _config.orientation in (2, 3) and count > 0:
         height = count * 2 + 0.2
         xml.append(
-            f'<quad posn="0 1.1" sizen="14 {height}" halign="center" valign="top" '
+            f'<quad posn="0 1.1" sizen="{cell_width_v} {height}" halign="center" valign="top" '
             'style="Bgs1InRace" substyle="NavButton" />'
         )
 
@@ -183,19 +214,19 @@ def _build_widget_xml() -> str:
                 line += 1
                 col = 0
 
-            posx = col * 11.5
+            posx = col * column_step_h
             posy = -(line * 2.25)
 
             xml.append(
-                f'<quad posn="{posx} {posy}" sizen="11.5 2.2" halign="center" valign="center" '
+                f'<quad posn="{posx} {posy}" sizen="{cell_width_h} 2.2" halign="center" valign="center" '
                 'style="Bgs1InRace" substyle="NavButton" />'
             )
             xml.append(
-                f'<label posn="{posx - 5.25} {posy}" sizen="5.5 2" halign="left" valign="center" '
+                f'<label posn="{posx - 6.7} {posy}" sizen="{time_label_width_h} 2" halign="left" valign="center" '
                 f'text="{_esc(text)}"/>'
             )
             xml.append(
-                f'<label posn="{posx - 0.35} {posy}" sizen="5.5 2" halign="left" valign="center" '
+                f'<label posn="{posx - 0.1} {posy}" sizen="{nick_label_width_h} 2" halign="left" valign="center" '
                 f'text="{_esc(value.nickname)}"/>'
             )
             col += 1
@@ -204,15 +235,15 @@ def _build_widget_xml() -> str:
             text = f'$z{place}. {_format_cp_time(value.time)}'
             posy = idx * -2
             xml.append(
-                f'<quad posn="0 {posy}" sizen="14 2.2" halign="center" valign="center" '
+                f'<quad posn="0 {posy}" sizen="{cell_width_v} 2.2" halign="center" valign="center" '
                 'style="Bgs1InRace" substyle="NavButton" />'
             )
             xml.append(
-                f'<label posn="-6.5 {posy + 0.1}" sizen="6.5 2" halign="left" valign="center" '
+                f'<label posn="-7.55 {posy + 0.1}" sizen="6.4 2" halign="left" valign="center" '
                 f'text="{_esc(text)}"/>'
             )
             xml.append(
-                f'<label posn="-0.4 {posy + 0.1}" sizen="6.5 2" halign="left" valign="center" '
+                f'<label posn="0.15 {posy + 0.1}" sizen="7.0 2" halign="left" valign="center" '
                 f'text="{_esc(value.nickname)}"/>'
             )
     else:
@@ -220,11 +251,11 @@ def _build_widget_xml() -> str:
             text = f'$z{place}. {_format_cp_time(value.time)}'
             posy = idx * -2 + 0.1
             xml.append(
-                f'<label posn="-6.2 {posy}" sizen="6.5 2" halign="left" valign="center" '
+                f'<label posn="-7.35 {posy}" sizen="6.4 2" halign="left" valign="center" '
                 f'text="{_esc(text)}"/>'
             )
             xml.append(
-                f'<label posn="-0.4 {posy}" sizen="6.5 2" halign="left" valign="center" '
+                f'<label posn="0.15 {posy}" sizen="7.0 2" halign="left" valign="center" '
                 f'text="{_esc(value.nickname)}"/>'
             )
 
@@ -233,6 +264,14 @@ def _build_widget_xml() -> str:
 
 
 async def _broadcast_widget(aseco: 'Aseco'):
+    if _is_score_mode(aseco):
+        await aseco.client.query_ignore_result(
+            'SendDisplayManialinkPage',
+            f'<manialink id="{WIDGET_ID}"></manialink>',
+            0,
+            False,
+        )
+        return
     xml = _build_widget_xml()
     for player in aseco.server.players.all():
         if player.login in _hidden_for:
@@ -248,7 +287,11 @@ async def _bestcps_sync(aseco: 'Aseco', _param=None):
 
 
 async def _bestcps_player_connect(aseco: 'Aseco', player: 'Player'):
+    _load_config(aseco)
     await _send_toggle(aseco, player.login)
+    if _is_score_mode(aseco):
+        await _hide_widget_for_user(aseco, player.login)
+        return
     if player.login not in _hidden_for and _tab_cp_time:
         await _send_widget_xml(aseco, player.login, _build_widget_xml())
 
@@ -268,6 +311,20 @@ async def _bestcps_new_challenge(aseco: 'Aseco', challenge):
 async def _bestcps_player_finish(aseco: 'Aseco', record):
     # Preserved only as a compatibility hook from the original plugin.
     return
+
+
+async def _bestcps_begin_round(aseco: 'Aseco', _param=None):
+    if _tab_cp_time:
+        await _broadcast_widget(aseco)
+
+
+async def _bestcps_end_race(aseco: 'Aseco', _param=None):
+    await aseco.client.query_ignore_result(
+        'SendDisplayManialinkPage',
+        f'<manialink id="{WIDGET_ID}"></manialink>',
+        0,
+        False,
+    )
 
 
 async def _bestcps_checkpoint(aseco: 'Aseco', param: list):
@@ -299,6 +356,14 @@ async def _bestcps_checkpoint(aseco: 'Aseco', param: list):
 
 
 async def _bestcps_refresh(aseco: 'Aseco', _record):
+    if _is_score_mode(aseco):
+        await aseco.client.query_ignore_result(
+            'SendDisplayManialinkPage',
+            f'<manialink id="{WIDGET_ID}"></manialink>',
+            0,
+            False,
+        )
+        return
     if _tab_cp_time:
         await _broadcast_widget(aseco)
 

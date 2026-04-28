@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pyxaseco.helpers import display_manialink, display_manialink_multi, format_time
+from pyxaseco.helpers import display_manialink, display_manialink_multi, format_text, format_time
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -754,11 +754,11 @@ async def _handle_panel_command(
         return
 
     if require_rights and not getattr(aseco.server, "rights", False):
-        await _send_login(aseco, login, aseco.get_chat_message("UNITED_ONLY").format("server"))
+        await _send_login(aseco, login, format_text(aseco.get_chat_message("UNITED_ONLY"), "server"))
         return
 
     if require_rights and not getattr(player, "rights", False):
-        await _send_login(aseco, login, aseco.get_chat_message("UNITED_ONLY").format("account"))
+        await _send_login(aseco, login, format_text(aseco.get_chat_message("UNITED_ONLY"), "account"))
         return
 
     if admin_only:

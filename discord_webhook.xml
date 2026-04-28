@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<settings>
+  <discord_webhook>
+    <enabled>false</enabled>
+
+    <!-- Discord webhook URLs -->
+    <admin_webhook_url>https://discord.com/api/webhooks/</admin_webhook_url>
+    <chat_webhook_url>https://discord.com/api/webhooks/</chat_webhook_url>
+    <admin_webhook_name>PyXaseco Admin</admin_webhook_name>
+    <chat_webhook_name>PyXaseco Chat</chat_webhook_name>
+
+    <!-- Outbound routing -->
+    <mirror_player_chat>true</mirror_player_chat>
+    <mirror_server_chat>false</mirror_server_chat>
+    <mirror_admin_commands>true</mirror_admin_commands>
+    <mirror_joins_leaves>true</mirror_joins_leaves>
+    <mirror_new_challenge>true</mirror_new_challenge>
+    <mirror_warnings_errors>true</mirror_warnings_errors>
+
+    <!-- Message handling -->
+    <strip_tm_colors>true</strip_tm_colors>
+    <request_timeout>10</request_timeout>
+  </discord_webhook>
+</settings>

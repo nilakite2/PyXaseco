@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <rasp>
   <votes>
-    <feature_votes>false</feature_votes>
+    <feature_votes>true</feature_votes>
     <vote_in_window>false</vote_in_window>
     <allow_spec_startvote>false</allow_spec_startvote>
     <allow_spec_voting>false</allow_spec_voting>
     <disable_upon_admin>false</disable_upon_admin>
     <disable_while_sb>false</disable_while_sb>
-    <allow_kickvotes>true</allow_kickvotes>
+    <allow_kickvotes>false</allow_kickvotes>
     <allow_admin_kick>false</allow_admin_kick>
-    <allow_ignorevotes>true</allow_ignorevotes>
+    <allow_ignorevotes>false</allow_ignorevotes>
     <allow_admin_ignore>false</allow_admin_ignore>
     <ladder_fast_restart>false</ladder_fast_restart>
-    <auto_vote_starter>true</auto_vote_starter>
+    <auto_vote_starter>false</auto_vote_starter>
     <max_laddervotes>1</max_laddervotes>
     <max_replayvotes>1</max_replayvotes>
     <max_skipvotes>1</max_skipvotes>

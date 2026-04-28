@@ -3,7 +3,8 @@
 	<plugin>plugin_localdatabase</plugin>
 	<plugin>plugin_rounds</plugin>
 	<plugin>chat_admin</plugin>
-	<plugin>plugin_server_admin_bridge</plugin>
+	<plugin>plugin_server_admin_bridge</plugin> <!--Whitelists server login as MA-->
+	<plugin>plugin_discord_webhook</plugin> <!--Hooks to Discord channel WebHook - discord_webhook.xml-->
 	<plugin>chat_help</plugin>
 	<plugin>chat_records</plugin>
 	<plugin>chat_records2</plugin>
@@ -35,16 +36,20 @@
 	<plugin>plugin_uptodate</plugin>
 	<plugin>plugin_rpoints</plugin>
 	<plugin>jfreu_plugin</plugin>
-	<plugin>plugin_records_eyepiece</plugin>
-	<plugin>plugin_cplive_v3</plugin>
-	<plugin>plugin_bestsecs</plugin>
-	<plugin>plugin_bestcps</plugin>
-	<plugin>plugin_tgj_allbutton</plugin>
-<!--<plugin>plugin_best_checkpoint_times</plugin>-->
-	<plugin>plugin_bestruns</plugin>
+	<plugin>plugin_records_eyepiece</plugin> <!--Validated only in TA, other modes still in progress-->
+	<plugin>plugin_cplive_v3</plugin> <!--Checkpoints Live-->
+	<plugin>plugin_banner</plugin> <!--Displays server name-->
+<!--<plugin>plugin_bestsecs</plugin>--> <!--Best Sector Times-->
+<!--<plugin>plugin_bestcps</plugin>--> <!--Best CPs-->
+<!--<plugin>plugin_tgj_allbutton</plugin>--> <!--Custom Buttons-->
+<!--<plugin>plugin_best_checkpoint_times</plugin>--> <!--Best CP Times-->
+	<plugin>plugin_bestfinishes</plugin> <!--Best Finishes (based on BestRuns plugin)-->
 	<plugin>plugin_mania_karma</plugin>
 <!--<plugin>plugin_freezone</plugin>-->
 	<plugin>plugin_fufi_menu</plugin>
+<!--<plugin>plugin_flexitime</plugin>-->
+<!--<plugin>plugin_staler_tools</plugin>--> <!--Extended commands for chat, etc.-->
+<!--<plugin>plugin_staler_actionids</plugin>-->
 	<plugin>plugin_cpll</plugin>
 	<plugin>plugin_ztrack</plugin>
 </aseco_plugins>

@@ -201,9 +201,9 @@ async def _ensure_tables(aseco: 'Aseco'):
                 CREATE TABLE IF NOT EXISTS `challenges` (
                   `Id` mediumint(9) NOT NULL AUTO_INCREMENT,
                   `Uid` varchar(27) NOT NULL DEFAULT '',
-                  `Name` varchar(100) NOT NULL DEFAULT '',
-                  `Author` varchar(30) NOT NULL DEFAULT '',
-                  `Environment` varchar(10) NOT NULL DEFAULT '',
+                  `Name` varchar(255) NOT NULL DEFAULT '',
+                  `Author` varchar(100) NOT NULL DEFAULT '',
+                  `Environment` varchar(32) NOT NULL DEFAULT '',
                   PRIMARY KEY (`Id`), UNIQUE KEY `Uid` (`Uid`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """)
@@ -276,6 +276,36 @@ async def _ensure_tables(aseco: 'Aseco'):
                   KEY `challengeID` (`challengeID`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """)
+
+            # Repair legacy databases that still use older utf8 charsets.
+            # This prevents backfill/insert failures on 4-byte TM formatting chars.
+            for table_name in (
+                'challenges',
+                'players',
+                'records',
+                'players_extra',
+                'rs_karma',
+                'rs_rank',
+                'rs_times',
+            ):
+                try:
+                    await cur.execute(
+                        f"ALTER TABLE `{table_name}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                    )
+                except Exception as exc:
+                    logger.debug('[LocalDB] Charset repair skipped for %s: %s', table_name, exc)
+
+            # Repair older challenge schemas that used shorter text columns.
+            # Some servers have longer map names than the original XAseco-era widths.
+            try:
+                await cur.execute(
+                    "ALTER TABLE `challenges` "
+                    "MODIFY COLUMN `Name` varchar(255) NOT NULL DEFAULT '', "
+                    "MODIFY COLUMN `Author` varchar(100) NOT NULL DEFAULT '', "
+                    "MODIFY COLUMN `Environment` varchar(32) NOT NULL DEFAULT ''"
+                )
+            except Exception as exc:
+                logger.debug('[LocalDB] Challenge column-width repair skipped: %s', exc)
 
             # Re-enable notes
             await cur.execute("SET sql_notes = 1")

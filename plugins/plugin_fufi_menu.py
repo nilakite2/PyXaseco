@@ -17,6 +17,7 @@ Port notes:
 """
 
 import logging
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -29,6 +30,26 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _fufi_menu: "FufiMenu | None" = None
+
+
+def _resolve_indicator_func(name: str):
+    if not name:
+        return None
+
+    func = globals().get(name)
+    if callable(func):
+        return func
+
+    for mod_name, module in list(sys.modules.items()):
+        if not module:
+            continue
+        if not (mod_name.startswith("pyxaseco_plugins.") or mod_name.startswith("pyxaseco.plugins.")):
+            continue
+        func = getattr(module, name, None)
+        if callable(func):
+            return func
+
+    return None
 
 
 def register(aseco: "Aseco"):
@@ -96,35 +117,23 @@ class FufiMenuEntry:
 
         result: list[FufiMenuEntry] = []
         for entry in self.entries:
-            if entry.rights and not menu.aseco.is_any_admin(player):
-                continue
-
-            if entry.is_group() and not entry.chatcmd:
-                result.append(entry)
-
-            elif "/admin" in entry.chatcmd:
-                parts = entry.chatcmd.split()
-                cmd = parts[1].lower() if len(parts) > 1 else ""
-
-                try:
-                    from pyxaseco.plugins import chat_admin
-                    allowed = bool(chat_admin._auth_check(menu.aseco, player, cmd)[0])
-                except Exception:
-                    allowed = menu.aseco.is_any_admin(player)
-
-                if allowed:
+            if (entry.rights == getattr(player, "rights", False)) or (not entry.rights):
+                if entry.is_group() and not entry.chatcmd:
                     result.append(entry)
-
-            elif "/jfreu" in entry.chatcmd:
-                if menu.aseco.is_any_admin(player):
-                    result.append(entry)
-
-            else:
-                if entry.ability:
-                    if menu.aseco.allow_ability(player, entry.ability):
+                elif "/admin" in entry.chatcmd:
+                    parts = entry.chatcmd.split()
+                    cmd = parts[1] if len(parts) > 1 else ""
+                    if menu.aseco.allow_ability(player, cmd):
+                        result.append(entry)
+                elif "/jfreu" in entry.chatcmd:
+                    if menu.aseco.is_any_admin(player):
                         result.append(entry)
                 else:
-                    result.append(entry)
+                    if entry.ability:
+                        if menu.aseco.allow_ability(player, entry.ability):
+                            result.append(entry)
+                    else:
+                        result.append(entry)
 
         filtered: list[FufiMenuEntry] = []
         for entry in result:
@@ -594,7 +603,7 @@ class FufiMenu:
         if entry.chatcmdparams:
             chatparams = entry.chatcmdparams.split("/")
             if entry.indicator:
-                func = globals().get(entry.indicator)
+                func = _resolve_indicator_func(entry.indicator)
                 if callable(func):
                     params: list[Any] = []
                     if entry.params:
@@ -637,35 +646,23 @@ class FufiMenu:
 
         result: list[FufiMenuEntry] = []
         for entry in self.entries:
-            if entry.rights and not self.aseco.is_any_admin(player):
-                continue
-
-            if entry.is_group() and not entry.chatcmd:
-                result.append(entry)
-
-            elif "/admin" in entry.chatcmd:
-                parts = entry.chatcmd.split()
-                cmd = parts[1].lower() if len(parts) > 1 else ""
-
-                try:
-                    from pyxaseco.plugins import chat_admin
-                    allowed = bool(chat_admin._auth_check(self.aseco, player, cmd)[0])
-                except Exception:
-                    allowed = self.aseco.is_any_admin(player)
-
-                if allowed:
+            if (entry.rights == getattr(player, "rights", False)) or (not entry.rights):
+                if entry.is_group() and not entry.chatcmd:
                     result.append(entry)
-
-            elif "/jfreu" in entry.chatcmd:
-                if self.aseco.is_any_admin(player):
-                    result.append(entry)
-
-            else:
-                if entry.ability:
-                    if self.aseco.allow_ability(player, entry.ability):
+                elif "/admin" in entry.chatcmd:
+                    parts = entry.chatcmd.split()
+                    cmd = parts[1] if len(parts) > 1 else ""
+                    if self.aseco.allow_ability(player, cmd):
+                        result.append(entry)
+                elif "/jfreu" in entry.chatcmd:
+                    if self.aseco.is_any_admin(player):
                         result.append(entry)
                 else:
-                    result.append(entry)
+                    if entry.ability:
+                        if self.aseco.allow_ability(player, entry.ability):
+                            result.append(entry)
+                    else:
+                        result.append(entry)
 
         filtered: list[FufiMenuEntry] = []
         for entry in result:
@@ -851,7 +848,7 @@ class FufiMenu:
                         )
 
                 if entry.indicator:
-                    func = globals().get(entry.indicator)
+                    func = _resolve_indicator_func(entry.indicator)
                     if callable(func):
                         params: list[Any] = []
                         if entry.params:

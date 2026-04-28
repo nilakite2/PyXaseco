@@ -20,7 +20,7 @@
 	<menutimeout>13000</menutimeout> <!-- (milliseconds) time after which the menu closes itself (0 for infinite display)-->
 
 	<!--upper left preset-->
-		<position>-65 47.8</position>
+		<position>-50 47.8</position>
 		<horizontalorientation>1</horizontalorientation> <!-- 1.. left-to-right, 2...right-to-left-->
 		<verticalorientation>1</verticalorientation> <!-- 1.. top-to-bottom, 2.. bottom-to-top-->
 

@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from pyxaseco.models import Gameinfo
+
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
     from pyxaseco.models import Record, Challenge, Player
@@ -37,8 +39,11 @@ _state = BestRunsState()
 
 
 def register(aseco: "Aseco"):
+    LoadConfig_bestruns(aseco)
     aseco.register_event("onStartup", OnStartup_bestruns)
     aseco.register_event("onNewChallenge", OnNewChallenge_bestruns)
+    aseco.register_event("onBeginRound", OnBeginRound_bestruns)
+    aseco.register_event("onEndRace", OnEndRace_bestruns)
     aseco.register_event("onPlayerFinish", OnPlayerFinish_bestruns)
     aseco.register_event("onPlayerConnect", OnPlayerConnect_bestruns)
 
@@ -67,6 +72,14 @@ async def OnStartup_bestruns(aseco: "Aseco", _empty):
 async def OnPlayerConnect_bestruns(aseco: "Aseco", _player: "Player"):
     # Keep widget visible / initialized for newly connected players.
     await Display_bestruns(aseco)
+
+
+async def OnBeginRound_bestruns(aseco: "Aseco", _param=None):
+    await Display_bestruns(aseco)
+
+
+async def OnEndRace_bestruns(aseco: "Aseco", _param=None):
+    await Clear_bestruns(aseco, None)
 
 
 async def OnNewChallenge_bestruns(aseco: "Aseco", challenge: "Challenge"):
@@ -174,7 +187,8 @@ async def OnPlayerFinish_bestruns(aseco: "Aseco", payload):
 def LoadConfig_bestruns(aseco: "Aseco"):
     candidates = [
         Path(getattr(aseco, "_base_dir", ".")).resolve() / "bestruns.xml",
-        Path(".").resolve() / "bestruns.xml",
+        Path.cwd().resolve() / "bestruns.xml",
+        Path(__file__).resolve().parent.parent / "bestruns.xml",
     ]
     path = None
     for candidate in candidates:
@@ -193,17 +207,36 @@ def LoadConfig_bestruns(aseco: "Aseco"):
             node = root.find(tag)
             return node.text.strip() if node is not None and node.text else default
 
-        _state.config.x = float(_text("x", str(_state.config.x)))
-        _state.config.y = float(_text("y", str(_state.config.y)))
+        position = root.find("position")
+
+        def _nested_text(parent, tag: str, default: str) -> str:
+            if parent is None:
+                return default
+            node = parent.find(tag)
+            return node.text.strip() if node is not None and node.text else default
+
+        _state.config.x = float(_text("x", _nested_text(position, "x", str(_state.config.x))))
+        _state.config.y = float(_text("y", _nested_text(position, "y", str(_state.config.y))))
         _state.config.scale = float(_text("scale", str(_state.config.scale)))
-        _state.config.nb_bestruns = int(_text("nb_bestruns", str(_state.config.nb_bestruns)))
+        _state.config.nb_bestruns = int(
+            _text("nb_bestruns", _text("number", str(_state.config.nb_bestruns)))
+        )
         _state.config.nb_bestruns_with_cp = int(
-            _text("nb_bestruns_with_cp", str(_state.config.nb_bestruns_with_cp))
+            _text("nb_bestruns_with_cp", _text("number_with_cps", str(_state.config.nb_bestruns_with_cp)))
         )
         _state.config.nb_max_checkpoints = int(
-            _text("nb_max_checkpoints", str(_state.config.nb_max_checkpoints))
+            _text("nb_max_checkpoints", _text("max_checkpoints", str(_state.config.nb_max_checkpoints)))
         )
-        logger.info("[BestRuns] Config loaded from %s", path)
+        #logger.info(
+        #    "[BestRuns] Config loaded from %s (x=%s, y=%s, scale=%s, count=%s, count_with_cps=%s, max_cps=%s)",
+        #    path,
+        #    _state.config.x,
+        #    _state.config.y,
+        #    _state.config.scale,
+        #    _state.config.nb_bestruns,
+        #    _state.config.nb_bestruns_with_cp,
+        #    _state.config.nb_max_checkpoints,
+        #)
     except Exception as exc:
         logger.warning("[BestRuns] Failed to parse bestruns.xml: %r", exc)
 
@@ -215,16 +248,24 @@ def _format_score(ms: int) -> str:
     return f"{minutes}:{seconds:02d}.{centis:02d}"
 
 
+def _is_score_mode(aseco: "Aseco") -> bool:
+    return getattr(getattr(aseco.server, "gameinfo", None), "mode", -1) == getattr(Gameinfo, "SCOR", 7)
+
+
 async def Display_bestruns(aseco: "Aseco"):
+    if _is_score_mode(aseco):
+        await Clear_bestruns(aseco, None)
+        return
+
     cfg = _state.config
     x_frame_widget = cfg.x
     y_frame_widget = cfg.y
 
-    textsize = 1
+    textsize = 0.8
     textsize_cp = 0.9
     nb_col = 3
 
-    width_bestrun = 14
+    width_bestrun = 14.3
     height_main = 2.2
 
     xml_parts = [
@@ -239,10 +280,10 @@ async def Display_bestruns(aseco: "Aseco"):
         xml_parts.extend(
             [
                 f'<frame posn="0 0">',
-                f'<quad scale="{cfg.scale}" posn="0 0" sizen="{width_bestrun} {height_main}" '
-                'halign="left" valign="top" style="Bgs1InRace" substyle="NavButton" />',
-                f'<label scale="{cfg.scale}" posn="0.6 -0.3" sizen="13 2" '
-                'halign="left" valign="top" text="$z$fffBestRuns"/>',
+                #f'<quad scale="{cfg.scale}" posn="0 0" sizen="{width_bestrun} {height_main}" '
+                #'halign="left" valign="top" style="Bgs1InRace" substyle="NavButton" />',
+                #f'<label scale="{cfg.scale}" posn="0.6 -1.0" sizen="13 2" '
+                #'halign="left" valign="center" text="$z$fffBestRuns"/>',
                 "</frame>",
             ]
         )
@@ -259,14 +300,14 @@ async def Display_bestruns(aseco: "Aseco"):
             height_quad_main = height_main
 
             x_offset_label_time = 0.6
-            y_offset_label_time = -0.3
+            y_offset_label_time = -1.0
             x_label_time = (0 + x_offset_label_time) * cfg.scale
             y_label_time = (0 + y_offset_label_time) * cfg.scale
             width_label_time = 5.8
             height_label_time = 2
 
             x_offset_label_nickname = 0.6
-            y_offset_label_nickname = -0.3
+            y_offset_label_nickname = -1.0
             x_label_nickname = (width_label_time + x_offset_label_nickname) * cfg.scale
             y_label_nickname = (0 + y_offset_label_nickname) * cfg.scale
             width_label_nickname = 6.9
@@ -289,9 +330,9 @@ async def Display_bestruns(aseco: "Aseco"):
                     f'<quad scale="{cfg.scale}" posn="0 0" sizen="{width_quad_main} {height_quad_main}" '
                     'halign="left" valign="top" style="Bgs1InRace" substyle="NavButton" />',
                     f'<label scale="{cfg.scale}" posn="{x_label_time} {y_label_time}" '
-                    f'sizen="{width_label_time} {height_label_time}" halign="left" valign="top" text="{time_txt}"/>',
+                    f'sizen="{width_label_time} {height_label_time}" halign="left" valign="center" text="{time_txt}"/>',
                     f'<label scale="{cfg.scale}" posn="{x_label_nickname} {y_label_nickname}" '
-                    f'sizen="{width_label_nickname} {height_label_nickname}" halign="left" valign="top" text="{nickname}"/>',
+                    f'sizen="{width_label_nickname} {height_label_nickname}" halign="left" valign="center" text="{nickname}"/>',
                     "</frame>",
                 ]
             )
@@ -312,7 +353,7 @@ async def Display_bestruns(aseco: "Aseco"):
                     cp = int(checks[j] or 0)
                     textee = f"$z$fff{_format_score(cp)}"
 
-                    width_quad_cp = 4.6
+                    width_quad_cp = width_bestrun / nb_col
                     height_quad_cp = 1.6
                     x_quad_cp = (j % nb_col) * width_quad_cp * cfg.scale
                     y_quad_cp = (-((j // nb_col) * height_quad_cp)) * cfg.scale

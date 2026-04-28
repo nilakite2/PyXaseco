@@ -222,9 +222,8 @@
 			<pos_y>48</pos_y>
 		</race>
 		<score>
-			<pos_x>47.50</pos_x>
+			<pos_x>48.7</pos_x>
 			<pos_y>48</pos_y>
-			<width>16.5</width>
 		</score>
 	</challenge_widget>
 
@@ -278,7 +277,7 @@
 			<time_attack>
 				<enabled>true</enabled>
 				<pos_x>49.2</pos_x>
-				<pos_y>-5.7</pos_y>
+				<pos_y>0.7</pos_y>
 				<entries>10</entries>
 				<topcount>3</topcount>
 			</time_attack>
@@ -373,7 +372,7 @@
 			<time_attack>
 				<enabled>true</enabled>
 				<pos_x>49.2</pos_x>
-				<pos_y>17.8</pos_y>
+				<pos_y>22.1</pos_y>
 				<entries>10</entries>
 				<topcount>3</topcount>
 			</time_attack>
@@ -433,10 +432,10 @@
 
 			<time_attack>
 				<enabled>false</enabled>
-				<pos_x>49.2</pos_x>
-				<pos_y>-10.7</pos_y>
-				<entries>8</entries>
-				<topcount>3</topcount>
+				<pos_x>33.5</pos_x>
+				<pos_y>48</pos_y>
+				<entries>5</entries>
+				<topcount>0</topcount>
 			</time_attack>
 
 			<team>
@@ -686,7 +685,7 @@
 
 	<!-- Displays the current LadderLimits like "40-80k" -->
 	<ladderlimit_widget>
-		<enabled>true</enabled>
+		<enabled>false</enabled>
 		<text_color>FC0F</text_color>
 
 		<!--
@@ -706,7 +705,7 @@
 
 	<!-- Displays the current Gamemode (within Race) -->
 	<gamemode_widget>
-		<enabled>true</enabled>
+		<enabled>false</enabled>
 		<text_color>FC0F</text_color>
 
 		<pos_x>-59.05</pos_x>
@@ -722,8 +721,8 @@
 		<enabled>true</enabled>
 		<text_color>FC0F</text_color>
 
-		<pos_x>-54.25</pos_x>
-		<pos_y>39.8</pos_y>
+		<pos_x>-54.5</pos_x>
+		<pos_y>41.1</pos_y>
 
 		<background_style>BgsPlayerCard</background_style>
 		<background_substyle>ProgressBar</background_substyle>
@@ -732,7 +731,7 @@
 
 	<!-- Displays the current Rankings -->
 	<current_ranking_widget>
-		<enabled>true</enabled>
+		<enabled>false</enabled>
 		<text_color>FC0F</text_color>
 
 		<pos_x>-49.45</pos_x>
@@ -745,7 +744,7 @@
 
 	<!-- Displays a button for TMExchange -->
 	<tmexchange_widget>
-		<enabled>true</enabled>
+		<enabled>false</enabled>
 		<text_color>FC0F</text_color>
 
 		<pos_x>25.1</pos_x>
@@ -758,7 +757,7 @@
 
 	<!-- Displays a button for the Toplists at score into the Race 'MORE RANKING' -->
 	<toplist_widget>
-		<enabled>true</enabled>
+		<enabled>false</enabled>
 		<text_color>FC0F</text_color>
 
 		<pos_x>29.9</pos_x>
@@ -774,8 +773,8 @@
 		<enabled>true</enabled>
 		<text_color>FC0F</text_color>
 
-		<pos_x>44.3</pos_x>
-		<pos_y>48</pos_y>
+		<pos_x>-59.2</pos_x>
+		<pos_y>47.8</pos_y>
 
 		<background_style>BgsPlayerCard</background_style>
 		<background_substyle>ProgressBar</background_substyle>
@@ -787,8 +786,8 @@
 		<enabled>true</enabled>
 		<text_color>FC0F</text_color>
 
-		<pos_x>39.5</pos_x>
-		<pos_y>39.3</pos_y>
+		<pos_x>-63.9</pos_x>
+		<pos_y>47.8</pos_y>
 
 		<background_style>BgsPlayerCard</background_style>
 		<background_substyle>ProgressBar</background_substyle>
@@ -803,8 +802,8 @@
 		<text_color>FC0F</text_color>
 
 		<race>
-			<pos_x>44.3</pos_x>
-			<pos_y>39.3</pos_y>
+			<pos_x>-54.5</pos_x>
+			<pos_y>47.8</pos_y>
 			<background_style>BgsPlayerCard</background_style>
 			<background_substyle>ProgressBar</background_substyle>
 		</race>
@@ -819,11 +818,11 @@
 
 	<!-- Displays the Add-To-Favorite -->
 	<favorite_widget>
-		<enabled>true</enabled>
+		<enabled>false</enabled>
 		<text_color>FC0F</text_color>
 
 		<race>
-			<pos_x>34.7</pos_x>
+			<pos_x>44.3</pos_x>
 			<pos_y>39.3</pos_y>
 			<background_style>BgsPlayerCard</background_style>
 			<background_substyle>ProgressBar</background_substyle>

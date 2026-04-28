@@ -55,6 +55,73 @@ class FreezoneState:
             'free': 0,
         }
 
+    @staticmethod
+    def _api_number(value, default: int = 0) -> int:
+        """Coerce freezone API payloads into an integer value."""
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str):
+            try:
+                return int(float(value.strip()))
+            except Exception:
+                return default
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return default
+            return FreezoneState._api_number(value[0], default)
+        if isinstance(value, dict):
+            for key in ('count', 'value', 'result', 'status'):
+                if key in value:
+                    return FreezoneState._api_number(value[key], default)
+        return default
+
+    @staticmethod
+    def _is_spectator(player_or_info) -> bool:
+        raw = getattr(player_or_info, 'spectatorstatus', None)
+        if raw is None and isinstance(player_or_info, dict):
+            raw = player_or_info.get('SpectatorStatus', player_or_info.get('spectatorstatus'))
+        if raw is not None:
+            try:
+                return (int(raw) % 10) != 0
+            except Exception:
+                pass
+        raw_flag = getattr(player_or_info, 'isspectator', None)
+        if raw_flag is None and isinstance(player_or_info, dict):
+            raw_flag = player_or_info.get('IsSpectator', player_or_info.get('isspectator', False))
+        return bool(raw_flag)
+
+    async def _show_freezone_button(self, login: str | None = None):
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<manialinks>'
+            '<manialink id="1073741824">'
+            f'<frame posn="53 {"42" if self.gamestate == 1 else "47"} -32">'
+            '<quad sizen="27 4" style="BgsPlayerCard" substyle="BgCard1" manialink="freezone"/>'
+            '<label posn="13.5 -1 0.1" sizen="27 3" halign="center" '
+            'style="TextStaticSmall" text="FreeZone"/>'
+            '</frame>'
+            '</manialink>'
+            '</manialinks>'
+        )
+
+        if login:
+            player = self.aseco.server.players.get_player(login)
+            if player and not getattr(player, 'rights', False):
+                await self.aseco.client.query_ignore_result(
+                    'SendDisplayManialinkPageToLogin', login, xml, 0, False
+                )
+            return
+
+        logins = [pl.login for pl in self.aseco.server.players.all() if not getattr(pl, 'rights', False)]
+        if logins:
+            await self.aseco.client.query_ignore_result(
+                'SendDisplayManialinkPageToLogin', ','.join(logins), xml, 0, False
+            )
+
     def get_free_players(self) -> list:
         return [pl.login for pl in self.aseco.server.players.all()
                 if not getattr(pl, 'rights', False)]
@@ -84,20 +151,43 @@ class FreezoneState:
         if getattr(player, 'rights', False):
             return
         # Check ban
-        ban_status = await self._api('GET', f'/freezone/ban/status/{login}/index.json')
+        ban_status = self._api_number(await self._api('GET', f'/freezone/ban/status/{login}/index.json'))
         if ban_status == 2:
             await self.aseco.client.query_ignore_result('Kick', login)
             self.banned.append(login)
             return
+
+        # Restore in-memory state first when reconnecting during the same session.
+        if login in self.retired:
+            if login in self.players:
+                if self._is_spectator(player):
+                    self.spectators[login] = self.players[login]
+                else:
+                    await self.aseco.client.query_ignore_result('ForceSpectator', login, 2)
+                    self.forced[login] = 2
+            elif login in self.spectators:
+                if self._is_spectator(player):
+                    await self._force_spectator(login, max(int(self.spectators.get(login, MAX_PLAYER_GAME) or 0), MAX_PLAYER_GAME))
+                elif int(self.spectators.get(login, 0) or 0) > MAX_PLAYER_GAME:
+                    await self._force_spectator(login, int(self.spectators.get(login, MAX_PLAYER_GAME) or MAX_PLAYER_GAME))
+                else:
+                    self.players[login] = self.spectators[login]
+                    self.spectators.pop(login, None)
+            await self._show_freezone_button(login)
+            return
+
         # Check rules count
-        count = await self._api('GET', f'/freezone/rules/{login}/index.json') or 0
+        count = self._api_number(await self._api('GET', f'/freezone/rules/{login}/index.json'))
         if count >= MAX_PLAYER_GAME:
             await self._force_spectator(login, count)
         else:
-            self.players[login] = count
-            if not self.player.isspectator:
+            if not self._is_spectator(player):
+                self.players[login] = count
                 await self.aseco.client.query_ignore_result('ForceSpectator', login, 2)
                 self.forced[login] = 2
+            else:
+                self.spectators[login] = count
+        await self._show_freezone_button(login)
 
     async def player_disconnect(self, player):
         login = player.login
@@ -113,10 +203,6 @@ class FreezoneState:
         self.spectators[login] = count
         await self.aseco.client.query_ignore_result('ForceSpectator', login, 1)
         self.forced[login] = 1
-        msg = self.notify_mute.format(self._get_player_nick(aseco, login))
-        if self.notify:
-            await self.aseco.client.query_ignore_result(
-                'ChatSendServerMessage', CHAT_PREFIX + msg)
 
     async def new_challenge(self, challenge):
         # Increment counters and check limits
@@ -134,6 +220,7 @@ class FreezoneState:
                 await self._force_spectator(login, value + 1)
 
         self.gamestate = 0
+        await self._show_freezone_button()
 
     async def end_race(self):
         self.gamestate = 1
@@ -144,6 +231,7 @@ class FreezoneState:
             self.players.pop(login, None)
             self.spectators.pop(login, None)
         self.retired.clear()
+        await self._show_freezone_button()
 
     async def tick(self):
         now = time.time()
@@ -151,12 +239,6 @@ class FreezoneState:
             self.banned = []
             self.interval['ban_slang'] = now
         if self.interval['rules'] + 780 <= now:
-            free = self.get_free_players()
-            if free:
-                msg = (CHAT_PREFIX +
-                       'Free account players: max 5 tracks in a row before 1 spectator round.')
-                await self.aseco.client.query_ignore_result(
-                    'ChatSendServerMessage', msg)
             self.interval['rules'] = now
 
     def check_language(self, login: str, text: str):
@@ -219,7 +301,31 @@ async def _fz_player_disconnect(aseco: 'Aseco', player):
 
 
 async def _fz_info_changed(aseco: 'Aseco', info: dict):
-    pass  # player side-switching handled in new_challenge
+    if not _fz:
+        return
+    if isinstance(info, dict):
+        login = str(info.get('Login', info.get('login', '')) or '').strip()
+    else:
+        login = str(getattr(info, 'login', '') or '').strip()
+    if not login:
+        return
+    player = aseco.server.players.get_player(login)
+    if not player or getattr(player, 'rights', False):
+        return
+
+    is_spec = _fz._is_spectator(info if isinstance(info, dict) else player)
+    player.isspectator = is_spec
+
+    if not is_spec:
+        if login in _fz.spectators:
+            _fz.players[login] = _fz.spectators.pop(login)
+        await aseco.client.query_ignore_result('ForceSpectator', login, 2)
+        _fz.forced[login] = 2
+    else:
+        if login in _fz.players:
+            _fz.spectators[login] = _fz.players.pop(login)
+
+    await _fz._show_freezone_button(login)
 
 
 async def _fz_action(aseco: 'Aseco', answer: list):

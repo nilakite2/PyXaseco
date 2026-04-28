@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <settings>
-	<x>-52</x>
-	<y>48</y>
-	<scale>1</scale>
-	<nb_bestruns>6</nb_bestruns>
-	<nb_bestruns_with_cp>0</nb_bestruns_with_cp>
-	<nb_max_checkpoints>0</nb_max_checkpoints>
+	<position>
+		<x>-55.66</x>
+		<y>45.65</y>
+	</position>
+	<number>7</number>
+	<number_with_cps>7</number_with_cps>
+	<max_checkpoints>9</max_checkpoints>
 </settings>
