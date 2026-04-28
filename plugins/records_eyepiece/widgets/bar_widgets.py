@@ -913,7 +913,7 @@ async def _draw_rampage_buttons_all(aseco: 'Aseco') -> None:
         return
     xml = (
         f'<manialink id="{ML_RAMPAGE_DISCORD}">'
-        f'<frame posn="39.5 48 0" action="{ACT_RAMPAGE_DISCORD}">'
+        f'<frame posn="-59.2 41.1 0" action="{ACT_RAMPAGE_DISCORD}">'
         f'<format textsize="1"/>'
         f'<quad posn="0 0 0.001" sizen="4.6 6.5"'
         f' action="{ACT_RAMPAGE_DISCORD}"'
@@ -928,7 +928,7 @@ async def _draw_rampage_buttons_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
         f'<manialink id="{ML_RAMPAGE_FORCE}">'
-        f'<frame posn="34.7 48 0" action="{ACT_RAMPAGE_FORCE}">'
+        f'<frame posn="-63.9 41.1 0" action="{ACT_RAMPAGE_FORCE}">'
         f'<format textsize="1"/>'
         f'<quad posn="0 0 0.001" sizen="4.6 6.5"'
         f' action="{ACT_RAMPAGE_FORCE}"'
