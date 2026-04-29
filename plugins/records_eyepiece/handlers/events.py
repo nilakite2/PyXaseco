@@ -246,6 +246,7 @@ async def _on_dedi_record(aseco: 'Aseco', _rec):
 async def _on_begin_round(aseco: 'Aseco', _p=None):
     from ..widgets.common import _hide
     from ..widgets.checkpoint import _refresh_cp_targets_all
+    from ..widgets.score_widgets import hide_round_score
 
     # Refresh last_real_mode — round start always has the real game mode
     _effective_mode(aseco)
@@ -261,6 +262,7 @@ async def _on_begin_round(aseco: 'Aseco', _p=None):
 
     _state.round_scores.clear()
     _state.round_score_pb.clear()
+    await hide_round_score(aseco)
     _refresh_cp_targets_all(aseco)
     await _apply_custom_ui_all(aseco)
     await _draw_cp_all(aseco)
@@ -388,10 +390,9 @@ async def _on_end_race(aseco: 'Aseco', _p=None):
     await _draw_live_all(aseco)
 
     from ..widgets.bar_widgets import draw_all_score_bars, hide_all_race_bars
-    from ..widgets.score_widgets import draw_all_score_lists, hide_round_score
+    from ..widgets.score_widgets import draw_all_score_lists
     from ..toplists import draw_all_score_columns
     await hide_all_race_bars(aseco)
-    await hide_round_score(aseco)
     await draw_all_score_bars(aseco)
     await draw_all_score_lists(aseco)
     await draw_all_score_columns(aseco)
@@ -413,11 +414,12 @@ async def _on_end_race1(aseco: 'Aseco', _p=None):
     await _redraw_all(aseco)
 
     from ..widgets.bar_widgets import draw_all_race_bars, hide_all_score_bars
-    from ..widgets.score_widgets import hide_all_score_lists
+    from ..widgets.score_widgets import hide_all_score_lists, hide_round_score
     from ..toplists import hide_all_score_columns
     await hide_all_score_bars(aseco)
     await hide_all_score_lists(aseco)
     await hide_all_score_columns(aseco)
+    await hide_round_score(aseco)
     await draw_all_race_bars(aseco)
 
 

@@ -31,13 +31,14 @@ async def _fetch_live(aseco: 'Aseco') -> list:
     if not isinstance(ranks, list):
         return []
 
-    # Team mode — override login/nick with team labels
+    # Team mode — collapse to the two team entries and relabel them explicitly.
     if getattr(aseco.server.gameinfo, 'mode', -1) == Gameinfo.TEAM and len(ranks) >= 2:
         try:
             ranks[0].update({'Login': 'TEAM-0', 'NickName': '$08FTeam Blue'})
             ranks[1].update({'Login': 'TEAM-1', 'NickName': '$F50Team Red'})
         except Exception:
             pass
+        return ranks[:2]
     return ranks
 
 
@@ -53,6 +54,20 @@ def _point_limit(aseco) -> int:
     if mode == Gameinfo.CUP:
         return int(getattr(info, 'cuplimit', 0) or 0)
     return 0
+
+
+def _is_team_live_mode(aseco, mode: int | None = None) -> bool:
+    if mode == Gameinfo.TEAM:
+        return True
+    direct_mode = getattr(getattr(aseco.server, 'gameinfo', None), 'mode', -1)
+    if direct_mode == Gameinfo.TEAM:
+        return True
+    if len(_state.live_cache) >= 2:
+        login0 = str(_state.live_cache[0].get('Login') or '')
+        login1 = str(_state.live_cache[1].get('Login') or '')
+        if login0 == 'TEAM-0' and login1 == 'TEAM-1':
+            return True
+    return False
 
 
 def _live_metric(aseco, item: dict, cfg: WidgetCfg, plimit: int) -> str:
@@ -167,7 +182,7 @@ def _live_team_entries(aseco) -> list:
             'login': il,
             'nickname': item.get('NickName') or il or '?',
             'score': str(int(item.get('Score', 0) or 0)) + ' pts.',
-            'self': 0,
+            'self': -1,
             'highlitefull': False,
         })
     return entries
@@ -176,6 +191,11 @@ def _live_team_entries(aseco) -> list:
 async def _draw_live_player(aseco: 'Aseco', login: str):
     from .common import _hide, _send
     from .records_common import _build_record_widget
+
+    mode = getattr(aseco.server.gameinfo, 'mode', -1)
+    if _state.challenge_show_next or mode == getattr(Gameinfo, 'SCOR', 7):
+        await _hide(aseco, login, ML_LIVE)
+        return
 
     if not _state.player_visible.get(login, True):
         await _hide(aseco, login, ML_LIVE)
@@ -188,8 +208,9 @@ async def _draw_live_player(aseco: 'Aseco', login: str):
         return
 
     plimit = _point_limit(aseco)
+    team_mode = _is_team_live_mode(aseco, mode)
 
-    if mode == Gameinfo.TEAM:
+    if team_mode:
         raw_entries = _live_team_entries(aseco)
     else:
         raw_entries = _live_entries_for(aseco, login, cfg, plimit)
@@ -205,7 +226,7 @@ async def _draw_live_player(aseco: 'Aseco', login: str):
         login=login,
         entries=raw_entries,
         online=set(),
-        mode=mode,
+        mode=Gameinfo.TEAM if team_mode else mode,
         is_live=True,
         click_action=91806,
     )
@@ -218,8 +239,9 @@ def _build_live_rankings_window(aseco: 'Aseco', page: int = 0) -> str:
         return ''
 
     mode = _effective_mode(aseco)
+    team_mode = _is_team_live_mode(aseco, mode)
     plimit = _point_limit(aseco)
-    cfg = _state.live.get(mode, WidgetCfg())
+    cfg = _state.live.get(Gameinfo.TEAM if team_mode else mode, WidgetCfg())
     st = _state.style
 
     total = len(live)
@@ -263,7 +285,7 @@ def _build_live_rankings_window(aseco: 'Aseco', page: int = 0) -> str:
         rank_num = start + i + 1
         y = 1.83 * line
 
-        if mode == Gameinfo.TEAM:
+        if team_mode:
             p.append(f'<label posn="{6.6 + offset:.2f} -{y:.2f} 0.03" sizen="6 1.7" halign="right" scale="0.9" textcolor="FFFF" text="{score_str}"/>')
         else:
             p.append(f'<label posn="{2.6 + offset:.2f} -{y:.2f} 0.03" sizen="2 1.7" halign="right" scale="0.9" text="{rank_num}."/>')

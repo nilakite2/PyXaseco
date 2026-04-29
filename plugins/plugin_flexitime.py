@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from pyxaseco.core.config import parse_xml_file
+from pyxaseco.models import Gameinfo
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -51,6 +52,10 @@ class FlexiTime:
         self.paused      = False
 
         self._load_config(aseco)
+
+    def _is_ta_mode(self) -> bool:
+        gameinfo = getattr(getattr(self.aseco, 'server', None), 'gameinfo', None)
+        return getattr(gameinfo, 'mode', -1) == Gameinfo.TA
 
     def _load_config(self, aseco: 'Aseco'):
         xml_path = aseco._base_dir / 'flexitime.xml'
@@ -105,6 +110,10 @@ class FlexiTime:
         return self.clock_colour
 
     async def init_timer(self):
+        if not self._is_ta_mode():
+            self.paused = True
+            await self.hide_panel()
+            return
         challenge = self.aseco.server.challenge
         self.author_time = round(challenge.authortime / 1000)
         self.paused = False
@@ -143,6 +152,10 @@ class FlexiTime:
         await self._show_panel()
 
     async def tick(self):
+        if not self._is_ta_mode():
+            self.paused = True
+            await self.hide_panel()
+            return
         if not self.paused and self.time_left > 0:
             self.time_left -= 1
         await self._show_panel()
@@ -203,6 +216,10 @@ class FlexiTime:
             await self.aseco.client.query_ignore_result(
                 'ChatSendServerMessage', f'> {msg}')
 
+        if not self._is_ta_mode():
+            await _private('FlexiTime is only active in TimeAttack mode.')
+            return
+
         if not emergency and not param:
             suf = ' (h:m:s)' if self.time_left >= 3600 else ' (m:s)'
             status = ' (paused).' if self.paused else '.'
@@ -261,6 +278,10 @@ class FlexiTime:
         async def _private(msg):
             await self.aseco.client.query_ignore_result(
                 'ChatSendServerMessageToLogin', msg, login)
+
+        if not self._is_ta_mode():
+            await _private('FlexiTime is only active in TimeAttack mode.')
+            return
 
         if not self.custom_time:
             await _private('/timeset command not enabled in plugin config.')

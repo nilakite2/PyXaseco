@@ -674,11 +674,14 @@ def _load_config(aseco: 'Aseco') -> None:
     warm_op = _get_node_value(rs_node, 'WARMUP', {})
     _state.round_score_cfg = {
         'title':  str(_get_node_value(rs_node, 'TITLE', 'Round Score')),
-        'width':  max(15.5, _get_float(rs_node, 'WIDTH', 15.5)),
+        'width':  max(20.5, _get_float(rs_node, 'WIDTH', 20.5)),
         'race':   {'icon_style': str(_get_node_value(race_op,'ICON_STYLE','Icons64x64_1')), 'icon_substyle': str(_get_node_value(race_op,'ICON_SUBSTYLE','RestartRace'))},
         'warmup': {'icon_style': str(_get_node_value(warm_op,'ICON_STYLE','BgRaceScore2')), 'icon_substyle': str(_get_node_value(warm_op,'ICON_SUBSTYLE','Warmup'))},
         'gamemodes': {'rounds': _rs_gm('rounds'),'time_attack': _rs_gm('time_attack'),'team': _rs_gm('team'),'laps': _rs_gm('laps'),'stunts': _rs_gm('stunts'),'cup': _rs_gm('cup')},
     }
+
+    if any(gm.get('enabled', False) for gm in _state.round_score_cfg['gamemodes'].values()):
+        _state.custom_ui_round_scores = False
 
     # ── Phase 4: scoretable_lists config ─────────────────────────────────
     def _stl(key: str, d: dict) -> dict:

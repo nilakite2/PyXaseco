@@ -22,6 +22,7 @@ from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 
 from ..config import _state, _effective_mode
+from ..utils import _clip, _sanitise_nick
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -477,7 +478,9 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
         title_ha= 'left'
 
     widget_height = lh * entries + 3.3
-    col_width_name = width / 100 * 62.58
+    col_width_name = width / 100 * 72.0
+    score_x = 2.65
+    score_w = 3.45
 
     p = []
     p.append(f'<manialink id="{ML_ROUND_SCORE}">')
@@ -509,10 +512,10 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
         # Empty — no one finished yet
         p.append(f'<label posn="2.3 -3 0.004" sizen="1.7 1.7"'
                  f' halign="right" scale="0.9" text="{escape(fmt)}--."/ >')
-        p.append(f'<label posn="5.9 -3 0.004" sizen="3.8 1.7"'
-                 f' halign="right" scale="0.9" textcolor="{escape(col_top)}"'
+        p.append(f'<label posn="{score_x:.2f} -3 0.004" sizen="{score_w:.2f} 1.7"'
+                 f' halign="left" scale="0.9" textcolor="{escape(col_top)}"'
                  f' text="{escape(fmt)}-:--.--"/>')
-        p.append(f'<label posn="6.1 -3 0.004" sizen="{col_width_name:.2f} 1.7"'
+        p.append(f'<label posn="6.25 -3 0.004" sizen="{max(width - 6.7, 1.0):.2f} 1.7"'
                  f' scale="0.9" textcolor="FA0F" text=" Free For You!"/>')
     else:
         # Build sorted score list
@@ -540,14 +543,18 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
                 sorted_list.extend(group)
 
         # Get rpoints
-        rpoints = _get_rpoints(aseco, mode)
+        rpoints = _get_rpoints(aseco, mode, len(sorted_list))
 
         line = 0
         offset = 3.0
+        row_scale = 0.65
+        name_x = 5.05 if mode == Gameinfo.TEAM else 5.05
+        name_w = max(width - name_x - 0.55, 1.0)
+
         for item in sorted_list[:entries]:
             y = lh * line + offset
             textcolor = col_top if (line + 1) <= topcount else col_worse
-            nick = escape(item.get('nickname', '?'))
+            nick = escape(_sanitise_nick(item.get('nickname', '?')))
             score_txt = escape(item.get('score', '--'))
 
             # Points badge (left or right of widget)
@@ -564,19 +571,19 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
                     p.append(f'<quad posn="-7.1 -{y-0.3:.2f} 0.003" sizen="7 2"'
                              f' style="BgsPlayerCard" substyle="ProgressBar"/>')
                     p.append(f'<label posn="-2.35 -{y:.2f} 0.004" sizen="4.8 2"'
-                             f' halign="right" scale="0.9" textcolor="{delta_col}"'
+                             f' halign="right" scale="{row_scale:.2f}" textcolor="{delta_col}"'
                              f' text="$O+{escape(fmt)}{delta_txt}"/>')
                     p.append(f'<label posn="-0.5 -{y:.2f} 0.004" sizen="1.3 2"'
-                             f' halign="right" scale="0.9" textcolor="{delta_col}"'
+                             f' halign="right" scale="{row_scale:.2f}" textcolor="{delta_col}"'
                              f' text="$O{escape(fmt)}{lap_txt}"/>')
                 else:
                     p.append(f'<quad posn="{width+0.1:.2f} -{y-0.3:.2f} 0.003" sizen="7 2"'
                              f' style="BgsPlayerCard" substyle="ProgressBar"/>')
                     p.append(f'<label posn="{width+4.7:.2f} -{y:.2f} 0.004" sizen="4.8 2"'
-                             f' halign="right" scale="0.9" textcolor="{delta_col}"'
+                             f' halign="right" scale="{row_scale:.2f}" textcolor="{delta_col}"'
                              f' text="$O+{escape(fmt)}{delta_txt}"/>')
                     p.append(f'<label posn="{width+6.8:.2f} -{y:.2f} 0.004" sizen="1.3 2"'
-                             f' halign="right" scale="0.9" textcolor="{delta_col}"'
+                             f' halign="right" scale="{row_scale:.2f}" textcolor="{delta_col}"'
                              f' text="$O{escape(fmt)}{lap_txt}"/>')
             else:
                 pts = (rpoints[line] if line < len(rpoints)
@@ -586,41 +593,106 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
                     p.append(f'<quad posn="-4.1 -{y-0.3:.2f} 0.003" sizen="4 2"'
                              f' style="Bgs1InRace" substyle="BgCard1"/>')
                     p.append(f'<label posn="-0.6 -{y:.2f} 0.004" sizen="3 2"'
-                             f' halign="right" scale="0.9" textcolor="0B3F"'
+                             f' halign="right" scale="{row_scale:.2f}" textcolor="0B3F"'
                              f' text="{pts_txt}"/>')
                 else:
                     p.append(f'<quad posn="{width+0.1:.2f} -{y-0.3:.2f} 0.003" sizen="4 2"'
                              f' style="Bgs1InRace" substyle="BgCard1"/>')
                     p.append(f'<label posn="{width+3.6:.2f} -{y:.2f} 0.004" sizen="3 2"'
-                             f' halign="right" scale="0.9" textcolor="0B3F"'
+                             f' halign="right" scale="{row_scale:.2f}" textcolor="0B3F"'
                              f' text="{pts_txt}"/>')
 
             # Rank, score, name
             p.append(f'<label posn="2.3 -{y:.2f} 0.004" sizen="1.7 1.7"'
-                     f' halign="right" scale="0.9"'
+                     f' halign="right" scale="{row_scale:.2f}"'
                      f' text="{escape(fmt)}{line+1}."/>')
-            p.append(f'<label posn="5.9 -{y:.2f} 0.004" sizen="3.8 1.7"'
-                     f' halign="right" scale="0.9" textcolor="{escape(textcolor)}"'
+            p.append(f'<label posn="{score_x:.2f} -{y:.2f} 0.004" sizen="{score_w:.2f} 1.7"'
+                     f' halign="left" scale="{row_scale:.2f}" textcolor="{escape(textcolor)}"'
                      f' text="{escape(fmt)}{score_txt}"/>')
-            p.append(f'<label posn="6.1 -{y:.2f} 0.004" sizen="{col_width_name:.2f} 1.7"'
-                     f' scale="0.9" text="{escape(fmt)}{nick}"/>')
+            p.append(f'<label posn="{name_x:.2f} -{y:.2f} 0.004" sizen="{name_w:.2f} 1.7"'
+                     f' scale="{row_scale:.2f}" text="{escape(fmt)}{nick}"/>')
             line += 1
 
     p.append('</frame></manialink>')
     return ''.join(p)
 
 
-def _get_rpoints(aseco: 'Aseco', mode: int) -> list[int]:
+def _get_rpoints(aseco: 'Aseco', mode: int, shown_count: int = 0) -> list[int]:
     """Get current round points list via GBX (cached) or settings fallback."""
+    if mode == Gameinfo.TEAM:
+        players = getattr(getattr(aseco, 'server', None), 'players', None)
+        active_count = 0
+        connected_count = 0
+        if players is not None:
+            try:
+                all_players = list(players.all())
+                server_login = getattr(getattr(aseco, 'server', None), 'serverlogin', '') or ''
+                connected_count = sum(
+                    1 for p in all_players
+                    if getattr(p, 'login', '') and getattr(p, 'login', '') != server_login
+                )
+                active_count = sum(
+                    1 for p in all_players
+                    if getattr(p, 'login', '')
+                    and getattr(p, 'login', '') != server_login
+                    and not getattr(p, 'isspectator', False)
+                )
+            except Exception:
+                active_count = 0
+                connected_count = 0
+
+        max_points_team = 0
+        for holder in (
+            getattr(aseco, 'settings', None),
+            getattr(getattr(aseco, 'server', None), 'gameinfo', None),
+            getattr(aseco, 'server', None),
+        ):
+            if holder is None:
+                continue
+            for attr in (
+                'max_points_team',
+                'team_max_points',
+                'teampointsmax',
+                'maxpointsteam',
+                'TeamMaxPoints',
+                'MaxPointsTeam',
+            ):
+                try:
+                    value = int(getattr(holder, attr, 0) or 0)
+                except Exception:
+                    value = 0
+                if value > 0:
+                    max_points_team = value
+                    break
+            if max_points_team > 0:
+                break
+
+        count = max(active_count, shown_count)
+        if count <= 1:
+            count = max(count, connected_count)
+        if max_points_team > 0:
+            count = min(count, max_points_team) if count > 0 else max_points_team
+        if count > 0:
+            return list(range(count, 0, -1))
+
     # Try to use cached value set by plugin_rpoints
     cached = getattr(_state, '_rpoints_cache', None)
-    if cached is not None:
-        return cached
+    if cached:
+        return list(cached)
     # Fallback: read from settings
     system = getattr(getattr(aseco, 'settings', None), 'default_rpoints', '') or ''
-    from pyxaseco.plugins.plugin_rpoints import ROUNDS_POINTS
-    if system in ROUNDS_POINTS:
-        return list(ROUNDS_POINTS[system][1])
+    rounds_points = None
+    try:
+        from pyxaseco_plugins.plugin_rpoints import ROUNDS_POINTS as _ROUNDS_POINTS
+        rounds_points = _ROUNDS_POINTS
+    except Exception:
+        try:
+            from pyxaseco.plugins.plugin_rpoints import ROUNDS_POINTS as _ROUNDS_POINTS
+            rounds_points = _ROUNDS_POINTS
+        except Exception:
+            rounds_points = None
+    if rounds_points and system in rounds_points:
+        return list(rounds_points[system][1])
     if ',' in system:
         try:
             return list(map(int, system.split(',')))
