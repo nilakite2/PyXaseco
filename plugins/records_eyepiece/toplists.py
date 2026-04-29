@@ -33,7 +33,7 @@ from pyxaseco.helpers import format_time
 
 from .ui import append_window_start, append_window_end, append_four_player_columns
 from .config import _state, _effective_mode
-from .utils import _clip, _sanitise_nick
+from .utils import _handle_special_chars, _safe_ml_text
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -173,9 +173,9 @@ def _stl_row_score_nick(line: int, score: str, nick: str, lh: float,
     return (
         f'<label posn="4 -{y:.2f} 0.002" sizen="3.4 1.7"'
         f' halign="right" scale="0.9" textcolor="{escape(sc)}"'
-        f' text="{escape(fmt)}{escape(score)}"/>'
+        f' text="{_safe_ml_text(fmt + score)}"/>'
         f'<label posn="4.65 -{y:.2f} 0.002" sizen="11.1 1.7"'
-        f' scale="0.9" text="{escape(fmt)}{escape(nick)}"/>'
+        f' scale="0.9" text="{_safe_ml_text(fmt + nick)}"/>'
     )
 
 
@@ -185,12 +185,12 @@ def _stl_row_rank_nick(line: int, rank: int, score: str, nick: str, lh: float,
     y   = lh * line + 3.0
     return (
         f'<label posn="2.1 -{y:.2f} 0.002" sizen="1.7 1.7"'
-        f' halign="right" scale="0.9" text="{escape(fmt)}{rank}."/>'
+        f' halign="right" scale="0.9" text="{_safe_ml_text(f"{fmt}{rank}.")}"/>'
         f'<label posn="5.7 -{y:.2f} 0.002" sizen="3.8 1.7"'
         f' halign="right" scale="0.9" textcolor="{escape(sc)}"'
-        f' text="{escape(fmt)}{escape(score)}"/>'
+        f' text="{_safe_ml_text(fmt + score)}"/>'
         f'<label posn="5.9 -{y:.2f} 0.002" sizen="10.2 1.7"'
-        f' scale="0.9" text="{escape(fmt)}{escape(nick)}"/>'
+        f' scale="0.9" text="{_safe_ml_text(fmt + nick)}"/>'
     )
 
 
@@ -377,15 +377,15 @@ async def build_top_nations_widget(aseco: 'Aseco') -> str:
         code  = _FLAGFIX.get(str(row[1] or '').upper(), str(row[1] or '').upper())
         y     = lh * i + 3.0
         flag_y = -(y - 0.3)
-        name  = escape(_country_name(aseco, code))
+        name  = _country_name(aseco, code)
         p.append(
             f'<label posn="4 -{y:.2f} 0.002" sizen="3.4 1.7"'
             f' halign="right" scale="0.9" textcolor="{escape(sc)}"'
-            f' text="{escape(fmt)}{count}"/>'
+            f' text="{_safe_ml_text(f"{fmt}{count}")}"/>'
             f'<quad posn="4.5 {flag_y:.2f} 0.003" sizen="2 2"'
             f' image="{escape(_flag_path(code))}"/>'
             f'<label posn="7.0 -{y:.2f} 0.002" sizen="8.5 1.7"'
-            f' scale="0.9" text="{escape(fmt)}{name}"/>'
+            f' scale="0.9" text="{_safe_ml_text(fmt + name)}"/>'
         )
     p.append(_stl_footer())
     return ''.join(p)
@@ -698,21 +698,21 @@ def _build_toplist_window_entry(title: str, icon_style: str, icon_substyle: str,
                 count = str(item.get('score') or '0')
                 nation_name = str(item.get('nickname') or code)
                 flag_y = 0.3 if line == 0 else -(1.75 * line - 0.3)
-                p.append(f'<label posn="3.15 -{1.75 * line:.2f} 0.02" sizen="2.65 1.7" halign="right" scale="0.9" textcolor="{escape(score_col)}" text="{escape(fmt)}{escape(count)}"/>')
+                p.append(f'<label posn="3.15 -{1.75 * line:.2f} 0.02" sizen="2.65 1.7" halign="right" scale="0.9" textcolor="{escape(score_col)}" text="{_safe_ml_text(fmt + count)}"/>')
                 p.append(f'<quad posn="3.9 {flag_y:.2f} 0.02" sizen="2 2" image="{escape(_flag_path(code))}"/>')
-                p.append(f'<label posn="6.6 -{1.75 * line:.2f} 0.02" sizen="11.2 1.7" scale="0.9" text="{escape(fmt)}{escape(nation_name)}"/>')
+                p.append(f'<label posn="6.6 -{1.75 * line:.2f} 0.02" sizen="11.2 1.7" scale="0.9" text="{_safe_ml_text(fmt + nation_name)}"/>')
             else:
                 rank = str(item.get('rank', idx))
                 score = str(item.get('score', ''))
                 if special_suffix not in (False, None, ''):
                     score += str(special_suffix)
-                nick = _clip(_sanitise_nick(str(item.get('nickname', '?'))), 40)
+                nick = _handle_special_chars(str(item.get('nickname', '?')))
                 if item.get('online'):
                     y_bg = (((1.75 * line - 0.2) > 0) and -(1.75 * line - 0.2) or 0.2)
                     p.append(f'<quad posn="0.4 {y_bg:.2f} 0.01" sizen="16.95 1.83" style="{hi_style}" substyle="{hi_sub}"/>')
                 p.append(f'<label posn="2.6 -{1.75 * line:.2f} 0.02" sizen="2 1.7" halign="right" scale="0.9" text="{rank}."/>')
-                p.append(f'<label posn="6.4 -{1.75 * line:.2f} 0.02" sizen="4 1.7" halign="right" scale="0.9" textcolor="{escape(score_col)}" text="{escape(fmt)}{escape(score)}"/>')
-                p.append(f'<label posn="6.9 -{1.75 * line:.2f} 0.02" sizen="11.2 1.7" scale="0.9" text="{escape(nick)}"/>')
+                p.append(f'<label posn="6.4 -{1.75 * line:.2f} 0.02" sizen="4 1.7" halign="right" scale="0.9" textcolor="{escape(score_col)}" text="{_safe_ml_text(fmt + score)}"/>')
+                p.append(f'<label posn="6.9 -{1.75 * line:.2f} 0.02" sizen="11.2 1.7" scale="0.9" text="{_safe_ml_text(nick)}"/>')
         p.append('</frame>')
     return ''.join(p)
 
@@ -759,7 +759,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
                 parsed.append({
                     'rank': idx,
                     'score': str(int(row[1] or 0)),
-                    'nickname': _sanitise_nick(str(row[0] or '?')),
+                    'nickname': _handle_special_chars(str(row[0] or '?')),
                     'login': '',
                     'online': False,
                 })
@@ -769,7 +769,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
                 # row = (visits, login, nickname)
                 visits = str(int(row[0] or 0))
                 login_id = str(row[1] or '')
-                nick = _sanitise_nick(str(row[2] or login_id or '?'))
+                nick = _handle_special_chars(str(row[2] or login_id or '?'))
                 parsed.append({
                     'rank': idx,
                     'score': visits,
@@ -782,7 +782,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             for idx, row in enumerate(rows[:25], start=1):
                 # row = (login, nickname, seconds)
                 login_id = str(row[0] or '')
-                nick = _sanitise_nick(str(row[1] or login_id or '?'))
+                nick = _handle_special_chars(str(row[1] or login_id or '?'))
                 hours = str(round(int(row[2] or 0) / 3600))
                 parsed.append({
                     'rank': idx,
@@ -796,7 +796,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             for idx, row in enumerate(rows[:25], start=1):
                 # row = (login, nickname, avg)
                 login_id = str(row[0] or '')
-                nick = _sanitise_nick(str(row[1] or login_id or '?'))
+                nick = _handle_special_chars(str(row[1] or login_id or '?'))
                 score = f'{float(row[2] or 0) / 10000:.1f}'
                 parsed.append({
                     'rank': idx,
@@ -810,7 +810,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             for idx, row in enumerate(rows[:25], start=1):
                 # row = (login, nickname, days)
                 login_id = str(row[0] or '')
-                nick = _sanitise_nick(str(row[1] or login_id or '?'))
+                nick = _handle_special_chars(str(row[1] or login_id or '?'))
                 days = int(row[2] or 0)
                 score = 'Today' if days == 0 else f'-{days} d'
                 parsed.append({
@@ -825,7 +825,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             for idx, row in enumerate(rows[:25], start=1):
                 # row = (login, nickname, donations)
                 login_id = str(row[0] or '')
-                nick = _sanitise_nick(str(row[1] or login_id or '?'))
+                nick = _handle_special_chars(str(row[1] or login_id or '?'))
                 score = str(int(row[2] or 0))
                 parsed.append({
                     'rank': idx,
@@ -839,7 +839,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             for idx, row in enumerate(rows[:25], start=1):
                 # default row = (login, nickname, score)
                 login_id = str(row[0] or '')
-                nick = _sanitise_nick(str(row[1] or login_id or '?'))
+                nick = _handle_special_chars(str(row[1] or login_id or '?'))
                 score = str(row[2] if len(row) > 2 else '')
                 parsed.append({
                     'rank': idx,
@@ -885,7 +885,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
     # Number these rows sequentially in the More Ranking window.
                 'rank': idx,
                 'score': str(score_text or '--'),
-                'nickname': _sanitise_nick(str(rec.get('nickname') or rec.get('NickName') or login_id or '?')),
+                'nickname': _handle_special_chars(str(rec.get('nickname') or rec.get('NickName') or login_id or '?')),
                 'login': login_id,
                 'online': login_id in players,
             })
@@ -912,7 +912,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
         local_rows.append({
             'rank': idx,
             'score': score,
-            'nickname': _sanitise_nick(rec.player.nickname if rec.player else '?'),
+            'nickname': _handle_special_chars(rec.player.nickname if rec.player else '?'),
             'login': login_id,
             'online': login_id in players,
         })
@@ -1203,12 +1203,12 @@ async def _build_generic_toplist_window(
             p.append(
                 f'<label posn="{2.75+x_off:.2f} -{y:.2f} 0.03"'
                 f' sizen="2.5 1.7" halign="right" scale="0.9" textsize="1"'
-                f' text="{escape(score)}"/>'
+                f' text="{_safe_ml_text(score)}"/>'
             )
             p.append(
                 f'<label posn="{6.2+x_off:.2f} -{y:.2f} 0.03"'
                 f' sizen="11.2 1.7" scale="0.9" textsize="1"'
-                f' text="{escape(nick)}"/>'
+                f' text="{_safe_ml_text(_handle_special_chars(nick))}"/>'
             )
 
     append_window_end(p)
@@ -1254,7 +1254,7 @@ async def _build_top_nations_window(aseco: 'Aseco') -> str:
             p.append(
                 f'<label posn="{6.2+x_off:.2f} -{y:.2f} 0.03"'
                 f' sizen="11.2 1.7" scale="0.9" textsize="1"'
-                f' text="{escape(_country_name(aseco, code))}"/>'
+                f' text="{_safe_ml_text(_country_name(aseco, code))}"/>'
             )
 
     append_window_end(p)

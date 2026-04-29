@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from pyxaseco.helpers import display_manialink, strip_colors, strip_sizes
+from pyxaseco.helpers import display_manialink, safe_manialink_text, strip_sizes
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -356,8 +356,8 @@ class _CPLive:
             Pid=pid,
             PlainNicks=PLAIN_NICKS,
             Collapsed=False,
-            NicknamePlainXml="$" + COLORS["Mono"] + strip_colors(strip_sizes(nickname), for_tm=True),
-            NicknameColoredXml=_strip_sizes_php(nickname),
+            NicknamePlainXml="$" + COLORS["Mono"] + safe_manialink_text(strip_sizes(nickname), keep_colors=False),
+            NicknameColoredXml=safe_manialink_text(_strip_sizes_php(nickname), keep_colors=True),
             CPNumber=0,
             RawTime=0,
             CPTimes=[0],

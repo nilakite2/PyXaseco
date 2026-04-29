@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from pyxaseco.helpers import format_time, strip_colors
+from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 
 from ..config import _state, _effective_mode
 from ..ui import append_window_start, append_window_end, append_four_player_columns
+from ..utils import _handle_special_chars
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -28,10 +29,6 @@ def _digest_entries(entries: list, login: str) -> str:
     key = str((login, [(e.get('rank'), e.get('login'), e.get('score'), e.get('self'))
                        for e in entries]))
     return str(hash(key))
-
-
-def _clip(text: str, n: int) -> str:
-    return str(text or '')
 
 
 def _close_to_you(records, login: str, limit: int, topcount: int, player_nick: str | None = None) -> list:
@@ -174,7 +171,7 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
 
 
 async def _build_local_records_window(aseco: 'Aseco', page: int) -> str:
-    from xml.sax.saxutils import escape as _esc
+    from ..utils import _safe_ml_text
 
     records = list(aseco.server.records)
     if not records:
@@ -259,8 +256,8 @@ async def _build_local_records_window(aseco: 'Aseco', page: int) -> str:
 
         y = 1.83 * line
         p.append(f'<label posn="{2.6 + offset:.2f} -{y:.2f} 0.04" sizen="2 1.7" halign="right" scale="0.9" text="{i + 1}."/>')
-        p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.04" sizen="4 1.7" halign="right" scale="0.9" textcolor="{_state.style.col_scores}" text="{_esc(score_str)}"/>')
-        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.04" sizen="11.2 1.7" scale="0.9" text="{_esc(_clip(nick, 40))}"/>')
+        p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.04" sizen="4 1.7" halign="right" scale="0.9" textcolor="{_state.style.col_scores}" text="{_safe_ml_text(score_str)}"/>')
+        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.04" sizen="11.2 1.7" scale="0.9" text="{_safe_ml_text(nick)}"/>')
 
         line += 1
         if line >= 25:

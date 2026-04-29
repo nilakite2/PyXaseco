@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
-from xml.sax.saxutils import escape
+from ..utils import _digest_entries, _handle_special_chars, _safe_ml_text
 
 from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 
 from ..config import WidgetCfg, _state, _effective_mode
-from ..utils import _clip, _digest_entries
 from ..ui import append_window_start, append_window_end, append_four_player_columns
 
 if TYPE_CHECKING:
@@ -290,7 +289,7 @@ def _build_live_rankings_window(aseco: 'Aseco', page: int = 0) -> str:
         else:
             p.append(f'<label posn="{2.6 + offset:.2f} -{y:.2f} 0.03" sizen="2 1.7" halign="right" scale="0.9" text="{rank_num}."/>')
             p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.03" sizen="4 1.7" halign="right" scale="0.9" textcolor="{st.col_scores}" text="{score_str}"/>')
-        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.03" sizen="11.2 1.7" scale="0.9" text="{escape(_clip(nick, 80))}"/>')
+        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.03" sizen="11.2 1.7" scale="0.9" text="{_safe_ml_text(nick)}"/>')
 
         line += 1
         if line >= 25:

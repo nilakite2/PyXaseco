@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from pyxaseco.helpers import format_time, strip_colors
+from pyxaseco.helpers import format_time, safe_manialink_text, strip_colors
 from pyxaseco.models import Gameinfo
 
 from .config import _state
@@ -68,12 +68,13 @@ async def _fetch_tracklist_data(aseco: 'Aseco') -> list:
         logger.debug('[Eyepiece] GetChallengeList: %s', e)
         return []
 
-    author_times: dict = {}
     db_ids: dict = {}
     karma_map: dict = {}
+    extra_meta: dict = {}
 
     try:
         from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.core.challenges_cache import get_metadata_map
 
         pool = await get_pool()
         if pool:
@@ -98,6 +99,7 @@ async def _fetch_tracklist_data(aseco: 'Aseco') -> list:
                     for row in await cur.fetchall():
                         if row[0] is not None:
                             karma_map[row[0]] = int(row[1] or 0)
+            extra_meta = await get_metadata_map(pool)
     except Exception as e:
         logger.debug('[Eyepiece] DB enrich for tracklist: %s', e)
 
@@ -112,6 +114,7 @@ async def _fetch_tracklist_data(aseco: 'Aseco') -> list:
 
         name = t.get('Name', '') or ''
         author = t.get('Author', '') or ''
+        meta = extra_meta.get(uid, {})
 
         result.append({
             'uid': uid,
@@ -122,13 +125,14 @@ async def _fetch_tracklist_data(aseco: 'Aseco') -> list:
             'env': env,
             'mood': '',
             'filename': t.get('FileName', '') or '',
-            'authortime_ms': int(t.get('AuthorTime', 0) or 0),
-            'goldtime_ms': t.get('GoldTime', 0) or 0,
+            'authortime_ms': int(t.get('AuthorTime', 0) or meta.get('author_time', 0) or 0),
+            'goldtime_ms': int(t.get('GoldTime', 0) or meta.get('gold_time', 0) or 0),
             'silvertime_ms': t.get('SilverTime', 0) or 0,
             'bronzetime_ms': t.get('BronzeTime', 0) or 0,
             'laprace': bool(t.get('LapRace', False)),
             'nblaps': t.get('NbLaps', 0) or 0,
-            'dbid': db_ids.get(uid, 0),
+            'dbid': db_ids.get(uid, int(meta.get('challenge_id', 0) or 0)),
+            'added_at': meta.get('added_at') or '',
             'karma': karma_map.get(uid, 0),
         })
 
@@ -369,8 +373,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
                 p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="-{TL_DROP_BASE + juked}" style="Icons64x64_1" substyle="Close"/>')
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="Bgs1InRace" substyle="BgListLine"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textcolor="000F" textsize="1" text="Track #{i+1}"/>')
-            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{strip_colors(name, for_tm=True)}"/>')
-            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="by {strip_colors(author, for_tm=True)}"/>')
+            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=False)}"/>')
+            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=False)}"/>')
 
         elif is_recent:
             p.append('<format textsize="1" textcolor="FFF8"/>')
@@ -378,8 +382,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
             p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{TL_JB_BASE + global_idx}" style="Icons64x64_1" substyle="Add"/>')
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textsize="1" text="Track #{i+1}"/>')
-            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{strip_colors(name, for_tm=True)}"/>')
-            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="by {strip_colors(author, for_tm=True)}"/>')
+            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=False)}"/>')
+            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=False)}"/>')
 
         elif is_juked:
             p.append('<format textsize="1" textcolor="FFFF"/>')
@@ -789,10 +793,10 @@ async def _send_tracklist_window(
         tracks = sorted(all_tracks, key=lambda t: t['authortime_ms'] or 0, reverse=True)
         title = '(Sorting: Longest)'
     elif fc == 'NEWEST':
-        tracks = sorted(all_tracks, key=lambda t: t['dbid'], reverse=True)
+        tracks = sorted(all_tracks, key=lambda t: (t.get('added_at') or '', t['dbid']), reverse=True)
         title = '(Sorting: Newest First)'
     elif fc == 'OLDEST':
-        tracks = sorted(all_tracks, key=lambda t: t['dbid'])
+        tracks = sorted(all_tracks, key=lambda t: (t.get('added_at') or '9999-12-31 23:59:59', t['dbid']))
         title = '(Sorting: Oldest First)'
     elif fc == 'BEST':
         tracks = sorted(

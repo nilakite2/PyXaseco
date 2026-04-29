@@ -8,7 +8,7 @@ from pyxaseco.models import Gameinfo
 
 from ..config import _state, _effective_mode
 from ..ui import append_window_start, append_window_end, append_four_player_columns
-from ..utils import _clip, _sanitise_nick
+from ..utils import _handle_special_chars
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -46,7 +46,7 @@ def _normalise_dedi_record(rec: dict, rank: int) -> dict | None:
         or login
         or '?'
     )
-    nickname = _sanitise_nick(nickname)
+    nickname = _handle_special_chars(nickname)
 
     return {
         # Normalized Eyepiece shape
@@ -175,7 +175,10 @@ def _dedi_close_to_you(
 
 def _get_dedi_records() -> list:
     try:
-        from pyxaseco.plugins.plugin_dedimania import dedi_db
+        try:
+            from pyxaseco_plugins.plugin_dedimania import dedi_db
+        except Exception:
+            from pyxaseco.plugins.plugin_dedimania import dedi_db
         if not isinstance(dedi_db, dict):
             return []
         challenge = dedi_db.get('Challenge', {})
@@ -251,7 +254,7 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
 
 
 def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | None = None) -> str:
-    from xml.sax.saxutils import escape as _esc
+    from ..utils import _safe_ml_text
 
     raw_records = records if records is not None else _get_dedi_records()
     if not raw_records:
@@ -268,7 +271,7 @@ def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | No
         p,
         ml_window=ML_WINDOW,
         ml_subwin=ML_SUBWIN,
-        title=f'{_esc(title)}  |  Page 1/1  |  {total} Records',
+        title=f'{_safe_ml_text(title)}  |  Page 1/1  |  {total} Records',
         icon_style='Icons128x128_1',
         icon_substyle='Rankings',
         content_frame_pos='2.5 -6.5 1',
@@ -280,7 +283,7 @@ def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | No
     p.append('<frame posn="63.15 0 0.04">')
     p.append(
         f'<quad posn="0 -47.8 -0.5" sizen="14.5 1" '
-        f'url="http://dedimania.net/tmstats/?do=stat{dedimode}&amp;RecOrder3=RANK-ASC&amp;Uid={_esc(uid)}&amp;Show=RECORDS" bgcolor="0000"/>'
+        f'url="http://dedimania.net/tmstats/?do=stat{dedimode}&amp;RecOrder3=RANK-ASC&amp;Uid={_safe_ml_text(uid)}&amp;Show=RECORDS" bgcolor="0000"/>'
     )
 
     p.append('<label posn="0 -47.8 -0.5" sizen="30 1" textsize="1" scale="0.7" textcolor="000F" text="MORE INFO ON DEDIMANIA.NET  "/>')
@@ -324,8 +327,8 @@ def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | No
 
         y = 1.83 * line
         p.append(f'<label posn="{2.6 + offset:.2f} -{y:.2f} 0.04" sizen="2 1.7" halign="right" scale="0.9" text="{rank}."/>')
-        p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.04" sizen="4 1.7" halign="right" scale="0.9" textcolor="{_state.style.col_scores}" text="{_esc(score)}"/>')
-        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.04" sizen="11.2 1.7" scale="0.9" text="{_esc(_clip(nick, 40))}"/>')
+        p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.04" sizen="4 1.7" halign="right" scale="0.9" textcolor="{_state.style.col_scores}" text="{_safe_ml_text(score)}"/>')
+        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.04" sizen="11.2 1.7" scale="0.9" text="{_safe_ml_text(nick)}"/>')
 
         line += 1
         if line >= 25:

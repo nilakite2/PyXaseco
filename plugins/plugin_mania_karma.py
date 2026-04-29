@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from pyxaseco.helpers import strip_colors
+from pyxaseco.helpers import clean_tm_text, strip_colors
 from pyxaseco.plugins.plugin_tmxinfo import (
     build_public_tmx_track_url as _build_public_tmx_track_url,
     normalise_tmx_web_url as _normalise_tmx_web_url,
@@ -1523,7 +1523,7 @@ async def _show_mx_window(aseco: Aseco, player: Any) -> None:
         f'<label posn="3.75 -1.8 0" sizen="10 0" textsize="1" halign="center" text="{cmd}"/>',
         '</frame>',
         '<frame posn="33 0.2 1">',
-        f'<label posn="40.5 -1.3 0" sizen="50 0" halign="right" textsize="1" text="$000Visit &#187; {strip_colors(str(_current_map.get("name", ""))).replace("$", "")} $Z$000 &#171; at"/>',
+        f'<label posn="40.5 -1.3 0" sizen="50 0" halign="right" textsize="1" text="$000Visit &#187; {clean_tm_text(str(_current_map.get("name", "")), keep_colors=False).replace("$", "")} $Z$000 &#171; at"/>',
     ]
     if _cfg.img_tmx_logo_normal:
         xml.append(f'<quad posn="41.25 0.08 0" sizen="7 4" image="{_cfg.img_tmx_logo_normal}" imagefocus="{_cfg.img_tmx_logo_focus}" url="{_tmx_page_url(aseco)}"/>')

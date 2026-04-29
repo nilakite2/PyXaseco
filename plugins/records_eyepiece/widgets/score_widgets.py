@@ -22,7 +22,7 @@ from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 
 from ..config import _state, _effective_mode
-from ..utils import _clip, _sanitise_nick
+from ..utils import _handle_special_chars, _safe_ml_text
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -104,20 +104,17 @@ def _scoretable_row(line: int, rank: int, score_text: str, nick: str,
     """Single entry row"""
     offset = 3.0
     y = lh * line + offset
-    fc = escape(fmt)
     sc = escape(score_color)
-    st_score = escape(score_text)
-    st_nick  = escape(nick)
     p = []
     p.append(f'<label posn="2.1 -{y:.2f} 0.002" sizen="1.7 1.7"'
              f' halign="right" scale="0.9"'
-             f' text="{fc}{rank}."/>')
+             f' text="{_safe_ml_text(f"{fmt}{rank}.")}"/>')
     p.append(f'<label posn="5.7 -{y:.2f} 0.002" sizen="3.8 1.7"'
              f' halign="right" scale="0.9" textcolor="{sc}"'
-             f' text="{fc}{st_score}"/>')
+             f' text="{_safe_ml_text(fmt + score_text)}"/>')
     p.append(f'<label posn="5.9 -{y:.2f} 0.002" sizen="10.2 1.7"'
              f' scale="0.9"'
-             f' text="{fc}{st_nick}"/>')
+             f' text="{_safe_ml_text(fmt + nick)}"/>')
     return ''.join(p)
 
 
@@ -389,7 +386,7 @@ def build_winning_payout_widget(aseco: 'Aseco') -> str:
     for i, item in enumerate(finishers):
         y = lh * i + offset
         rank_icon = {1: 'First', 2: 'Second', 3: 'Third'}.get(item['rank'])
-        nick = escape(item['nickname'])
+        nick = _safe_ml_text(_handle_special_chars(item['nickname']))
         won  = item['won']
 
         if rank_icon:
@@ -548,14 +545,14 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
         line = 0
         offset = 3.0
         row_scale = 0.65
-        name_x = 5.05 if mode == Gameinfo.TEAM else 5.05
+        name_x = 5.85 if mode == Gameinfo.TEAM else 5.65
         name_w = max(width - name_x - 0.55, 1.0)
 
         for item in sorted_list[:entries]:
             y = lh * line + offset
             textcolor = col_top if (line + 1) <= topcount else col_worse
-            nick = escape(_sanitise_nick(item.get('nickname', '?')))
-            score_txt = escape(item.get('score', '--'))
+            nick = _handle_special_chars(item.get('nickname', '?'))
+            score_txt = str(item.get('score', '--'))
 
             # Points badge (left or right of widget)
             if mode == Gameinfo.LAPS:
@@ -605,12 +602,12 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
             # Rank, score, name
             p.append(f'<label posn="2.3 -{y:.2f} 0.004" sizen="1.7 1.7"'
                      f' halign="right" scale="{row_scale:.2f}"'
-                     f' text="{escape(fmt)}{line+1}."/>')
+                     f' text="{_safe_ml_text(f"{fmt}{line + 1}.")}"/>')
             p.append(f'<label posn="{score_x:.2f} -{y:.2f} 0.004" sizen="{score_w:.2f} 1.7"'
                      f' halign="left" scale="{row_scale:.2f}" textcolor="{escape(textcolor)}"'
-                     f' text="{escape(fmt)}{score_txt}"/>')
+                     f' text="{_safe_ml_text(fmt + score_txt)}"/>')
             p.append(f'<label posn="{name_x:.2f} -{y:.2f} 0.004" sizen="{name_w:.2f} 1.7"'
-                     f' scale="{row_scale:.2f}" text="{escape(fmt)}{nick}"/>')
+                     f' scale="{row_scale:.2f}" text="{_safe_ml_text(fmt + nick)}"/>')
             line += 1
 
     p.append('</frame></manialink>')

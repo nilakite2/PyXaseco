@@ -97,9 +97,9 @@ def format_text(text: str, *args) -> str:
 
 def strip_colors(text: str, for_tm: bool = True) -> str:
     """
-    Strip Maniaplanet colour/style codes.
-    for_tm=True  → surviving $$ become $$ (for TM display)
-    for_tm=False → surviving $$ become $  (for log messages)
+    Strip TM colour/style codes.
+    for_tm=True  -> surviving $$ become $$ (for TM display)
+    for_tm=False -> surviving $$ become $  (for log messages)
     """
     if not text:
         return text
@@ -117,6 +117,48 @@ def strip_sizes(text: str, for_tm: bool = True) -> str:
     text = text.replace('$$', '\x00')
     text = re.sub(r'\$[nwoNWO]', '', text)
     return text.replace('\x00', '$$' if for_tm else '$')
+
+
+def clean_tm_text(text: str, keep_colors: bool = True) -> str:
+    """
+    TMF-safe text cleanup for UI rendering.
+
+    keep_colors=True:
+      preserve color codes while removing links and unsafe style/control tags.
+
+    keep_colors=False:
+      strip color/style tags entirely via strip_colors(), but still keep the
+      UTF-8 / control cleanup shared with the colored path.
+    """
+    if not text:
+        return ''
+
+    text = validate_utf8(str(text))
+    text = ''.join(ch for ch in text if ord(ch) <= 0xFFFF)
+    text = text.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+    text = text.replace('$$', '\x00')
+
+    # Remove h/l/p link wrappers while preserving their visible text.
+    text = re.sub(
+        r'\$[hlp](.*?)(?:\[.*?\](.*?))*(?:\$[hlp]|$)',
+        r'\1\2',
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    if keep_colors:
+        # preserve colors, remove link/control/style tags that can destabilize ML labels
+        text = re.sub(r'\$[shwiplongtzSHWIPLONGTZ]', '', text)
+    else:
+        text = strip_colors(text, for_tm=True)
+
+    text = text.replace('\x00', '$$')
+    return ' '.join(text.split())
+
+
+def safe_manialink_text(text: str, keep_colors: bool = True) -> str:
+    """Clean TM text and escape it for ManiaLink XML attributes."""
+    return html.escape(clean_tm_text(text, keep_colors=keep_colors), quote=True)
 
 
 def is_lan_login(login: str) -> bool:
@@ -259,10 +301,10 @@ async def _event_manialink(aseco: 'Aseco', answer: list):
     Handle ManiaLink page-answer events for the main popup window.
 
     Action routing:
-      action  0          → close main window
-      action -4..-2, 1-4 → page navigation for multi-page windows
-      action -6..36      → passed through; plugin_panels.py handles the rest
-      action outside -6..36 → ignored (left to other handlers)
+      action  0          -> close main window
+      action -4..-2, 1-4 -> page navigation for multi-page windows
+      action -6..36      -> passed through; plugin_panels.py handles the rest
+      action outside -6..36 -> ignored (left to other handlers)
     """
     if len(answer) < 3:
         return
@@ -492,7 +534,7 @@ def _build_plain_multi_page_window(header, data, widths, page, total) -> str:
 # ---------------------------------------------------------------------------
 
 def _s(style, path) -> str:
-    """Safe nested style dict lookup: 'HEADER.TEXTSIZE' → style[HEADER][0][TEXTSIZE][0]"""
+    """Safe nested style dict lookup: 'HEADER.TEXTSIZE' -> style[HEADER][0][TEXTSIZE][0]"""
     try:
         parts = path.split('.')
         v = style

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from xml.sax.saxutils import escape
-
 from pyxaseco.helpers import format_time
 
 from ..config import WidgetCfg, StyleCfg, _state
-from ..utils import _clip, _sanitise_nick
+from ..utils import _handle_special_chars, _safe_ml_text
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -193,7 +191,7 @@ def _build_record_widget(
         else:
             score_str = format_time(int(score_raw))
 
-        nick_clean = _sanitise_nick(nick)
+        nick_clean = _handle_special_chars(nick)
 
         # Online marker for OTHER players
         if (_state.mark_online and ent_login and ent_login != login
@@ -285,7 +283,7 @@ def _build_record_widget(
         p.append(
             f'<label posn="6.1 -{y:.4f} 0.004"'
             f' sizen="{w - 5.7:.4f} 1.7" scale="0.9"'
-            f' text="{escape(st.fmt_codes + _clip(nick_clean, 40))}"/>'
+            f' text="{_safe_ml_text(st.fmt_codes + nick_clean)}"/>'
         )
 
     p.append('</frame></manialink>')
