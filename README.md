@@ -1,70 +1,64 @@
-# PyXaseco 1.0-Alpha
+# PyXaseco 1.0 Alpha
 
-PyXaseco is a Python 3.12 controller for **TrackMania Forever** servers, inspired by XASECO and focused on practical parity for day-to-day server administration, records, widgets, chat commands, etc..
+PyXaseco is a Python 3.12 controller for **TrackMania Forever** servers, inspired by XAseco and built around practical day-to-day server administration, records, widgets, RASP-style map flow, and XML-driven configuration.
 
-This public alpha includes the Python core, XML-based configuration, a broad plugin set.
+This repository snapshot is a **validated alpha pack**, not just an early proof of concept. It includes the Python core, the current XML config set, a working default plugin loadout, and optional Discord-side integrations.
 
 ## Status
 
-This is an **stable Alpha release**.
+This is an **alpha release with a validated baseline**.
 
 It is intended for:
-- private servers
-- testing and validation
-- feature parity checks against existing XASECO workflows
-- plugin migration and iteration
+- private and community TMF servers
+- migration from older XAseco-style setups
+- plugin parity testing
+- day-to-day real server use with the included loadout
 
-It is not presented as a fully finished drop-in replacement for every historical XASECO setup.
-But it integrates with existing .xml configs and past Xaseco DB instances.
+It is not presented as a perfect one-size-fits-all drop-in for every historical XAseco installation, especially because real server setups vary a lot: some admins run a very minimal loadout, while others enable nearly everything at once.
 
 ## Highlights
 
 - Python 3.12 async core
 - TrackMania Forever dedicated server support via GBX Remote
-- XML-driven configuration close to classic XASECO layouts
+- XML-driven configuration close to classic XAseco layouts
 - MySQL/MariaDB-backed local records and player data
 - Dedimania integration
 - ManiaKarma integration
 - TMX info integration
-- RASP-style admin, jukebox, voting, and karma features
-- split Records Eyepiece widgets and windows
-- admin, player, records, stats, checkpoint, and utility chat commands
+- RASP-style admin, jukebox, nextmap, voting, and karma features
+- Records Eyepiece widget/window suite
+- CP Live and banner widgets
+- optional Discord webhook mirroring
+- optional standalone Discord chat bot bundle
 
-## Included components
+## Default plugin loadout
 
-### Core
+The included [plugins.xml](plugins.xml) enables a broad practical set by default, including:
 
-- `main.py` — startup entry point
-- `pyxaseco/core/aseco.py` — main controller
-- `pyxaseco/core/gbx_client.py` — async GBX Remote client
-- `pyxaseco/core/event_bus.py` — event dispatching
-- `pyxaseco/core/plugin_loader.py` — plugin loading
-- `pyxaseco/core/config.py` — XML config parsing
-- `pyxaseco/models/` — player, challenge, record, server, and related models
-- `pyxaseco/helpers.py` — common formatting and UI helpers
-
-### Main plugin set
-
-From `plugins.xml`, this alpha currently loads plugins such as:
-
-- Local database
-- Rounds support
+- local database
 - admin chat commands
-- help / player / records / stats chat commands
+- help, player, records, stats, and server chat commands
 - Dedimania
 - TMX info
-- track info
 - checkpoints
-- RASP base, jukebox, votes, nextmap, nextrank, chat, karma
-- panels
-- donate
-- jfreu plugin
-- CP live
-- ManiaKarma
+- RASP base, jukebox, votes, nextmap, nextrank, and chat helpers
+- panels and donate support
+- JFreu
 - Records Eyepiece
-- ztrack
-- fufi menu
-- CPLL
+- CP Live
+- banner widget
+- ManiaKarma
+- FuFi menu
+- Discord webhook mirroring
+
+Some optional plugins are shipped but left disabled by default, such as:
+- BestSecs
+- BestCPs
+- Freezone
+- FlexiTime
+- STALKER tools
+
+For the pack-oriented plugin status sheet, see [00README.md](00README.md).
 
 ## Runtime requirements
 
@@ -74,7 +68,7 @@ From `plugins.xml`, this alpha currently loads plugins such as:
 
 ## Python dependencies
 
-This release uses only five external Python packages directly in the codebase:
+This pack directly uses a small dependency set:
 
 - `aiohttp`
 - `aiomysql`
@@ -88,28 +82,22 @@ Install them with:
 pip install -r requirements.txt
 ```
 
-## requirements.txt
+## Installation good old simple way
+1. Download the files "Code -> Download ZIP".
+2. Unpack inside of your root server folder where dedicated server is.
+3. Install Python dependencies.
+4. Review and update the XML config files (config.xml, localdatabase.xml, dedimania.xml, maniakarma.xml).
+5. Attach existing Xaseco DB or import the base database schema.
+6. Review config of "PyXaseco.bat" and start it.
 
-```txt
-aiohttp==3.13.5
-aiomysql==0.3.2
-cryptography==46.0.7
-tzdata==2026.1
-pycountry==26.2.16
-```
+## Installation with .venv
 
-## Installation
-
-1. Extract the release into your server controller directory.
+1. Extract the pack into your server controller directory.
 2. Create and activate a Python 3.12 virtual environment.
 3. Install Python dependencies.
-4. Review and update the XML config files.
-5. Start PyXaseco.
-
-### Via PyXaseco.bat
-Just run it. But make sure all .xml files wre updated.
-
-### Via virtual environment:
+4. Review and update the XML config files (config.xml, localdatabase.xml, dedimania.xml, maniakarma.xml).
+5. Attach existing Xaseco DB or import the base database schema.
+6. Start PyXaseco.
 
 ### Windows example
 
@@ -117,7 +105,7 @@ Just run it. But make sure all .xml files wre updated.
 py -3.12 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-py -3.12 main.py config.xml [--debug]
+py -3.12 main.py config.xml
 ```
 
 ### Linux example
@@ -126,15 +114,24 @@ py -3.12 main.py config.xml [--debug]
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python3.12 main.py config.xml [--debug]
+python3.12 main.py config.xml
 ```
 
+### Debug mode
+
+```bash
+python main.py config.xml --debug
+```
 
 ## Database setup
 
-PyXaseco **does NOT auto-create database schema**.
+The pack still ships the base schema in:
+- `database/pyxaseco_default_schema.sql`
 
-You must import it manually before first run.
+Recommended setup is still:
+1. create the database
+2. import the base schema
+3. let PyXaseco perform its normal startup checks and repairs
 
 ### Create database
 
@@ -150,9 +147,18 @@ COLLATE utf8mb4_unicode_ci;
 mysql -u root -p pyxaseco < database/pyxaseco_default_schema.sql
 ```
 
+### Important note
+
+Compared with earlier alpha snapshots, the current controller does more automatic structure maintenance than before:
+- startup checks/repairs for controller-owned tables
+- some charset widening/repair where needed
+- extra challenge metadata support through `challenges_extra`
+
+That makes upgrades and reuse of older XAseco-style databases much smoother. In practice, this pack has already been validated successfully against multiple older XAseco database instances without needing a fresh rebuild. For brand-new installs, importing the shipped schema is still the cleanest starting point, but existing XAseco-style databases are a realistic and supported migration path.
+
 ## Configuration files
 
-Main files included in this release:
+Main files included in this pack:
 
 - `config.xml`
 - `plugins.xml`
@@ -166,97 +172,112 @@ Main files included in this release:
 - `matchsave.xml`
 - `flexitime.xml`
 - `fufi_menu_config.xml`
-
-### Important setup items
+- `discord_webhook.xml`
 
 Before first real use, update at least:
 
-#### `config.xml`
+### `config.xml`
+
 - TM server login
 - TM server password
 - GBX port
 - master admin login(s)
 - optional message/style/panel preferences
 
-#### `localdatabase.xml`
+### `localdatabase.xml`
+
 - MySQL server
 - MySQL login
 - MySQL password
 - MySQL database name
 
-#### Other plugin configs
-Review optional plugin configs if you use them:
+### Optional plugin configs
+
+Review these if you use the related plugins:
 - `dedimania.xml`
 - `mania_karma.xml`
 - `records_eyepiece.xml`
+- `discord_webhook.xml`
 - `plugins/jfreu/jfreu.config.xml`
 - `plugins/jfreu/jfreu.vips.xml`
 - `plugins/jfreu/jfreu.bans.xml`
 
-## Running
+## Discord integrations
 
-Basic run:
+### Outbound webhooks
 
-```bash
-python main.py config.xml
-```
+The pack includes:
+- [plugin_discord_webhook.py](plugins/plugin_discord_webhook.py)
+- [discord_webhook.xml](discord_webhook.xml)
 
-Debug mode:
+This handles one-way mirroring from PyXaseco to Discord, including:
+- admin logs
+- player chat
+- joins/leaves
+- new challenge notifications
+- warnings/errors
 
-```bash
-python main.py config.xml --debug
-```
+### Optional Discord bot
 
-PyXaseco writes logs to:
+The pack also includes:
+- [DiscordBot-optional](DiscordBot-optional)
 
-- console output
-- `logfile.txt`
+That bot is separate from the controller and is intended for Discord-to-server chat bridging using commands like:
+- `-tm1 hello world`
+
+See its local documentation here:
+- [DiscordBot-optional/README.md](DiscordBot-optional/README.md)
 
 ## Repository layout
 
 ```text
 PyXaseco/
-├── main.py
-├── requirements.txt
-├── README.md
-├── config.xml
-├── plugins.xml
-├── localdatabase.xml
-├── dedimania.xml
-├── mania_karma.xml
-├── records_eyepiece.xml
-├── pyxaseco/
-│   ├── core/
-│   └── models/
-├── database/
-│   └── pyxaseco_default_schema.sql
-├── plugins/
-│   ├── plugin_localdatabase.py
-│   ├── plugin_dedimania.py
-│   ├── plugin_mania_karma.py
-│   ├── plugin_rasp.py
-│   ├── plugin_tmxinfo.py
-│   ├── plugin_ztrack.py
-│   ├── plugin_records_eyepiece.py
-│   └── records_eyepiece/
-├── panels/
-└── styles/
+|-- main.py
+|-- requirements.txt
+|-- README.md
+|-- 00README.md
+|-- config.xml
+|-- plugins.xml
+|-- localdatabase.xml
+|-- dedimania.xml
+|-- mania_karma.xml
+|-- records_eyepiece.xml
+|-- discord_webhook.xml
+|-- pyxaseco/
+|   |-- core/
+|   `-- models/
+|-- database/
+|   `-- pyxaseco_default_schema.sql
+|-- plugins/
+|   |-- plugin_localdatabase.py
+|   |-- plugin_dedimania.py
+|   |-- plugin_mania_karma.py
+|   |-- plugin_rasp.py
+|   |-- plugin_tmxinfo.py
+|   |-- plugin_records_eyepiece.py
+|   |-- plugin_cplive_v3.py
+|   |-- plugin_banner.py
+|   |-- plugin_bestfinishes.py
+|   `-- ...
+|-- DiscordBot-optional/
+|-- panels/
+`-- styles/
 ```
 
-## Notes for users coming from XASECO
+## Notes for users coming from XAseco
 
 - XML configuration is intentionally familiar.
-- Plugin naming is Python-based in this release.
-- This build targets **TMF**, not a broad multi-title compatibility matrix.
-- Some plugins are close ports, while others are practical Python-native rewrites shaped around the PyXaseco core.
+- The project targets **TMF** rather than a broad multi-title compatibility matrix.
+- Some plugins are close ports, while others are practical Python rewrites shaped around the PyXaseco core.
+- The shipped plugin names are Python-native, even when the feature ancestry comes from older PHP plugin names.
 
 ## Known alpha expectations
 
-Expect normal alpha-release realities:
-- some plugins are more mature than others
-- parity work may still be ongoing in edge cases
-- UI/window fidelity may continue to evolve
-- some optional legacy subsystems may be absent or intentionally deferred
+This pack is much further along than a blank alpha skeleton, but normal alpha realities still apply:
+- some optional plugins are more mature than others
+- niche parity edge cases can still show up
+- non-default loadouts need their own testing
+- ManiaLink/UI fidelity is still an area where small fixes may continue over time
 
 ## Contributing / testing
 
@@ -266,22 +287,21 @@ Useful feedback includes:
 - ManiaLink/UI mismatches
 - Dedimania / ManiaKarma / TMX integration issues
 - database schema or migration issues
-- differences versus XASECO behavior that matter in real servers
+- differences versus XAseco behavior that matter in real servers
 
-## Credits & Notes
+## Credits
 
 PyXaseco is inspired by and partially derived from the XAseco project.
 
 Original project:
-https://www.xaseco.org/
+- [xaseco.org](https://www.xaseco.org/)
 
-This project reimplements functionality in Python and adapts it for modern usage.
+This project reimplements and adapts that style of functionality in Python for modern TMF server usage.
 
 Parts of this project were developed with assistance from AI tools such as:
-
 - ChatGPT (GPT-5.3)
 - Claude (Sonnet 4.6)
 
 ## License
 
-GNU GPL v3. See LICENSE file.
+GNU GPL v3. See `LICENSE`.
