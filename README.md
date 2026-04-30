@@ -296,10 +296,15 @@ PyXaseco is inspired by and partially derived from the XAseco project.
 Original project:
 - [xaseco.org](https://www.xaseco.org/)
 
-This project reimplements and adapts that style of functionality in Python for modern TMF server usage.
+PyXaseco is also listed on the official XAseco resources page:
+- https://links.xaseco.org/resources.php#others
+
+Thanks to the original XAseco developers for including it.
+
+This project reimplements and adapts XAseco-style functionality in Python for modern TMF server usage.
 
 Parts of this project were developed with assistance from AI tools such as:
-- ChatGPT (GPT-5.3)
+- ChatGPT (GPT-5.3 & 5.4)
 - Claude (Sonnet 4.6)
 
 ## License
