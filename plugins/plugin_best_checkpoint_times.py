@@ -71,11 +71,59 @@ def register(aseco: "Aseco"):
     aseco.register_event("onSync", bct_onSync)
     aseco.register_event("onCheckpoint", bct_onCheckpoint)
     aseco.register_event("onNewChallenge2", bct_onNewChallenge2)
+    aseco.register_event("onBeginRound", bct_onBeginRound)
     aseco.register_event("onPlayerConnect", bct_onPlayerConnect)
     aseco.register_event("onPlayerInfoChanged", bct_onPlayerInfoChanged)
     aseco.register_event("onPlayerManialinkPageAnswer", bct_onPlayerManialinkPageAnswer)
     aseco.register_event("onEndRace1", bct_onEndRace1)
     aseco.register_event("onRestartChallenge", bct_onRestartChallenge)
+    aseco.register_event("onShutdown", bct_onShutdown)
+
+
+def _custom_ui_xml(checkpoint_visible: bool) -> str:
+    visible = "true" if checkpoint_visible else "false"
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<manialinks>"
+        '<manialink id="0"><line></line></manialink>'
+        "<custom_ui>"
+        '<notice visible="true"/>'
+        '<challenge_info visible="true"/>'
+        '<net_infos visible="true"/>'
+        '<chat visible="true"/>'
+        f'<checkpoint_list visible="{visible}"/>'
+        '<round_scores visible="true"/>'
+        '<scoretable visible="true"/>'
+        '<global visible="true"/>'
+        "</custom_ui>"
+        "</manialinks>"
+    )
+
+
+async def bct_apply_custom_ui_all(aseco: "Aseco", checkpoint_visible: bool):
+    xml = _custom_ui_xml(checkpoint_visible)
+    await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+
+
+async def bct_apply_custom_ui_login(aseco: "Aseco", login: str, checkpoint_visible: bool):
+    xml = _custom_ui_xml(checkpoint_visible)
+    await aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, 0, False)
+
+
+async def bct_set_checkpoint_list_visible(aseco: "Aseco", checkpoint_visible: bool):
+    try:
+        await aseco.client.query_ignore_result("SetForcedUi", {"checkpoint_list": checkpoint_visible})
+    except Exception:
+        pass
+    await bct_apply_custom_ui_all(aseco, checkpoint_visible)
+
+
+async def bct_set_checkpoint_list_visible_login(aseco: "Aseco", login: str, checkpoint_visible: bool):
+    try:
+        await aseco.client.query_ignore_result("SetForcedUi", {"checkpoint_list": checkpoint_visible})
+    except Exception:
+        pass
+    await bct_apply_custom_ui_login(aseco, login, checkpoint_visible)
 
 
 async def bct_onSync(aseco: "Aseco", _param=None):
@@ -101,23 +149,21 @@ async def bct_onSync(aseco: "Aseco", _param=None):
             versions.append(
                 {
                     "plugin": "plugin_best_checkpoint_times.py",
-                    "author": "undef.de / OpenAI port",
+                    "author": "undef.de",
                     "version": _state.version,
                 }
             )
     except Exception:
         pass
 
-    try:
-        await aseco.client.query_ignore_result("SetForcedUi", {"checkpoint_list": False})
-    except Exception:
-        pass
+    await bct_set_checkpoint_list_visible(aseco, False)
 
 
 async def bct_onPlayerConnect(aseco: "Aseco", player: "Player"):
     if not getattr(_state, "challenge_num_cps", 0):
         _state.challenge_num_cps = _state.show_max_checkpoints
     _state.hidden_logins.discard(player.login)
+    await bct_set_checkpoint_list_visible_login(aseco, player.login, False)
     await bct_buildWidget(aseco, player.login)
 
 
@@ -166,6 +212,7 @@ async def bct_onPlayerManialinkPageAnswer(aseco: "Aseco", answer: list):
 
 async def bct_onNewChallenge2(aseco: "Aseco", challenge_item):
     _state.current_state = STATE_RACE
+    await bct_set_checkpoint_list_visible(aseco, False)
     await bct_buildWidget(aseco, None)
 
     _state.challenge_num_cps = int(getattr(challenge_item, "nbchecks", 0) or _state.show_max_checkpoints)
@@ -178,6 +225,18 @@ async def bct_onNewChallenge2(aseco: "Aseco", challenge_item):
 
 async def bct_onRestartChallenge(aseco: "Aseco", _challenge_item):
     _state.current_state = STATE_RACE
+
+
+async def bct_onBeginRound(aseco: "Aseco", _param=None):
+    _state.current_state = STATE_RACE
+    await bct_set_checkpoint_list_visible(aseco, False)
+
+
+async def bct_onShutdown(aseco: "Aseco", _param=None):
+    try:
+        await bct_set_checkpoint_list_visible(aseco, True)
+    except Exception:
+        pass
 
 
 async def bct_onCheckpoint(aseco: "Aseco", checkpt: list):
