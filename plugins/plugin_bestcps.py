@@ -2,7 +2,7 @@
 plugin_bestcps.py — Python base port of plugin.bestcps.php
 
 Displays best checkpoint times on the current challenge in a compact widget,
-with a per-player toggle via `/bestcps` or the small Toggle BestCPs panel.
+with a per-player toggle via `/bestcps`.
 """
 
 from __future__ import annotations
@@ -23,8 +23,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 WIDGET_ID = 123123456
-TOGGLE_ID = 123123457
-ACTION_TOGGLE = 9000
 
 
 @dataclass
@@ -60,7 +58,6 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onEndRace', _bestcps_end_race)
     aseco.register_event('onNewChallenge', _bestcps_new_challenge)
     aseco.register_event('onPlayerFinish', _bestcps_player_finish)
-    aseco.register_event('onPlayerManialinkPageAnswer', _bestcps_click)
 
     aseco.add_chat_command('bestcps', 'Toggle show/hide bestcps')
     aseco.register_event('onChat_bestcps', chat_bestcps)
@@ -159,30 +156,6 @@ async def _send_widget_xml(aseco: 'Aseco', login: str, xml: str):
 
 async def _hide_widget_for_user(aseco: 'Aseco', login: str):
     await _send_widget_xml(aseco, login, f'<manialink id="{WIDGET_ID}"></manialink>')
-
-
-def _build_toggle_xml() -> str:
-    return (
-        f'<manialink id="{TOGGLE_ID}">'
-        '<frame posn="57.5 -32.25">'
-        '<format textsize="0.5"/>'
-        f'<label posn="1 1" sizen="5.5 2" halign="left" valign="center" text="Toggle BestCPs" action="{ACTION_TOGGLE}"/>'
-        '</frame>'
-        '</manialink>'
-    )
-
-
-async def _send_toggle(aseco: 'Aseco', login: str | None = None):
-    xml = _build_toggle_xml()
-    if login:
-        await _send_widget_xml(aseco, login, xml)
-    else:
-        await aseco.client.query_ignore_result(
-            'SendDisplayManialinkPage',
-            aseco.format_colors(xml),
-            0,
-            False,
-        )
 
 
 def _build_widget_xml() -> str:
@@ -288,14 +261,12 @@ async def _broadcast_widget(aseco: 'Aseco'):
 
 async def _bestcps_sync(aseco: 'Aseco', _param=None):
     _load_config(aseco)
-    await _send_toggle(aseco)
     if _tab_cp_time:
         await _broadcast_widget(aseco)
 
 
 async def _bestcps_player_connect(aseco: 'Aseco', player: 'Player'):
     _load_config(aseco)
-    await _send_toggle(aseco, player.login)
     if _is_score_mode(aseco):
         await _hide_widget_for_user(aseco, player.login)
         return
@@ -312,9 +283,6 @@ async def _bestcps_new_challenge(aseco: 'Aseco', challenge):
         1,
         False,
     )
-    await _send_toggle(aseco)
-
-
 async def _bestcps_player_finish(aseco: 'Aseco', record):
     # Preserved only as a compatibility hook from the original plugin.
     return
@@ -373,25 +341,6 @@ async def _bestcps_refresh(aseco: 'Aseco', _record):
         return
     if _tab_cp_time:
         await _broadcast_widget(aseco)
-
-
-async def _bestcps_click(aseco: 'Aseco', answer: list):
-    if len(answer) < 3:
-        return
-    try:
-        action = int(answer[2])
-    except Exception:
-        return
-
-    if action != ACTION_TOGGLE:
-        return
-
-    player = aseco.server.players.get_player(answer[1])
-    if not player:
-        return
-
-    aseco.console('player {1} clicked command "/bestcps"', player.login)
-    await chat_bestcps(aseco, {'author': player})
 
 
 async def chat_bestcps(aseco: 'Aseco', command: dict):

@@ -31,8 +31,8 @@ PANEL_ID_VOTE = 5
 PANEL_ID_DONATE = 6
 PANEL_ID_STATS = 9
 
-ACTION_ADMIN_BASE = -7       # -8.. etc
-ACTION_RECPANEL_BASE = -49   # -50.. etc
+ACTION_ADMIN_BASE = 7400     # 7401.. etc
+ACTION_RECPANEL_BASE = 7300  # 7301.. etc
 ACTION_VOTEPANEL_BASE = 36   # 37.. etc
 ACTION_DONPANEL_BASE = 7200  # 7201.. etc
 
@@ -879,6 +879,18 @@ def _action_id(base: int, index_1_based: int) -> int:
     return base + index_1_based
 
 
+def _action_index_from_base(base: int, action: int, count: int) -> int | None:
+    if count <= 0:
+        return None
+    first = base + 1
+    last = base + count
+    low = min(first, last)
+    high = max(first, last)
+    if not (low <= action <= high):
+        return None
+    return action - first
+
+
 def _strip_prefix(name: str, prefix: str) -> str:
     if name.lower().startswith(prefix.lower()):
         return name[len(prefix):]
@@ -1062,26 +1074,22 @@ async def event_panels(aseco: "Aseco", answer: list):
         elif param == "vote":
             await chat_votepanel(aseco, command)
 
-    if -100 <= action <= -49:
-        idx = abs(action) - 50
-        if 0 <= idx < len(player.tracklist):
-            await _dispatch("records", player.tracklist[idx]["panel"])
+    idx = _action_index_from_base(ACTION_RECPANEL_BASE, action, len(player.tracklist))
+    if idx is not None and 0 <= idx < len(player.tracklist):
+        await _dispatch("records", player.tracklist[idx]["panel"])
         return
 
-    if -48 <= action <= -7:
-        idx = abs(action) - 8
-        if 0 <= idx < len(player.tracklist):
-            await _dispatch("admin", player.tracklist[idx]["panel"])
+    idx = _action_index_from_base(ACTION_ADMIN_BASE, action, len(player.tracklist))
+    if idx is not None and 0 <= idx < len(player.tracklist):
+        await _dispatch("admin", player.tracklist[idx]["panel"])
         return
 
-    if 37 <= action <= 48:
-        idx = action - 37
-        if 0 <= idx < len(player.tracklist):
-            await _dispatch("vote", player.tracklist[idx]["panel"])
+    idx = _action_index_from_base(ACTION_VOTEPANEL_BASE, action, len(player.tracklist))
+    if idx is not None and 0 <= idx < len(player.tracklist):
+        await _dispatch("vote", player.tracklist[idx]["panel"])
         return
 
-    if 7201 <= action <= 7222:
-        idx = action - 7201
-        if 0 <= idx < len(player.tracklist):
-            await _dispatch("donate", player.tracklist[idx]["panel"])
+    idx = _action_index_from_base(ACTION_DONPANEL_BASE, action, len(player.tracklist))
+    if idx is not None and 0 <= idx < len(player.tracklist):
+        await _dispatch("donate", player.tracklist[idx]["panel"])
         return

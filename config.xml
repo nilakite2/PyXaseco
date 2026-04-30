@@ -199,9 +199,9 @@
     <window_style>DarkBlur</window_style>
     <!-- default panels:  empty for no panel, otherwise a -->
     <!-- filename that should be at panels/<filename>.xml -->
-    <admin_panel>AdminBelowChat</admin_panel>
-    <donate_panel>DonateBelowCPList</donate_panel>
-    <records_panel>RecordsRightBottom</records_panel>
+    <admin_panel>AdminAboveChat</admin_panel>
+    <donate_panel></donate_panel>
+    <records_panel></records_panel>
     <vote_panel>VoteBelowChat</vote_panel>
   </aseco>
 

@@ -1,0 +1,23 @@
+<settings>
+	<position>
+		<x>49.7</x>
+		<y>-20.0</y>
+	</position>
+
+	<!-- Overall panel size -->
+	<width>15</width>
+	<height>18.2</height>
+
+	<!-- Maximum number of checkpoints to consider overall -->
+	<number>2000</number>
+
+	<!-- Hide the native TrackMania checkpoint list/custom UI -->
+	<custom_ui>true</custom_ui>
+
+	<!-- Show the widget while a player is spectating -->
+	<show_spectators>true</show_spectators>
+
+	<!-- Base text size/scale used for checkpoint rows -->
+	<textsize>1.0</textsize>
+	<textscale>0.9</textscale>
+</settings>
