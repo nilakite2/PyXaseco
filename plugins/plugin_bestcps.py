@@ -39,6 +39,7 @@ class BestCpsConfig:
     pos_y: float = 44.8
     number: int = 30
     newline: int = 10
+    rows: int = 0
     orientation: int = 0
     pos_x_counter: float = 0.0
     pos_y_counter: float = -35.0
@@ -111,17 +112,19 @@ def _load_config(aseco: 'Aseco'):
             pos_y=_parse_float(pos.findtext('y', '44.8') if pos is not None else '44.8', 44.8),
             number=_parse_int(root.findtext('number', '30'), 30),
             newline=max(1, _parse_int(root.findtext('newline', '10'), 10)),
+            rows=max(0, _parse_int(root.findtext('rows', '0'), 0)),
             orientation=_parse_int(root.findtext('orientation', '0'), 0),
             pos_x_counter=_parse_float(pos_counter.findtext('x_counter', '0') if pos_counter is not None else '0', 0.0),
             pos_y_counter=_parse_float(pos_counter.findtext('y_counter', '-35') if pos_counter is not None else '-35', -35.0),
         )
         logger.info(
-            '[BestCps] Config loaded from %s (x=%s, y=%s, number=%s, newline=%s, orientation=%s)',
+            '[BestCps] Config loaded from %s (x=%s, y=%s, number=%s, newline=%s, rows=%s, orientation=%s)',
             path,
             _config.pos_x,
             _config.pos_y,
             _config.number,
             _config.newline,
+            _config.rows,
             _config.orientation,
         )
     except Exception as e:
@@ -195,6 +198,10 @@ def _build_widget_xml() -> str:
     xml.append('<format textsize="1"/>')
 
     entries = [(place, _tab_cp_time[cp_index]) for place, cp_index in enumerate(sorted(_tab_cp_time), start=1)]
+    if _config.orientation == 0 and _config.rows > 0:
+        entries = entries[: _config.newline * _config.rows]
+    elif _config.rows > 0:
+        entries = entries[: _config.rows]
     count = len(entries)
 
     if _config.orientation in (2, 3) and count > 0:

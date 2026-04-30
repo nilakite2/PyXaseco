@@ -48,8 +48,8 @@
 <!--<plugin>plugin_freezone</plugin>-->
 	<plugin>plugin_fufi_menu</plugin>
 <!--<plugin>plugin_flexitime</plugin>-->
-<!--<plugin>plugin_staler_tools</plugin>--> <!--Extended commands for chat, etc.-->
-<!--<plugin>plugin_staler_actionids</plugin>-->
+<!--<plugin>plugin_stalker_tools</plugin>--> <!--Extended commands for chat, etc.-->
+<!--<plugin>plugin_stalker_actionids</plugin>-->
 	<plugin>plugin_cpll</plugin>
 	<plugin>plugin_ztrack</plugin>
 </aseco_plugins>

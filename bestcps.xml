@@ -7,10 +7,14 @@
 	</position>
 
 	<!-- Total Number CPS -->
-	<number>30</number>
-	
-	<!-- Number of CPS per row -->
-	<newline>5</newline>
+	<number>7</number>
+
+	<!-- Horizontal layout: after this many CP entries, continue on the next row -->
+	<newline>7</newline>
+
+	<!-- Maximum amount of rows to display; 0 = unlimited
+	     In horizontal mode this limits total entries to rows * newline -->
+	<rows>1</rows>
 
 	<!--0 : horizontal, 1 : vertical_V1, 2 : vertical_V2, 3 : vertical_V3 -->
 	<orientation>0</orientation>
