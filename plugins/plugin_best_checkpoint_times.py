@@ -63,6 +63,7 @@ class BctState:
     challenge_multilap: bool = False
     checkpoint_times: dict[int, dict[str, object]] = field(default_factory=dict)
     hidden_logins: set[str] = field(default_factory=set)
+    eyepiece_prev_checkpoint_list: bool | None = None
 
 
 _state = BctState()
@@ -72,13 +73,11 @@ def register(aseco: "Aseco"):
     aseco.register_event("onSync", bct_onSync)
     aseco.register_event("onCheckpoint", bct_onCheckpoint)
     aseco.register_event("onNewChallenge2", bct_onNewChallenge2)
-    aseco.register_event("onBeginRound", bct_onBeginRound)
     aseco.register_event("onPlayerConnect", bct_onPlayerConnect)
     aseco.register_event("onPlayerInfoChanged", bct_onPlayerInfoChanged)
     aseco.register_event("onPlayerManialinkPageAnswer", bct_onPlayerManialinkPageAnswer)
     aseco.register_event("onEndRace1", bct_onEndRace1)
     aseco.register_event("onRestartChallenge", bct_onRestartChallenge)
-    aseco.register_event("onShutdown", bct_onShutdown)
 
 
 def _resolve_eyepiece_state():
@@ -106,48 +105,31 @@ def _resolve_eyepiece_state():
     return None
 
 
-def _bool_text(value: bool) -> str:
-    return "true" if value else "false"
-
-
-def _custom_ui_flags(checkpoint_visible: bool) -> dict[str, bool]:
-    flags = {
-        "notice": True,
-        "challenge_info": True,
-        "net_infos": True,
-        "chat": True,
-        "checkpoint_list": checkpoint_visible,
-        "round_scores": True,
-        "scoretable": True,
-        "global": True,
-    }
-
-    ep_state = _resolve_eyepiece_state()
-    if ep_state and getattr(ep_state, "custom_ui_enabled", False):
-        flags["challenge_info"] = not bool(getattr(getattr(ep_state, "challenge", None), "enabled", False))
-        flags["net_infos"] = bool(getattr(ep_state, "custom_ui_net_infos", True))
-        flags["chat"] = bool(getattr(ep_state, "custom_ui_chat", True))
-        flags["round_scores"] = bool(getattr(ep_state, "custom_ui_round_scores", True))
-        flags["scoretable"] = bool(getattr(ep_state, "custom_ui_scoretable", True))
-
-    return flags
+def _resolve_eyepiece_apply():
+    module_names = (
+        "records_eyepiece.handlers.events",
+        "pyxaseco_plugins.records_eyepiece.handlers.events",
+        "pyxaseco.plugins.records_eyepiece.handlers.events",
+        "plugins.records_eyepiece.handlers.events",
+    )
+    for name in module_names:
+        try:
+            mod = importlib.import_module(name)
+        except Exception:
+            continue
+        fn = getattr(mod, "_apply_custom_ui_all", None)
+        if callable(fn):
+            return fn
+    return None
 
 
 def _custom_ui_xml(checkpoint_visible: bool) -> str:
-    flags = _custom_ui_flags(checkpoint_visible)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<manialinks>"
         '<manialink id="0"><line></line></manialink>'
         "<custom_ui>"
-        f'<notice visible="{_bool_text(flags["notice"])}"/>'
-        f'<challenge_info visible="{_bool_text(flags["challenge_info"])}"/>'
-        f'<net_infos visible="{_bool_text(flags["net_infos"])}"/>'
-        f'<chat visible="{_bool_text(flags["chat"])}"/>'
-        f'<checkpoint_list visible="{_bool_text(flags["checkpoint_list"])}"/>'
-        f'<round_scores visible="{_bool_text(flags["round_scores"])}"/>'
-        f'<scoretable visible="{_bool_text(flags["scoretable"])}"/>'
-        f'<global visible="{_bool_text(flags["global"])}"/>'
+        f'<checkpoint_list visible="{"true" if checkpoint_visible else "false"}"/>'
         "</custom_ui>"
         "</manialinks>"
     )
@@ -164,6 +146,15 @@ async def bct_apply_custom_ui_login(aseco: "Aseco", login: str, checkpoint_visib
 
 
 async def bct_set_checkpoint_list_visible(aseco: "Aseco", checkpoint_visible: bool):
+    ep_state = _resolve_eyepiece_state()
+    ep_apply = _resolve_eyepiece_apply()
+    if ep_state and ep_apply and getattr(ep_state, "custom_ui_enabled", False):
+        if _state.eyepiece_prev_checkpoint_list is None:
+            _state.eyepiece_prev_checkpoint_list = bool(getattr(ep_state, "custom_ui_checkpoint_list", True))
+        ep_state.custom_ui_checkpoint_list = checkpoint_visible
+        await ep_apply(aseco)
+        return
+
     try:
         await aseco.client.query_ignore_result("SetForcedUi", {"checkpoint_list": checkpoint_visible})
     except Exception:
@@ -172,6 +163,15 @@ async def bct_set_checkpoint_list_visible(aseco: "Aseco", checkpoint_visible: bo
 
 
 async def bct_set_checkpoint_list_visible_login(aseco: "Aseco", login: str, checkpoint_visible: bool):
+    ep_state = _resolve_eyepiece_state()
+    ep_apply = _resolve_eyepiece_apply()
+    if ep_state and ep_apply and getattr(ep_state, "custom_ui_enabled", False):
+        if _state.eyepiece_prev_checkpoint_list is None:
+            _state.eyepiece_prev_checkpoint_list = bool(getattr(ep_state, "custom_ui_checkpoint_list", True))
+        ep_state.custom_ui_checkpoint_list = checkpoint_visible
+        await ep_apply(aseco)
+        return
+
     try:
         await aseco.client.query_ignore_result("SetForcedUi", {"checkpoint_list": checkpoint_visible})
     except Exception:
@@ -220,11 +220,17 @@ async def bct_onPlayerConnect(aseco: "Aseco", player: "Player"):
     await bct_buildWidget(aseco, player.login)
 
 
-async def bct_onPlayerInfoChanged(aseco: "Aseco", info: dict):
+async def bct_onPlayerInfoChanged(aseco: "Aseco", info):
     if _state.current_state == STATE_SCORE:
         return
 
-    login = str(info.get("Login", "") or "")
+    if isinstance(info, dict):
+        login = str(info.get("Login", "") or "")
+        spectator_status = int(info.get("SpectatorStatus", 0) or 0)
+    else:
+        login = str(getattr(info, "login", "") or "")
+        spectator_status = int(getattr(info, "spectatorstatus", 0) or 0)
+
     if not login:
         return
 
@@ -232,7 +238,6 @@ async def bct_onPlayerInfoChanged(aseco: "Aseco", info: dict):
     if not player:
         return
 
-    spectator_status = int(info.get("SpectatorStatus", 0) or 0)
     if spectator_status > 0:
         xml = (
             '<?xml version="1.0" encoding="UTF-8"?>'
@@ -282,14 +287,6 @@ async def bct_onRestartChallenge(aseco: "Aseco", _challenge_item):
 
 async def bct_onBeginRound(aseco: "Aseco", _param=None):
     _state.current_state = STATE_RACE
-    await bct_set_checkpoint_list_visible(aseco, False)
-
-
-async def bct_onShutdown(aseco: "Aseco", _param=None):
-    try:
-        await bct_set_checkpoint_list_visible(aseco, True)
-    except Exception:
-        pass
 
 
 async def bct_onCheckpoint(aseco: "Aseco", checkpt: list):
