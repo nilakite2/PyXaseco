@@ -33,7 +33,7 @@ PANEL_ID_STATS = 9
 
 ACTION_ADMIN_BASE = 7400     # 7401.. etc
 ACTION_RECPANEL_BASE = 7300  # 7301.. etc
-ACTION_VOTEPANEL_BASE = 36   # 37.. etc
+ACTION_VOTEPANEL_BASE = 7500 # 7501.. etc
 ACTION_DONPANEL_BASE = 7200  # 7201.. etc
 
 # Functional panel action ids
@@ -1076,20 +1076,28 @@ async def event_panels(aseco: "Aseco", answer: list):
 
     idx = _action_index_from_base(ACTION_RECPANEL_BASE, action, len(player.tracklist))
     if idx is not None and 0 <= idx < len(player.tracklist):
-        await _dispatch("records", player.tracklist[idx]["panel"])
+        panel_name = player.tracklist[idx].get("panel")
+        if panel_name:
+            await _dispatch("records", panel_name)
         return
 
     idx = _action_index_from_base(ACTION_ADMIN_BASE, action, len(player.tracklist))
     if idx is not None and 0 <= idx < len(player.tracklist):
-        await _dispatch("admin", player.tracklist[idx]["panel"])
+        panel_name = player.tracklist[idx].get("panel")
+        if panel_name:
+            await _dispatch("admin", panel_name)
         return
 
     idx = _action_index_from_base(ACTION_VOTEPANEL_BASE, action, len(player.tracklist))
     if idx is not None and 0 <= idx < len(player.tracklist):
-        await _dispatch("vote", player.tracklist[idx]["panel"])
+        panel_name = player.tracklist[idx].get("panel")
+        if panel_name:
+            await _dispatch("vote", panel_name)
         return
 
     idx = _action_index_from_base(ACTION_DONPANEL_BASE, action, len(player.tracklist))
     if idx is not None and 0 <= idx < len(player.tracklist):
-        await _dispatch("donate", player.tracklist[idx]["panel"])
+        panel_name = player.tracklist[idx].get("panel")
+        if panel_name:
+            await _dispatch("donate", panel_name)
         return
