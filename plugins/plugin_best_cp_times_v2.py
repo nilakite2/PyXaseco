@@ -51,9 +51,11 @@ class BctState:
     challenge_num_cps: int = 20
     challenge_multilap: bool = False
     checkpoint_times: dict[int, dict[str, object]] = field(default_factory=dict)
+    player_checkpoint_times: dict[str, dict[int, int]] = field(default_factory=dict)
     hidden_logins: set[str] = field(default_factory=set)
     eyepiece_prev_checkpoint_list: bool | None = None
     pages: dict[str, int] = field(default_factory=dict)
+    view_modes: dict[str, str] = field(default_factory=dict)
 
 
 _state = BctState()
@@ -68,6 +70,8 @@ def register(aseco: "Aseco"):
     aseco.register_event("onPlayerManialinkPageAnswer", bct_onPlayerManialinkPageAnswer)
     aseco.register_event("onEndRace1", bct_onEndRace1)
     aseco.register_event("onRestartChallenge", bct_onRestartChallenge)
+    aseco.add_chat_command("bcps", "Switch Best CP Times mode (/bcps all or /bcps my)")
+    aseco.register_event("onChat_bcps", chat_bcps)
 
 
 def _load_cfg(aseco: "Aseco"):
@@ -257,6 +261,8 @@ async def bct_onPlayerConnect(aseco: "Aseco", player: "Player"):
     if not getattr(_state, "challenge_num_cps", 0):
         _state.challenge_num_cps = _state.show_max_checkpoints
     _state.pages[player.login] = 0
+    _state.view_modes.setdefault(player.login, "all")
+    _state.player_checkpoint_times.setdefault(player.login, {})
     if bool(getattr(player, "isspectator", False)) and not _state.widget.show_spectators:
         _state.hidden_logins.add(player.login)
     else:
@@ -265,6 +271,15 @@ async def bct_onPlayerConnect(aseco: "Aseco", player: "Player"):
     await bct_buildWidget(aseco, player.login)
     if player.login not in _state.hidden_logins:
         await bct_buildCheckpointsTimeInlay(aseco, login=player.login)
+    await aseco.client.query_ignore_result(
+        "ChatSendServerMessageToLogin",
+        aseco.format_colors(
+            "{#server}>> {#message}This server is running Best CP Times, "
+            "type {#highlite}/bcps all {#message}or {#highlite}/bcps my "
+            "{#message}to switch the view."
+        ),
+        player.login,
+    )
 
 
 async def bct_onPlayerInfoChanged(aseco: "Aseco", info):
@@ -300,6 +315,8 @@ async def bct_onPlayerInfoChanged(aseco: "Aseco", info):
     else:
         _state.hidden_logins.discard(login)
         _state.pages.setdefault(login, 0)
+        _state.view_modes.setdefault(login, "all")
+        _state.player_checkpoint_times.setdefault(login, {})
         await bct_buildWidget(aseco, login)
         await bct_buildCheckpointsTimeInlay(aseco)
 
@@ -328,6 +345,7 @@ async def bct_onNewChallenge2(aseco: "Aseco", challenge_item):
     _state.current_state = STATE_RACE
     await bct_set_checkpoint_list_visible(aseco, False)
     _state.pages.clear()
+    _state.player_checkpoint_times.clear()
     await bct_buildWidget(aseco, None)
 
     _state.challenge_num_cps = int(getattr(challenge_item, "nbchecks", 0) or _state.show_max_checkpoints)
@@ -371,7 +389,8 @@ async def bct_onCheckpoint(aseco: "Aseco", checkpt: list):
             if cp >= 0:
                 checkpoint_id = cp
 
-    _state.pages[player.login] = _page_for_checkpoint(checkpoint_id)
+    _state.pages[player.login] = checkpoint_id // PAGE_SIZE
+    _state.player_checkpoint_times.setdefault(player.login, {})[checkpoint_id] = score
 
     refresh = False
     current = _state.checkpoint_times.get(checkpoint_id, {"Score": 0, "Nickname": "---"})
@@ -409,6 +428,7 @@ async def bct_onEndRace1(aseco: "Aseco", _race):
         "</manialinks>"
     )
     _state.checkpoint_times = {}
+    _state.player_checkpoint_times.clear()
     _state.pages.clear()
     await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
 
@@ -458,16 +478,7 @@ async def bct_buildCheckpointsTimeInlay(aseco: "Aseco", cpid: int = -1, login: s
 
 
 def _visible_checkpoint_ids() -> list[int]:
-    ids: list[int] = []
-    for cp in range(_state.challenge_num_cps):
-        if (cp + 1) > _state.show_max_checkpoints:
-            break
-        if (len(ids) + 1) == _state.challenge_num_cps:
-            break
-        if cp not in _state.checkpoint_times:
-            break
-        ids.append(cp)
-    return ids
+    return _visible_checkpoint_ids_for("", "all")
 
 
 def _page_count() -> int:
@@ -500,24 +511,77 @@ def _find_login_by_pid(aseco: "Aseco", pid: int) -> str | None:
     return None
 
 
-def _effective_page_for_login(aseco: "Aseco", login: str) -> int:
+def _effective_subject_login(aseco: "Aseco", login: str) -> str:
     player = aseco.server.players.get_player(login)
     if not player:
-        return _clamp_page(_state.pages.get(login, 0))
+        return login
 
     spectator_status = int(getattr(player, "spectatorstatus", 0) or 0)
     if spectator_status and (spectator_status % 10) != 0:
         target_pid = spectator_status // 10000
         target_login = _find_login_by_pid(aseco, target_pid)
         if target_login:
-            return _clamp_page(_state.pages.get(target_login, 0))
+            return target_login
+    return login
 
-    return _clamp_page(_state.pages.get(login, 0))
+
+def _effective_view_mode(login: str) -> str:
+    mode = str(_state.view_modes.get(login, "all") or "all").strip().lower()
+    return "my" if mode == "my" else "all"
+
+
+def _effective_page_for_login(aseco: "Aseco", login: str) -> int:
+    subject_login = _effective_subject_login(aseco, login)
+    view_mode = _effective_view_mode(login)
+    ids = _visible_checkpoint_ids_for(subject_login, view_mode)
+    total_pages = max(1, (len(ids) + PAGE_SIZE - 1) // PAGE_SIZE)
+    return max(0, min(max(0, total_pages - 1), int(_state.pages.get(subject_login, 0) or 0)))
+
+
+def _max_supported_checkpoint_id() -> int:
+    return max(-1, min(_state.challenge_num_cps - 2, _state.show_max_checkpoints - 1))
+
+
+def _furthest_reached_checkpoint_for(login: str, mode: str) -> int:
+    max_cp = _max_supported_checkpoint_id()
+    if max_cp < 0:
+        return -1
+
+    if mode == "my":
+        times = _state.player_checkpoint_times.get(login, {})
+        reached = [cp for cp, score in times.items() if int(score or 0) > 0 and 0 <= cp <= max_cp]
+        return max(reached) if reached else -1
+
+    reached = [
+        cp for cp in range(max_cp + 1)
+        if int((_state.checkpoint_times.get(cp, {}) or {}).get("Score", 0) or 0) > 0
+    ]
+    return max(reached) if reached else -1
+
+
+def _visible_checkpoint_ids_for(login: str, mode: str) -> list[int]:
+    max_cp = _max_supported_checkpoint_id()
+    if max_cp < 0:
+        return []
+
+    if mode == "my":
+        times = _state.player_checkpoint_times.get(login, {})
+        return sorted(
+            cp for cp, score in times.items()
+            if 0 <= cp <= max_cp and int(score or 0) > 0
+        )
+
+    return sorted(
+        cp for cp in range(max_cp + 1)
+        if int((_state.checkpoint_times.get(cp, {}) or {}).get("Score", 0) or 0) > 0
+    )
 
 
 def _build_inlay_xml(aseco: "Aseco", login: str, checkpoint_id: int, highlight: bool, mode: int) -> str:
+    view_mode = _effective_view_mode(login)
+    subject_login = _effective_subject_login(aseco, login)
     page = _effective_page_for_login(aseco, login)
-    ids = _visible_checkpoint_ids()
+    ids = _visible_checkpoint_ids_for(subject_login, view_mode)
     start = page * PAGE_SIZE
     page_ids = ids[start:start + PAGE_SIZE]
     width = _state.widget.width
@@ -542,9 +606,14 @@ def _build_inlay_xml(aseco: "Aseco", login: str, checkpoint_id: int, highlight: 
         else:
             parts.append('<format style="TextStaticMedium"/>')
 
-        entry = _state.checkpoint_times[cp]
-        score_val = int(entry.get("Score", 0) or 0)
-        nick = str(entry.get("Nickname", "---"))
+        if view_mode == "my":
+            score_val = int(_state.player_checkpoint_times.get(subject_login, {}).get(cp, 0) or 0)
+            subj = aseco.server.players.get_player(subject_login)
+            nick = bct_handleSpecialChars(str(getattr(subj, "nickname", subject_login) if subj else subject_login))
+        else:
+            entry = _state.checkpoint_times[cp]
+            score_val = int(entry.get("Score", 0) or 0)
+            nick = str(entry.get("Nickname", "---"))
         score_txt = str(score_val) if mode == 4 else bct_formatTime(score_val)
 
         parts.append(
@@ -560,26 +629,55 @@ def _build_inlay_xml(aseco: "Aseco", login: str, checkpoint_id: int, highlight: 
             f'textsize="{_state.widget.textsize}" scale="{_state.widget.textscale}" text="$FFF{nick}"/>'
         )
 
-    footer_y = -(row_offset * (PAGE_SIZE + 0.55)) - 0.45
-    page = _clamp_page(_state.pages.get(login, 0))
-    total_pages = _page_count()
-    prev_action = -(ACTION_PAGE_BASE + max(0, page - 1))
-    next_action = ACTION_PAGE_BASE + min(max(0, total_pages - 1), page + 1)
-    prev_x = 0.55
-    page_x = 3.6
-    next_x = 5.15
-    parts.append(
-        f'<quad posn="{prev_x:.2f} {footer_y:.2f} 0.12" sizen="2.0 2.0" action="{prev_action}" style="Icons64x64_1" substyle="ArrowPrev"/>'
-    )
-    parts.append(
-        f'<label posn="{page_x:.2f} {footer_y - 0.10:.2f} 0.14" sizen="3.8 0" halign="center" textsize="1.2" scale="0.85" text="$FFF{page + 1}/{max(1, total_pages)}"/>'
-    )
-    parts.append(
-        f'<quad posn="{next_x:.2f} {footer_y:.2f} 0.12" sizen="2.0 2.0" action="{next_action}" style="Icons64x64_1" substyle="ArrowNext"/>'
-    )
+    page = _effective_page_for_login(aseco, login)
+    total_pages = max(1, (len(ids) + PAGE_SIZE - 1) // PAGE_SIZE)
+    if total_pages > 1:
+        footer_y = -(row_offset * (PAGE_SIZE + 0.55)) - 0.45
+        prev_x = 0.55
+        page_x = 3.6
+        next_x = 5.15
+        parts.append('<format style="TextStaticMedium"/>')
+        if page > 0:
+            prev_action = -(ACTION_PAGE_BASE + (page - 1))
+            parts.append(
+                f'<quad posn="{prev_x:.2f} {footer_y:.2f} 0.12" sizen="2.0 2.0" action="{prev_action}" style="Icons64x64_1" substyle="ArrowPrev"/>'
+            )
+        parts.append(
+            f'<label posn="{page_x:.2f} {footer_y - 0.10:.2f} 0.14" sizen="3.8 0" halign="center" textsize="1.2" scale="0.85" text="$FFF{page + 1}/{total_pages}"/>'
+        )
+        if page < (total_pages - 1):
+            next_action = ACTION_PAGE_BASE + (page + 1)
+            parts.append(
+                f'<quad posn="{next_x:.2f} {footer_y:.2f} 0.12" sizen="2.0 2.0" action="{next_action}" style="Icons64x64_1" substyle="ArrowNext"/>'
+            )
 
     parts.extend(["</frame>", "</manialink>", "</manialinks>"])
     return "".join(parts)
+
+
+async def chat_bcps(aseco: "Aseco", command: dict):
+    player = command["author"]
+    login = player.login
+    params = str(command.get("params", "") or "").strip().lower()
+
+    if params not in ("all", "my"):
+        current = _effective_view_mode(login)
+        await aseco.client.query_ignore_result(
+            "ChatSendServerMessageToLogin",
+            f"Use /bcps all or /bcps my. Current mode: {current}",
+            login,
+        )
+        return
+
+    _state.view_modes[login] = params
+    _state.pages[login] = 0
+    await aseco.client.query_ignore_result(
+        "ChatSendServerMessageToLogin",
+        f"Best CP Times mode set to {params}.",
+        login,
+    )
+    await bct_buildWidget(aseco, login)
+    await bct_buildCheckpointsTimeInlay(aseco, login=login)
 
 
 def bct_formatTime(mw_time: int, hsec: bool = True) -> str:
