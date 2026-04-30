@@ -43,6 +43,7 @@
 <!--<plugin>plugin_bestcps</plugin>--> <!--Best CPs-->
 <!--<plugin>plugin_tgj_allbutton</plugin>--> <!--Custom Buttons-->
 <!--<plugin>plugin_best_checkpoint_times</plugin>--> <!--Best CP Times-->
+	<plugin>plugin_best_cp_times_v2</plugin>
 	<plugin>plugin_bestfinishes</plugin> <!--Best Finishes (based on BestRuns plugin)-->
 	<plugin>plugin_mania_karma</plugin>
 <!--<plugin>plugin_freezone</plugin>-->
