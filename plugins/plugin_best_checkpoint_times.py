@@ -22,6 +22,7 @@ Manialink ids/actions:
 from __future__ import annotations
 
 import logging
+import importlib
 import re
 from dataclasses import dataclass, field
 from html import escape
@@ -80,21 +81,73 @@ def register(aseco: "Aseco"):
     aseco.register_event("onShutdown", bct_onShutdown)
 
 
+def _resolve_eyepiece_state():
+    module_names = (
+        "records_eyepiece.state",
+        "records_eyepiece.plugin",
+        "pyxaseco_plugins.records_eyepiece.state",
+        "pyxaseco_plugins.records_eyepiece.plugin",
+        "pyxaseco.plugins.records_eyepiece.state",
+        "pyxaseco.plugins.records_eyepiece.plugin",
+        "plugins.records_eyepiece.state",
+        "plugins.records_eyepiece.plugin",
+    )
+    for name in module_names:
+        try:
+            mod = importlib.import_module(name)
+        except Exception:
+            continue
+        getter = getattr(mod, "get_state", None)
+        if callable(getter):
+            try:
+                return getter()
+            except Exception:
+                continue
+    return None
+
+
+def _bool_text(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def _custom_ui_flags(checkpoint_visible: bool) -> dict[str, bool]:
+    flags = {
+        "notice": True,
+        "challenge_info": True,
+        "net_infos": True,
+        "chat": True,
+        "checkpoint_list": checkpoint_visible,
+        "round_scores": True,
+        "scoretable": True,
+        "global": True,
+    }
+
+    ep_state = _resolve_eyepiece_state()
+    if ep_state and getattr(ep_state, "custom_ui_enabled", False):
+        flags["challenge_info"] = not bool(getattr(getattr(ep_state, "challenge", None), "enabled", False))
+        flags["net_infos"] = bool(getattr(ep_state, "custom_ui_net_infos", True))
+        flags["chat"] = bool(getattr(ep_state, "custom_ui_chat", True))
+        flags["round_scores"] = bool(getattr(ep_state, "custom_ui_round_scores", True))
+        flags["scoretable"] = bool(getattr(ep_state, "custom_ui_scoretable", True))
+
+    return flags
+
+
 def _custom_ui_xml(checkpoint_visible: bool) -> str:
-    visible = "true" if checkpoint_visible else "false"
+    flags = _custom_ui_flags(checkpoint_visible)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<manialinks>"
         '<manialink id="0"><line></line></manialink>'
         "<custom_ui>"
-        '<notice visible="true"/>'
-        '<challenge_info visible="true"/>'
-        '<net_infos visible="true"/>'
-        '<chat visible="true"/>'
-        f'<checkpoint_list visible="{visible}"/>'
-        '<round_scores visible="true"/>'
-        '<scoretable visible="true"/>'
-        '<global visible="true"/>'
+        f'<notice visible="{_bool_text(flags["notice"])}"/>'
+        f'<challenge_info visible="{_bool_text(flags["challenge_info"])}"/>'
+        f'<net_infos visible="{_bool_text(flags["net_infos"])}"/>'
+        f'<chat visible="{_bool_text(flags["chat"])}"/>'
+        f'<checkpoint_list visible="{_bool_text(flags["checkpoint_list"])}"/>'
+        f'<round_scores visible="{_bool_text(flags["round_scores"])}"/>'
+        f'<scoretable visible="{_bool_text(flags["scoretable"])}"/>'
+        f'<global visible="{_bool_text(flags["global"])}"/>'
         "</custom_ui>"
         "</manialinks>"
     )
