@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # RASP feature flags
 feature_ranks  = True
 feature_stats  = True
-always_show_pb = True
+always_show_pb = False
 nextrank_show_rp = True
 prune_records_times = False
 reset_cache_start = True
@@ -111,6 +111,8 @@ def register(aseco: 'Aseco'):
 
 async def rasp_startup(aseco: 'Aseco', _param):
     global _rasp_messages, maxrecs, _rasp
+    global feature_ranks, feature_stats, always_show_pb, nextrank_show_rp
+    global prune_records_times, reset_cache_start, minrank, maxavg
     global feature_votes, vote_in_window, allow_spec_startvote, allow_spec_voting
     global disable_upon_admin, disable_while_sb, allow_kickvotes, allow_admin_kick
     global allow_ignorevotes, allow_admin_ignore, ladder_fast_restart, auto_vote_starter
@@ -206,6 +208,16 @@ async def rasp_startup(aseco: 'Aseco', _param):
     ta_skip_max = _cfg_float(votes, 'ta_skip_max', ta_skip_max)
     global_explain = _cfg_int(votes, 'global_explain', global_explain)
 
+    rasp_cfg = data.get('RASP', {})
+    feature_ranks = _cfg_bool(rasp_cfg, 'feature_ranks', feature_ranks)
+    feature_stats = _cfg_bool(rasp_cfg, 'feature_stats', feature_stats)
+    always_show_pb = _cfg_bool(rasp_cfg, 'always_show_pb', always_show_pb)
+    nextrank_show_rp = _cfg_bool(rasp_cfg, 'nextrank_show_rp', nextrank_show_rp)
+    prune_records_times = _cfg_bool(rasp_cfg, 'prune_records_times', prune_records_times)
+    reset_cache_start = _cfg_bool(rasp_cfg, 'reset_cache_start', reset_cache_start)
+    minrank = _cfg_int(rasp_cfg, 'minrank', minrank)
+    maxavg = _cfg_int(rasp_cfg, 'maxavg', maxavg)
+
     # Apply maxrecs from settings
     maxrecs = int(data.get('RASP', {}).get('MAXRECS', [500])[0]) if 'RASP' in data else 500
     aseco.server.records.set_limit(maxrecs)
@@ -283,9 +295,10 @@ async def rasp_new_challenge(aseco: 'Aseco', challenge):
 
     challenge_id = int(getattr(challenge, 'id', 0) or 0)
 
-    # Show PB to all online players
-    for player in aseco.server.players.all():
-        await _show_pb(aseco, player, challenge_id, always_show_pb)
+    # Show PB to all online players only when explicitly enabled.
+    if always_show_pb:
+        for player in aseco.server.players.all():
+            await _show_pb(aseco, player, challenge_id, True)
 
 # ---------------------------------------------------------------------------
 # End of race — recalculate ranks
@@ -351,8 +364,8 @@ async def _insert_time(player_id: int, challenge_id: int, score: int):
 async def rasp_player_connect(aseco: 'Aseco', player: 'Player'):
     if feature_ranks:
         await _show_rank(aseco, player.login)
-    if feature_stats:
-        await _show_pb(aseco, player, aseco.server.challenge.id, always_show_pb)
+    if feature_stats and always_show_pb:
+        await _show_pb(aseco, player, aseco.server.challenge.id, True)
 
 
 # ---------------------------------------------------------------------------

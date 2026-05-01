@@ -172,6 +172,7 @@ TMX_PREFIXES = {
 TMX_SITE_ORDER = ["TMNF", "TMU", "TMN", "TMO", "TMS"]
 
 _tmxdata = None  # cached TMX data for current track
+_tmx_worldrec_cached_msg = ""
 _tmx_helper_cache: dict[str, dict] = {
     "trackid": {},
     "trackinfo": {},
@@ -182,6 +183,7 @@ _tmx_helper_cache: dict[str, dict] = {
 
 def register(aseco: "Aseco"):
     aseco.register_event("onNewChallenge2", _tmx_worldrec)
+    aseco.register_event("onPlayerConnect", _tmx_worldrec_player_connect)
     aseco.add_chat_command("tmxinfo", "Displays TMX info {Track_ID/TMX_ID} {sec}")
     aseco.add_chat_command("tmxrecs", "Displays TMX records {Track_ID/TMX_ID} {sec}")
     aseco.register_event("onChat_tmxinfo", chat_tmxinfo)
@@ -625,8 +627,21 @@ async def get_tmx_trackmeta_for_uid(aseco: "Aseco", uid: str) -> dict:
     return out
 
 
+async def _tmx_worldrec_player_connect(aseco: "Aseco", player):
+    show = int(getattr(aseco.settings, "show_tmxrec", 0) or 0)
+    if show <= 0 or not _tmx_worldrec_cached_msg:
+        return
+    await aseco.client.query_ignore_result(
+        "ChatSendServerMessageToLogin",
+        aseco.format_colors(_tmx_worldrec_cached_msg),
+        player.login,
+    )
+
+
 async def _tmx_worldrec(aseco: "Aseco", challenge):
+    global _tmx_worldrec_cached_msg
     tmx_value = "---.--"
+    _tmx_worldrec_cached_msg = ""
     mode = getattr(aseco.server.gameinfo, "mode", -1)
 
     try:
@@ -670,6 +685,7 @@ async def _tmx_worldrec(aseco: "Aseco", challenge):
                         wr_text,
                         rec_name,
                     )
+                    _tmx_worldrec_cached_msg = msg
                     await aseco.client.query_ignore_result(
                         "ChatSendServerMessage",
                         aseco.format_colors(msg),

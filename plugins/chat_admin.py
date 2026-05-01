@@ -73,11 +73,13 @@ def register(aseco: 'Aseco'):
     
     aseco.add_chat_command('admin', 'Provides admin commands (see: /admin help)')
     aseco.add_chat_command('ad', 'Provides admin commands (see: /ad help)')
+    aseco.add_chat_command('a', 'Provides admin commands (see: /a help)')
     aseco.add_chat_command('listmasters', 'Displays current masteradmin list')
     aseco.add_chat_command('listadmins', 'Displays current admin list')
     aseco.add_chat_command('listops', 'Displays current operator list')
     aseco.register_event('onChat_admin', chat_admin)
     aseco.register_event('onChat_ad', chat_admin)
+    aseco.register_event('onChat_a', chat_admin)
     aseco.register_event('onChat_listmasters', chat_listmasters)
     aseco.register_event('onChat_listadmins', chat_listadmins)
     aseco.register_event('onChat_listops', chat_listops)
@@ -330,7 +332,7 @@ def _visible_admin_commands_for_player(aseco: 'Aseco', player) -> list[tuple[str
             continue
 
         cmd = name.lower().split('/')[0]
-        if cmd in ('admin', 'ad') or cmd in seen:
+        if cmd in ('admin', 'ad', 'a') or cmd in seen:
             continue
 
         if _auth_check(aseco, player, cmd)[0]:
