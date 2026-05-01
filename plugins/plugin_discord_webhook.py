@@ -155,6 +155,7 @@ def register(aseco: "Aseco"):
     aseco.register_event("onChat", _dw_on_chat)
     aseco.register_event("onChat_admin", _dw_on_admin)
     aseco.register_event("onChat_ad", _dw_on_admin)
+    aseco.register_event("onChat_a", _dw_on_admin)
     aseco.register_event("onPlayerConnect", _dw_on_player_connect)
     aseco.register_event("onPlayerDisconnect", _dw_on_player_disconnect)
     aseco.register_event("onNewChallenge", _dw_on_new_challenge)
@@ -289,7 +290,13 @@ async def _dw_on_admin(_aseco: "Aseco", command: dict):
         return
     player = command.get("author")
     params = str(command.get("params", "") or "").strip()
-    prefix = "/admin"
+    invoked = str(command.get("command", "") or "").strip().lower()
+    prefix_map = {
+        "admin": "/admin",
+        "ad": "/ad",
+        "a": "/a",
+    }
+    prefix = prefix_map.get(invoked, "/admin")
     text = prefix if not params else f"{prefix} {params}"
     await _state.enqueue("admin", f"[AdminCmd] {_player_label(player)}: {text}")
 

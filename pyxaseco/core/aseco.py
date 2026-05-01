@@ -762,6 +762,16 @@ class Aseco:
         if params:
             self.warmup_phase = bool(params[1]) if len(params) > 1 else False
 
+        # Refresh game mode before firing challenge events so plugins see the
+        # actual next-mode state after /admin setgamemode + skip/restart flows.
+        try:
+            gameinfo_raw = await self.client.query('GetCurrentGameInfo', 1)
+            self.server.gameinfo = Gameinfo(gameinfo_raw)
+            if getattr(self, 'changingmode', False):
+                self.changingmode = False
+        except GbxError as e:
+            logger.warning('GetCurrentGameInfo refresh before begin race failed: %s', e)
+
         # Fetch current challenge info
         try:
             challenge_info = await self.client.query('GetCurrentChallengeInfo')
