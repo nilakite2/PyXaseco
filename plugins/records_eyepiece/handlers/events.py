@@ -143,12 +143,30 @@ async def _on_player_disconnect(aseco: 'Aseco', player: 'Player'):
 
 async def _on_player_info_changed(aseco: 'Aseco', player: 'Player'):
     from ..widgets.bar_widgets import _draw_playerspectator_all
+    from ..widgets.score_widgets import draw_round_score
 
     await _draw_live_player(aseco, player.login)
     # Spectator status may have changed — redraw CP widgets so the
     # player/spectator pos_y shift is applied immediately.
     await _draw_cp_player(aseco, player.login)
     await _draw_cpdelta_player(aseco, player.login)
+
+    updated_round_score = False
+    try:
+        team_id = int(getattr(player, 'teamid', 0) or 0)
+    except Exception:
+        team_id = 0
+    for _score, _entries in getattr(_state, 'round_scores', {}).items():
+        if not isinstance(_entries, list):
+            continue
+        for _entry in _entries:
+            if isinstance(_entry, dict) and _entry.get('login') == player.login and _entry.get('team') != team_id:
+                _entry['team'] = team_id
+                updated_round_score = True
+
+    if updated_round_score:
+        await draw_round_score(aseco)
+
     if not _state.challenge_show_next:
         await _draw_playerspectator_all(aseco)
 

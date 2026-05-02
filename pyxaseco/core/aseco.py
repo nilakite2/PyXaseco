@@ -614,6 +614,8 @@ class Aseco:
         if player:
             player.isspectator    = info.get('IsSpectator', player.isspectator)
             player.isofficial     = info.get('IsInOfficialMode', player.isofficial)
+            player.teamid         = int(info.get('TeamId', player.teamid) or 0)
+            player.teamname       = info.get('TeamName', player.teamname)
             # Store the packed SpectatorStatus so plugins can decode target/auto info
             # without an extra GetPlayerInfo round-trip.
             player.spectatorstatus = int(info.get('SpectatorStatus', 0) or 0)
