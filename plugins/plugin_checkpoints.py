@@ -199,15 +199,16 @@ async def _store_checkp(aseco: 'Aseco', checkpt: list):
             laps_cpcount = checkpt[4] + 1
         relcheck = (checkpt[4] % laps_cpcount) if laps_cpcount > 0 else checkpt[4]
         cp.curr_cps.append(checkpt[2] - cp.curr_fin)
+        curr_idx = len(cp.curr_cps) - 1
 
         if checkpt[3] * laps_cpcount != checkpt[4] + 1:
-            if cp.loclrec != -1 and relcheck < len(cp.best_cps):
-                diff = cp.curr_cps[relcheck] - cp.best_cps[relcheck]
+            if cp.loclrec != -1 and curr_idx >= 0 and relcheck < len(cp.best_cps):
+                diff = cp.curr_cps[curr_idx] - cp.best_cps[relcheck]
                 _show_cp_diff(aseco, login, cp, relcheck + 1, diff)
         else:
             # Completed lap
             cp.curr_fin = checkpt[2]
-            lap_time = cp.curr_cps[relcheck] if cp.curr_cps else 0
+            lap_time = cp.curr_cps[curr_idx] if curr_idx >= 0 else 0
             if lap_time < cp.best_fin:
                 cp.best_fin = lap_time
                 cp.best_cps = list(cp.curr_cps)

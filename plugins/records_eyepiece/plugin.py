@@ -27,6 +27,7 @@ def register(aseco: 'Aseco'):
         _on_player_disconnect,
         _on_player_info_changed,
         _on_player_finish,
+        _on_player_retire,
         _on_local_record,
         _on_dedi_recs_loaded,
         _on_dedi_record,
@@ -67,6 +68,7 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onPlayerDisconnect',          _on_player_disconnect)
     aseco.register_event('onPlayerInfoChanged',         _on_player_info_changed)
     aseco.register_event('onPlayerFinish1',             _on_player_finish)
+    aseco.register_event('onPlayerRetire',              _on_player_retire)
     aseco.register_event('onLocalRecord',               _on_local_record)
     aseco.register_event('onDediRecsLoaded',            _on_dedi_recs_loaded)
     aseco.register_event('onDedimaniaRecord',           _on_dedi_record)

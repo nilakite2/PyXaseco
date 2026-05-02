@@ -171,6 +171,22 @@ async def _on_player_info_changed(aseco: 'Aseco', player: 'Player'):
         await _draw_playerspectator_all(aseco)
 
 
+async def _on_player_retire(aseco: 'Aseco', player: 'Player'):
+    from ..widgets.common import _hide
+
+    if not player:
+        return
+
+    login = player.login
+    if not login:
+        return
+
+    _state.player_cp_idx[login] = max(0, int(_state.player_cp_idx.get(login, 0) or 0))
+    _state.player_cp_delta[login] = ''
+    await _hide(aseco, login, ML_CPDELTA)
+    await _draw_cp_player(aseco, login)
+
+
 async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
     from ..widgets.common import _hide
     from ..widgets.live import _fetch_live
@@ -180,9 +196,12 @@ async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
 
     if score == 0:
         if login:
+            finish.player.retired = True
             _state.player_cp_idx[login] = 0
             await _draw_cp_player(aseco, login)
         return
+
+    finish.player.retired = False
 
     if login:
         _state.player_cp_idx[login] = getattr(aseco.server.challenge, 'nbchecks', 0)
@@ -274,6 +293,9 @@ async def _on_begin_round(aseco: 'Aseco', _p=None):
         for k in list(d):
             d[k] = 0
 
+    for _player in aseco.server.players.all():
+        _player.retired = False
+
     for login in list(_state.player_cp_delta):
         _state.player_cp_delta[login] = ''
         await _hide(aseco, login, ML_CPDELTA)
@@ -324,6 +346,9 @@ async def _on_new_challenge(aseco: 'Aseco', challenge: 'Challenge'):
     _state.round_scores.clear()
     _state.round_score_pb.clear()
     _state.avg_times.clear()
+
+    for _player in aseco.server.players.all():
+        _player.retired = False
 
     for p in aseco.server.players.all():
         await _hide(aseco, p.login, ML_CPDELTA)
@@ -536,7 +561,8 @@ async def _on_every_second(aseco: 'Aseco', _p=None):
 
 async def _on_checkpoint(aseco: 'Aseco', params: list):
     from ..widgets.common import _hide
-    from ..widgets.checkpoint import _format_cp_delta
+    from ..widgets.checkpoint import _format_cp_delta, _resolve_display_login
+    from ..widgets.live import _fetch_live
 
     if len(params) < 5:
         return
@@ -544,6 +570,10 @@ async def _on_checkpoint(aseco: 'Aseco', params: list):
     login = params[1]
     if login not in _state.player_cp_idx:
         return
+
+    _player = aseco.server.players.get_player(login)
+    if _player:
+        _player.retired = False
 
     try:
         cp_time = int(params[2])
@@ -572,17 +602,28 @@ async def _on_checkpoint(aseco: 'Aseco', params: list):
 
     await _draw_cp_player(aseco, login)
 
-    # Also redraw the CP widget for any spectators watching this player,
-    # so their display updates immediately when the target crosses a CP.
+    # Also redraw the CP widget for any spectators or retired viewers watching
+    # this player, so their display updates immediately when the target crosses
+    # a checkpoint.
     for _sp in aseco.server.players.all():
-        if not getattr(_sp, 'isspectator', False):
-            continue
-        _ss = getattr(_sp, 'spectatorstatus', 0) or 0
-        if _ss and (_ss % 10) != 0:
-            _target_pid = _ss // 10000
-            _viewer_player = aseco.server.players.get_player(login)
-            if _viewer_player and getattr(_viewer_player, 'pid', 0) == _target_pid:
-                await _draw_cp_player(aseco, _sp.login)
+        if _resolve_display_login(aseco, _sp.login) == login and _sp.login != login:
+            await _draw_cp_player(aseco, _sp.login)
+
+    # XAseco refreshes Live Rankings progress during LAPS as checkpoints are hit.
+    # Without this, Eyepiece waits for the periodic 1-second refresh loop and
+    # feels noticeably behind the CP widget.
+    mode = _effective_mode(aseco)
+    live_cfg = _state.live.get(mode)
+    if (
+        mode == Gameinfo.LAPS
+        and live_cfg
+        and live_cfg.enabled
+        and live_cfg.display_type != 'time'
+        and not _state.challenge_show_next
+    ):
+        _state.live_cache = await _fetch_live(aseco)
+        _state.next_refresh = _loop_time() + max(1, _state.refresh_interval)
+        await _draw_live_all(aseco)
 
 
 # ---------------------------------------------------------------------------

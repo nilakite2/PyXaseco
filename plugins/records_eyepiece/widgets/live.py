@@ -55,6 +55,45 @@ def _point_limit(aseco) -> int:
     return 0
 
 
+def _intish(value, default: int = 0) -> int:
+    if isinstance(value, list):
+        if not value:
+            return default
+        value = value[-1]
+    try:
+        return int(value or 0)
+    except Exception:
+        return default
+
+
+def _checkpoint_count_value(value) -> int:
+    if isinstance(value, list):
+        return len(value)
+    return _intish(value, 0)
+
+
+def _laps_total_count(aseco, item: dict | None = None) -> int:
+    ch = getattr(aseco.server, 'challenge', None)
+    gi = getattr(aseco.server, 'gameinfo', None)
+    nbchecks = _intish(getattr(ch, 'nbchecks', 0), 0)
+    if nbchecks <= 0:
+        return 0
+
+    raw_gameinfo = getattr(gi, 'raw', {}) if gi else {}
+    item = item or {}
+    lap_count = max(
+        _intish(getattr(ch, 'forcedlaps', 0), 0),
+        _intish(getattr(ch, 'nblaps', 0), 0),
+        _intish(getattr(gi, 'lapsnblaps', 0), 0),
+        _intish(getattr(gi, 'forcedlaps', 0), 0),
+        _intish(raw_gameinfo.get('LapsNbLaps', 0), 0),
+        _intish(raw_gameinfo.get('NbLaps', 0), 0),
+        _intish(item.get('LapsNbLaps', 0), 0),
+        _intish(item.get('NbLaps', 0), 0),
+    )
+    return nbchecks * max(lap_count, 1)
+
+
 def _is_team_live_mode(aseco, mode: int | None = None) -> bool:
     if mode == Gameinfo.TEAM:
         return True
@@ -88,21 +127,29 @@ def _live_metric(aseco, item: dict, cfg: WidgetCfg, plimit: int) -> str:
 
     if mode == Gameinfo.LAPS:
         if cfg.display_type == 'time':
-            best = int(item.get('BestTime', 0) or 0)
+            best = _intish(item.get('BestTime', 0), 0)
             return format_time(best) if best > 0 else '--'
 
-        ch = aseco.server.challenge
-        nbc = int(getattr(ch, 'nbchecks', 0) or 0)
-        nbl = int(getattr(ch, 'nblaps', 0) or 0)
-        total_cps = nbc * nbl if nbl > 0 else nbc
-        cps = int(item.get('NbCheckpoints') or item.get('BestCheckpoints') or 0)
+        # XAseco Eyepiece uses the live-ranking Score field for LAPS progress.
+        # Some Python server payloads still expose checkpoint arrays, so keep
+        # those as fallback only.
+        total_cps = max(_laps_total_count(aseco, item), 0)
+        cps = _intish(item.get('Score', 0), 0)
+        if cps <= 0:
+            cps = _checkpoint_count_value(item.get('NbCheckpoints'))
+        if cps <= 0:
+            cps = _checkpoint_count_value(item.get('BestCheckpoints'))
+        if total_cps > 0:
+            cps = max(0, min(cps, total_cps))
         return f'{cps}/{total_cps}'
 
     if mode == Gameinfo.STNT:
-        return str(int(item.get('Score', 0) or 0))
+        return str(_intish(item.get('Score', 0), 0))
 
     # TA, Team, and default
-    best = int(item.get('BestTime', 0) or item.get('Score', 0) or 0)
+    best = _intish(item.get('BestTime', 0), 0)
+    if best <= 0:
+        best = _intish(item.get('Score', 0), 0)
     return format_time(best) if best > 0 else '--'
 
 
@@ -285,9 +332,7 @@ def _build_live_rankings_window(aseco: 'Aseco', page: int = 0) -> str:
         y = 1.83 * line
 
         if team_mode:
-            # Team mode: colour the score to match the team (blue / red)
-            team_color = '08FF' if i == 0 else 'F50F'
-            p.append(f'<label posn="{6.6 + offset:.2f} -{y:.2f} 0.03" sizen="6 1.7" halign="right" scale="0.9" textcolor="{team_color}" text="{score_str}"/>')
+            p.append(f'<label posn="{6.6 + offset:.2f} -{y:.2f} 0.03" sizen="6 1.7" halign="right" scale="0.9" textcolor="FFFF" text="{score_str}"/>')
         else:
             p.append(f'<label posn="{2.6 + offset:.2f} -{y:.2f} 0.03" sizen="2 1.7" halign="right" scale="0.9" text="{rank_num}."/>')
             p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.03" sizen="4 1.7" halign="right" scale="0.9" textcolor="{st.col_scores}" text="{score_str}"/>')

@@ -118,6 +118,7 @@ class Player:
         self.nation: str = ''       # e.g. "France"
         self.prevstatus: bool = False
         self.isspectator: bool = False
+        self.retired: bool = False
         self.isofficial: bool = False
         self.rights: bool = False   # True = United (online rights == 3)
         self.language: str = ''
@@ -158,6 +159,7 @@ class Player:
         self.ip = re.sub(r':\d+$', '', self.ipport)
         self.prevstatus = False
         self.isspectator = info.get('IsSpectator', False)
+        self.retired = False
         self.isofficial = info.get('IsInOfficialMode', False)
         ladder = info.get('LadderStats', {})
         self.teamname = ladder.get('TeamName', '')
@@ -354,13 +356,16 @@ class Gameinfo:
         self.teamlimit: int = 0
         self.teamusenewrules: bool = False
         self.lapslimit: int = 0
+        self.lapsnblaps: int = 0
         self.cuplimit: int = 0
         self.forcedlaps: int = 0
+        self.raw: dict = {}
 
         if rpc_infos:
             self._from_rpc(rpc_infos)
 
     def _from_rpc(self, info: dict):
+        self.raw = dict(info or {})
         self.mode = info.get('GameMode', -1)
         self.numchall = info.get('NbChallenge', 0)
         if info.get('RoundsUseNewRules'):
@@ -374,6 +379,7 @@ class Gameinfo:
         else:
             self.teamlimit = info.get('TeamPointsLimit', 0)
         self.lapslimit = info.get('LapsTimeLimit', 0)
+        self.lapsnblaps = info.get('LapsNbLaps', info.get('NbLaps', 0))
         self.cuplimit = info.get('CupPointsLimit', 0)
         self.forcedlaps = info.get('RoundsForcedLaps', 0)
 

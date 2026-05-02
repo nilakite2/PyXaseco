@@ -14,9 +14,38 @@ ML_CP = 91832
 ML_CPDELTA = 91834
 
 
+def _intish(value, default: int = 0) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return default
+
+
+def _laps_total_count(aseco: 'Aseco') -> int:
+    ch = aseco.server.challenge
+    gi = getattr(aseco.server, 'gameinfo', None)
+    nbchecks = _intish(getattr(ch, 'nbchecks', 0), 0)
+    if nbchecks <= 0:
+        return 0
+
+    raw_gameinfo = getattr(gi, 'raw', {}) if gi else {}
+    lap_count = max(
+        _intish(getattr(ch, 'forcedlaps', 0), 0),
+        _intish(getattr(ch, 'nblaps', 0), 0),
+        _intish(getattr(gi, 'lapsnblaps', 0), 0),
+        _intish(getattr(gi, 'forcedlaps', 0), 0),
+        _intish(raw_gameinfo.get('LapsNbLaps', 0), 0),
+        _intish(raw_gameinfo.get('NbLaps', 0), 0),
+    )
+    return nbchecks * max(lap_count, 1)
+
+
 def _is_player_currently_spectating(player) -> bool:
     if not player:
         return False
+
+    if bool(getattr(player, 'retired', False)):
+        return True
 
     raw_status = getattr(player, 'spectatorstatus', None)
     if raw_status is not None:
@@ -26,6 +55,31 @@ def _is_player_currently_spectating(player) -> bool:
             pass
 
     return bool(getattr(player, 'isspectator', False))
+
+
+def _resolve_display_login(aseco: 'Aseco', viewer_login: str) -> str:
+    """
+    Return whose checkpoint progress should be shown for this viewer.
+    Real spectators and retired players both use the watched target when one
+    is encoded in SpectatorStatus; otherwise they fall back to their own login.
+    """
+    viewer = aseco.server.players.get_player(viewer_login)
+    if not viewer:
+        return viewer_login
+
+    try:
+        spec_status = int(getattr(viewer, 'spectatorstatus', 0) or 0)
+    except Exception:
+        spec_status = 0
+
+    is_spec_like = _is_player_currently_spectating(viewer)
+    target_pid = spec_status // 10000 if spec_status > 0 else 0
+    if is_spec_like and target_pid > 0:
+        for _p in aseco.server.players.all():
+            if getattr(_p, 'pid', 0) == target_pid:
+                return _p.login
+
+    return viewer_login
 
 
 # ---------------------------------------------------------------------------
@@ -93,9 +147,9 @@ async def _draw_cp_player(aseco: 'Aseco', login: str):
         await _hide(aseco, login, ML_CP)
         return
 
-    nbchecks = int(getattr(ch, 'nbchecks', 0) or 0)
-    nblaps = int(getattr(ch, 'nblaps', 0) or 0)
-    forcedlaps = int(getattr(ch, 'forcedlaps', 0) or 0)
+    nbchecks = _intish(getattr(ch, 'nbchecks', 0), 0)
+    nblaps = _intish(getattr(ch, 'nblaps', 0), 0)
+    forcedlaps = _intish(getattr(ch, 'forcedlaps', 0), 0)
 
     if mode in (Gameinfo.RNDS, Gameinfo.TEAM, Gameinfo.CUP):
         if forcedlaps > 0:
@@ -104,23 +158,14 @@ async def _draw_cp_player(aseco: 'Aseco', login: str):
             totalcps = nbchecks * nblaps
         else:
             totalcps = nbchecks
-    elif mode == Gameinfo.LAPS and nblaps > 0:
-        totalcps = nbchecks * nblaps
+    elif mode == Gameinfo.LAPS:
+        totalcps = _laps_total_count(aseco)
     else:
         totalcps = nbchecks
 
-    # When this player is spectating, show the CP progress of the player
-    # they are watching rather than the spectator's own (always 0) counter.
-    _display_login = login
-    spec_status = getattr(aseco.server.players.get_player(login), 'spectatorstatus', 0) or 0
-    if spec_status and (spec_status % 10) != 0:  # non-zero low digit = is spectator
-        target_pid = spec_status // 10000
-        if target_pid > 0:
-            # Find the player being spectated by their server PID
-            for _p in aseco.server.players.all():
-                if getattr(_p, 'pid', 0) == target_pid:
-                    _display_login = _p.login
-                    break
+    # Spectators and retired players show the CP progress of the player they
+    # are currently watching rather than their own (always 0) counter.
+    _display_login = _resolve_display_login(aseco, login)
 
     checkpoint = int(_state.player_cp_idx.get(_display_login, 0) or 0)
     cp_display = checkpoint

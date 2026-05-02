@@ -733,12 +733,16 @@ class Aseco:
         if len(params) < 3:
             return
         _uid, login, score = params[0], params[1], params[2]
+        player = self.server.players.get_player(login)
         if score == 0:
+            if player:
+                player.retired = True
+                await self.release_event('onPlayerRetire', player)
             return  # retired / DNF
 
-        player = self.server.players.get_player(login)
         if not player:
             return
+        player.retired = False
 
         # Build the finish_item object used by downstream race handlers.
         from pyxaseco.models import Record, Challenge as _Ch
