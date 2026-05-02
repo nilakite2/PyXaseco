@@ -47,6 +47,9 @@ def _is_player_currently_spectating(player) -> bool:
     if bool(getattr(player, 'retired', False)):
         return True
 
+    if bool(getattr(player, 'finished_waiting', False)):
+        return True
+
     raw_status = getattr(player, 'spectatorstatus', None)
     if raw_status is not None:
         try:
@@ -60,8 +63,9 @@ def _is_player_currently_spectating(player) -> bool:
 def _resolve_display_login(aseco: 'Aseco', viewer_login: str) -> str:
     """
     Return whose checkpoint progress should be shown for this viewer.
-    Real spectators and retired players both use the watched target when one
-    is encoded in SpectatorStatus; otherwise they fall back to their own login.
+    Real spectators, retired players, and players who already finished and are
+    waiting for the rest of the round all use the watched target when one is
+    encoded in SpectatorStatus; otherwise they fall back to their own login.
     """
     viewer = aseco.server.players.get_player(viewer_login)
     if not viewer:
@@ -163,8 +167,9 @@ async def _draw_cp_player(aseco: 'Aseco', login: str):
     else:
         totalcps = nbchecks
 
-    # Spectators and retired players show the CP progress of the player they
-    # are currently watching rather than their own (always 0) counter.
+    # Spectators, retired players, and players who already finished the round
+    # show the CP progress of the player they are currently watching rather
+    # than their own (always 0) counter.
     _display_login = _resolve_display_login(aseco, login)
 
     checkpoint = int(_state.player_cp_idx.get(_display_login, 0) or 0)

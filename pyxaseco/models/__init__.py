@@ -119,6 +119,7 @@ class Player:
         self.prevstatus: bool = False
         self.isspectator: bool = False
         self.retired: bool = False
+        self.finished_waiting: bool = False
         self.isofficial: bool = False
         self.rights: bool = False   # True = United (online rights == 3)
         self.language: str = ''
@@ -160,6 +161,7 @@ class Player:
         self.prevstatus = False
         self.isspectator = info.get('IsSpectator', False)
         self.retired = False
+        self.finished_waiting = False
         self.isofficial = info.get('IsInOfficialMode', False)
         ladder = info.get('LadderStats', {})
         self.teamname = ladder.get('TeamName', '')

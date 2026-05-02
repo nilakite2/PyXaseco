@@ -197,16 +197,19 @@ async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
     if score == 0:
         if login:
             finish.player.retired = True
+            finish.player.finished_waiting = False
             _state.player_cp_idx[login] = 0
             await _draw_cp_player(aseco, login)
         return
 
     finish.player.retired = False
+    finish.player.finished_waiting = True
 
     if login:
         _state.player_cp_idx[login] = getattr(aseco.server.challenge, 'nbchecks', 0)
         _state.player_cp_delta[login] = ''
         await _hide(aseco, login, ML_CPDELTA)
+        await _draw_cp_player(aseco, login)
 
     mode = getattr(aseco.server.gameinfo, 'mode', -1)
     is_stunts = (mode == Gameinfo.STNT)
@@ -295,6 +298,7 @@ async def _on_begin_round(aseco: 'Aseco', _p=None):
 
     for _player in aseco.server.players.all():
         _player.retired = False
+        _player.finished_waiting = False
 
     for login in list(_state.player_cp_delta):
         _state.player_cp_delta[login] = ''
@@ -349,6 +353,7 @@ async def _on_new_challenge(aseco: 'Aseco', challenge: 'Challenge'):
 
     for _player in aseco.server.players.all():
         _player.retired = False
+        _player.finished_waiting = False
 
     for p in aseco.server.players.all():
         await _hide(aseco, p.login, ML_CPDELTA)
@@ -393,6 +398,9 @@ async def _on_restart_challenge(aseco: 'Aseco', _p=None):
     from ..widgets.live import _fetch_live
 
     _clear_per_challenge_state()
+    for _player in aseco.server.players.all():
+        _player.retired = False
+        _player.finished_waiting = False
     _state.live_cache = await _fetch_live(aseco)
     _state.next_refresh = _loop_time() + _state.refresh_interval
     await _redraw_all(aseco)
@@ -574,6 +582,7 @@ async def _on_checkpoint(aseco: 'Aseco', params: list):
     _player = aseco.server.players.get_player(login)
     if _player:
         _player.retired = False
+        _player.finished_waiting = False
 
     try:
         cp_time = int(params[2])

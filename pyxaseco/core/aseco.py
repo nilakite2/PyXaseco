@@ -737,12 +737,14 @@ class Aseco:
         if score == 0:
             if player:
                 player.retired = True
+                player.finished_waiting = False
                 await self.release_event('onPlayerRetire', player)
             return  # retired / DNF
 
         if not player:
             return
         player.retired = False
+        player.finished_waiting = True
 
         # Build the finish_item object used by downstream race handlers.
         from pyxaseco.models import Record, Challenge as _Ch
