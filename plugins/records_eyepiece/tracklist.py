@@ -373,8 +373,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
                 p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="-{TL_DROP_BASE + juked}" style="Icons64x64_1" substyle="Close"/>')
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="Bgs1InRace" substyle="BgListLine"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textcolor="000F" textsize="1" text="Track #{i+1}"/>')
-            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=False)}"/>')
-            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=False)}"/>')
+            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')
+            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=True)}"/>')
 
         elif is_recent:
             p.append('<format textsize="1" textcolor="FFF8"/>')
@@ -382,8 +382,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
             p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{TL_JB_BASE + global_idx}" style="Icons64x64_1" substyle="Add"/>')
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textsize="1" text="Track #{i+1}"/>')
-            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=False)}"/>')
-            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=False)}"/>')
+            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')
+            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=True)}"/>')
 
         elif is_juked:
             p.append('<format textsize="1" textcolor="FFFF"/>')
@@ -392,8 +392,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
                 p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="-{TL_DROP_BASE + juked}" style="Icons64x64_1" substyle="Close"/>')
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="Bgs1InRace" substyle="BgListLine"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textcolor="000F" textsize="1" text="Track #{i+1}"/>')
-            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=False)}"/>')
-            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=False)}"/>')
+            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')
+            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=True)}"/>')
 
         else:
             p.append('<format textsize="1" textcolor="FFFF"/>')
@@ -401,8 +401,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
             p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{TL_JB_BASE + global_idx}" style="Icons64x64_1" substyle="Add"/>')
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="BgsPlayerCard" substyle="ProgressBar"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textsize="1" text="Track #{i+1}"/>')
-            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=False)}"/>')
-            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=False)}"/>')
+            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')
+            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=True)}"/>')
 
         if uid == cur_challenge_uid:
             p.append('<quad posn="15.3 0.4 0.06" sizen="3.4 3.4" style="BgRaceScore2" substyle="Fame"/>')
