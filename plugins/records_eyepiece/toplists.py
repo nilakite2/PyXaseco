@@ -127,6 +127,77 @@ async def _db_query(sql: str, params: tuple = ()) -> list[tuple]:
         return []
 
 
+async def _query_ranked_record_counts(aseco: 'Aseco', limit: int) -> list[tuple]:
+    """
+    Match chat_records2.py /toprecs logic:
+    count ranked entries from the records table across the active challenge list,
+    limited per challenge by plugin_rasp.maxrecs and ordered by score/date.
+    Returns rows shaped like: (login, nickname, count)
+    """
+    try:
+        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.chat_records2 import _get_challenge_list
+    except Exception as exc:
+        logger.warning('[Records-Eyepiece] Ranked-record helper import failed: %r', exc)
+        return []
+
+    pool = await get_pool()
+    if not pool:
+        return []
+
+    maxrecs = 0
+    try:
+        from pyxaseco.plugins.plugin_rasp import maxrecs as _mr
+        maxrecs = int(_mr or 0)
+    except Exception:
+        maxrecs = 0
+    if maxrecs <= 0:
+        maxrecs = 500
+
+    is_stnt = getattr(getattr(aseco.server, 'gameinfo', None), 'mode', -1) == Gameinfo.STNT
+    order = 'DESC' if is_stnt else 'ASC'
+    newlist = await _get_challenge_list(aseco)
+
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute('SELECT Id, Uid FROM challenges')
+            chal_rows = await cur.fetchall()
+            tid_list = [row[0] for row in chal_rows if row[1] in newlist]
+
+    if not tid_list:
+        return []
+
+    recs: dict[str, int] = {}
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            for tid in tid_list:
+                await cur.execute(
+                    f'SELECT players.Login '
+                    f'FROM players, records '
+                    f'WHERE players.Id=records.playerid AND challengeid=%s '
+                    f'ORDER BY score {order}, date ASC LIMIT %s',
+                    (tid, maxrecs),
+                )
+                for row in await cur.fetchall():
+                    login = str(row[0] or '')
+                    if login:
+                        recs[login] = recs.get(login, 0) + 1
+
+    if not recs:
+        return []
+
+    sorted_recs = sorted(recs.items(), key=lambda x: (-x[1], x[0].lower()))[:limit]
+    out: list[tuple] = []
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            for login, count in sorted_recs:
+                await cur.execute('SELECT NickName FROM players WHERE Login=%s', (login,))
+                nrow = await cur.fetchone()
+                nick = nrow[0] if nrow else login
+                out.append((login, nick, count))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Shared scoretable-list header/footer (SCORETABLE_LISTS template)
 # ---------------------------------------------------------------------------
@@ -255,10 +326,7 @@ async def build_most_records_widget(aseco: 'Aseco') -> str:
         return _stl_empty(ML_MOST_RECORDS)
 
     entries = int(cfg.get('entries', 6))
-    rows = await _db_query(
-        'SELECT p.Login, p.NickName, pe.mostrecords '
-        'FROM players_extra pe LEFT JOIN players p ON p.Id=pe.playerID '
-        'ORDER BY pe.mostrecords DESC LIMIT %s', (entries,))
+    rows = await _query_ranked_record_counts(aseco, entries)
 
     if not rows:
         return _stl_empty(ML_MOST_RECORDS)
@@ -619,10 +687,7 @@ async def _query_toplist_rows(aseco: 'Aseco', key: str, limit: int = 100) -> lis
             'SELECT Login, NickName, Wins FROM players '
             'WHERE Wins>0 ORDER BY Wins DESC LIMIT %s', (limit,))
     if key == 'MOSTRECORDS':
-        return await _db_query(
-            'SELECT p.Login, p.NickName, pe.mostrecords '
-            'FROM players_extra pe LEFT JOIN players p ON p.Id=pe.playerID '
-            'WHERE pe.mostrecords>0 ORDER BY pe.mostrecords DESC LIMIT %s', (limit,))
+        return await _query_ranked_record_counts(aseco, limit)
     if key == 'MOSTFINISHED':
         return await _db_query(
             'SELECT p.Login, p.NickName, pe.mostfinished '
@@ -1097,10 +1162,7 @@ async def _build_generic_toplist_window(
 
     elif key == 'MOSTRECORDS':
         title = 'Most Records'
-        rows = await _fetch(
-            'SELECT p.Login, p.NickName, pe.mostrecords '
-            'FROM players_extra pe LEFT JOIN players p ON p.Id=pe.playerID '
-            'WHERE pe.mostrecords>0 ORDER BY pe.mostrecords DESC LIMIT %s', (LIMIT,))
+        rows = await _query_ranked_record_counts(aseco, LIMIT)
         entries = [(str(r[1] or r[0]), str(int(r[2] or 0))) for r in rows]
 
     elif key == 'MOSTFINISHED':

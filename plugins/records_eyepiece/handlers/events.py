@@ -439,6 +439,7 @@ async def _on_jukebox_changed(aseco: 'Aseco', _data=None):
 
 
 async def _on_tracklist_changed(aseco: 'Aseco', _data=None):
+    setattr(aseco.server, '_re_trackcount', 0)
     _state.player_local_digest.clear()
     _state.player_dedi_digest.clear()
     _state.player_live_digest.clear()
@@ -571,24 +572,34 @@ async def _on_checkpoint(aseco: 'Aseco', params: list):
 # ---------------------------------------------------------------------------
 
 async def _apply_custom_ui_all(aseco: 'Aseco'):
-    if not _state.custom_ui_enabled:
-        return
-
     def b(v: bool) -> str:
         return 'true' if v else 'false'
 
-    hide_challenge = _state.challenge.enabled
+    if _state.custom_ui_enabled:
+        hide_challenge = _state.challenge.enabled
+        net_infos = _state.custom_ui_net_infos
+        chat = _state.custom_ui_chat
+        checkpoint_list = _state.custom_ui_checkpoint_list
+        round_scores = _state.custom_ui_round_scores
+        scoretable = _state.custom_ui_scoretable
+    else:
+        hide_challenge = False
+        net_infos = True
+        chat = True
+        checkpoint_list = True
+        round_scores = True
+        scoretable = True
 
     xml = (
         '<manialinks>'
         '<manialink id="0"><line></line></manialink>'
         '<custom_ui>'
         f'<challenge_info visible="{b(not hide_challenge)}"/>'
-        f'<net_infos visible="{b(_state.custom_ui_net_infos)}"/>'
-        f'<chat visible="{b(_state.custom_ui_chat)}"/>'
-        f'<checkpoint_list visible="{b(_state.custom_ui_checkpoint_list)}"/>'
-        f'<round_scores visible="{b(_state.custom_ui_round_scores)}"/>'
-        f'<scoretable visible="{b(_state.custom_ui_scoretable)}"/>'
+        f'<net_infos visible="{b(net_infos)}"/>'
+        f'<chat visible="{b(chat)}"/>'
+        f'<checkpoint_list visible="{b(checkpoint_list)}"/>'
+        f'<round_scores visible="{b(round_scores)}"/>'
+        f'<scoretable visible="{b(scoretable)}"/>'
         '</custom_ui>'
         '</manialinks>'
     )

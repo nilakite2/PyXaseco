@@ -392,8 +392,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
                 p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="-{TL_DROP_BASE + juked}" style="Icons64x64_1" substyle="Close"/>')
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="Bgs1InRace" substyle="BgListLine"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textcolor="000F" textsize="1" text="Track #{i+1}"/>')
-            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{name}"/>')
-            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="by {author}"/>')
+            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=False)}"/>')
+            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=False)}"/>')
 
         else:
             p.append('<format textsize="1" textcolor="FFFF"/>')
@@ -401,8 +401,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
             p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{TL_JB_BASE + global_idx}" style="Icons64x64_1" substyle="Add"/>')
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="BgsPlayerCard" substyle="ProgressBar"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textsize="1" text="Track #{i+1}"/>')
-            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{name}"/>')
-            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="by {author}"/>')
+            p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=False)}"/>')
+            p.append(f'<label posn="1 -4.5 0.04" sizen="17.3 2" scale="0.9" text="{safe_manialink_text(f"by {author}", keep_colors=False)}"/>')
 
         if uid == cur_challenge_uid:
             p.append('<quad posn="15.3 0.4 0.06" sizen="3.4 3.4" style="BgRaceScore2" substyle="Fame"/>')
@@ -649,7 +649,7 @@ def _build_trackauthorlist_window(page: int, authors: list[str]) -> str:
     array_count = page * 80
     for author in authors[page*80:page*80+80]:
         p.append(f'<quad posn="{0+offset:.2f} -{line_height*line+1:.2f} 0.10" sizen="17 2.2" action="-{9188000 + array_count}" style="Bgs1InRace" substyle="BgIconBorder"/>')
-        p.append(f'<label posn="{1+offset:.2f} -{line_height*line+1.3:.2f} 0.11" sizen="16.5 0" textsize="1" scale="0.9" textcolor="05CF" text="{author}"/>')
+        p.append(f'<label posn="{1+offset:.2f} -{line_height*line+1.3:.2f} 0.11" sizen="16.5 0" textsize="1" scale="0.9" textcolor="05CF" text="{safe_manialink_text(author, keep_colors=False)}"/>')
         array_count += 1
         line += 1
         if line >= 20:

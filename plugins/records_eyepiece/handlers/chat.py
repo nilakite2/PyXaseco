@@ -5,7 +5,14 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.helpers import display_manialink
 
-from ..config import WidgetCfg, _load_config, _state
+from ..config import (
+    WidgetCfg,
+    _load_config,
+    _state,
+    validate_phase1_runtime,
+    validate_phase1_dependencies,
+    apply_phase1_defaults,
+)
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -197,6 +204,21 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
         _draw_local_all,
         _draw_dedi_all,
     )
+    from ..widgets.bar_widgets import (
+        draw_all_race_bars,
+        draw_all_score_bars,
+        hide_all_race_bars,
+        hide_all_score_bars,
+        _refresh_server_limits,
+        _refresh_visitor_count,
+    )
+    from ..widgets.score_widgets import (
+        draw_all_score_lists,
+        hide_all_score_lists,
+        draw_round_score,
+        hide_round_score,
+    )
+    from ..toplists import draw_all_score_columns, hide_all_score_columns
 
     player = command['author']
     login = player.login
@@ -216,11 +238,31 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
         _state.player_live_digest.clear()
 
         _load_config(aseco)
+        validate_phase1_runtime(aseco)
+        apply_phase1_defaults(aseco)
+        validate_phase1_dependencies(aseco)
 
         await _on_new_challenge(aseco, aseco.server.challenge)
         await _on_new_challenge2(aseco, aseco.server.challenge)
         await _apply_custom_ui_all(aseco)
+        await hide_all_race_bars(aseco)
+        await hide_all_score_bars(aseco)
+        await hide_all_score_lists(aseco)
+        await hide_all_score_columns(aseco)
+        await hide_round_score(aseco)
         await _redraw_all(aseco)
+
+        if _state.challenge_show_next:
+            await draw_all_score_bars(aseco)
+            await draw_all_score_lists(aseco)
+            await draw_all_score_columns(aseco)
+            if getattr(_state, 'round_scores', None):
+                await draw_round_score(aseco)
+        else:
+            await _refresh_server_limits(aseco)
+            await _refresh_visitor_count(aseco)
+            await draw_all_race_bars(aseco)
+
         await _send_chat(aseco, login, '{#server}>> Reload of records_eyepiece.xml done.')
         return
 

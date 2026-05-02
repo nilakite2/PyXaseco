@@ -170,16 +170,10 @@ async def _draw_trackcount_all(aseco: 'Aseco') -> None:
         return
 
     try:
-        # server.tracklist is per-player state, not server-wide.
-        # Query GBX directly for the authoritative track count.
-        tracks = await aseco.client.query('GetChallengeList', 1, 0)
-        # GetChallengeList with limit=1 doesn't return total; use a cached count
-        # stored by _fetch_tracklist_data, or fall back to a full query.
-        count = getattr(aseco.server, '_re_trackcount', 0)
-        if count == 0:
-            all_tracks = await aseco.client.query('GetChallengeList', 5000, 0) or []
-            count = len(all_tracks)
-            aseco.server._re_trackcount = count
+        # Query GBX directly for the authoritative server-wide track count.
+        all_tracks = await aseco.client.query('GetChallengeList', 5000, 0) or []
+        count = len(all_tracks)
+        aseco.server._re_trackcount = count
     except Exception:
         count = getattr(aseco.server, '_re_trackcount', 0)
 
@@ -981,11 +975,12 @@ async def hide_all_race_bars(aseco: 'Aseco') -> None:
     """Broadcast empty MLs for all race-state bar widgets (at score)."""
     for ml_id in (ML_TRACKCOUNT, ML_GAMEMODE, ML_VISITORS, ML_PLAYERSPECTATOR,
                   ML_LADDERLIMIT, ML_CURRENTRANKING, ML_TMEXCHANGE, ML_TOPLIST,
-                  ML_RAMPAGE_DISCORD, ML_RAMPAGE_FORCE):
+                  ML_FAVORITE, ML_CLOCK, ML_RAMPAGE_DISCORD, ML_RAMPAGE_FORCE):
         await _broadcast(aseco, _empty(ml_id))
 
 
 async def hide_all_score_bars(aseco: 'Aseco') -> None:
     """Broadcast empty MLs for all score-state bar widgets (at race start)."""
-    for ml_id in (ML_NEXT_ENV, ML_NEXT_GAMEMODE, ML_EYEPIECE_SCORE):
+    for ml_id in (ML_NEXT_ENV, ML_NEXT_GAMEMODE, ML_EYEPIECE_SCORE,
+                  ML_FAVORITE, ML_CLOCK):
         await _broadcast(aseco, _empty(ml_id))

@@ -1049,7 +1049,12 @@ async def _erase_track_from_localdb(aseco: 'Aseco', uid: str):
                 except Exception:
                     pass
 
-                await cur.execute('DELETE FROM custom_tracktimes WHERE challenge_uid=%s', (uid,))
+                try:
+                    await cur.execute('DELETE FROM custom_tracktimes WHERE challenge_uid=%s', (uid,))
+                except Exception as e:
+                    # FlexiTime table/optional
+                    if 'doesn\'t exist' not in str(e).lower() and '1146' not in str(e):
+                        raise
                 await cur.execute('DELETE FROM challenges WHERE Uid=%s', (uid,))
     except Exception as e:
         aseco.console('[Admin] erase LocalDB warning for UID [{1}]: {2}', uid, str(e))
