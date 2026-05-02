@@ -352,6 +352,7 @@ class Gameinfo:
         self.rndslimit: int = 0
         self.timelimit: int = 0
         self.teamlimit: int = 0
+        self.teamusenewrules: bool = False
         self.lapslimit: int = 0
         self.cuplimit: int = 0
         self.forcedlaps: int = 0
@@ -367,7 +368,8 @@ class Gameinfo:
         else:
             self.rndslimit = info.get('RoundsPointsLimit', 0)
         self.timelimit = info.get('TimeAttackLimit', 0)
-        if info.get('TeamUseNewRules'):
+        self.teamusenewrules = bool(info.get('TeamUseNewRules'))
+        if self.teamusenewrules:
             self.teamlimit = info.get('TeamPointsLimitNewRules', 0)
         else:
             self.teamlimit = info.get('TeamPointsLimit', 0)

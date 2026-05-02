@@ -57,6 +57,15 @@ def _empty(ml_id: int) -> str:
     return f'<manialink id="{ml_id}"></manialink>'
 
 
+def _team_badge_color(team_id: int) -> str:
+    """TEAM point badge background colors matching the live TM HUD palette."""
+    if team_id in (0, 2):
+        return "00FF"
+    if team_id in (1, 3):
+        return "F00F"
+    return "888F"
+
+
 async def _broadcast(aseco: 'Aseco', xml: str) -> None:
     await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
 
@@ -541,18 +550,27 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
 
         # Get rpoints
         rpoints = _get_rpoints(aseco, mode, len(sorted_list))
+        team_use_new_rules = bool(
+            getattr(getattr(getattr(aseco, 'server', None), 'gameinfo', None), 'teamusenewrules', False)
+        )
 
         line = 0
         offset = 3.0
         row_scale = 0.65
-        name_x = 5.85 if mode == Gameinfo.TEAM else 5.65
+        name_x = 6.15 if mode == Gameinfo.TEAM else 5.65
         name_w = max(width - name_x - 0.55, 1.0)
+        team_break = False
 
         for item in sorted_list[:entries]:
             y = lh * line + offset
             textcolor = col_top if (line + 1) <= topcount else col_worse
             nick = _handle_special_chars(item.get('nickname', '?'))
             score_txt = str(item.get('score', '--'))
+            raw_team_id = item.get('team', -1)
+            try:
+                team_id = int(raw_team_id) if raw_team_id not in (None, '') else -1
+            except Exception:
+                team_id = -1
 
             # Points badge (left or right of widget)
             if mode == Gameinfo.LAPS:
@@ -583,21 +601,59 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
                              f' halign="right" scale="{row_scale:.2f}" textcolor="{delta_col}"'
                              f' text="$O{escape(fmt)}{lap_txt}"/>')
             else:
-                pts = (rpoints[line] if line < len(rpoints)
-                       else (rpoints[-1] if rpoints else 0))
-                pts_txt = f'$O+{escape(fmt)}{pts}'
+                if mode == Gameinfo.TEAM:
+                    if not team_use_new_rules:
+                        if team_break:
+                            pts = 0
+                        elif sorted_list and int(sorted_list[0].get('team', -999) or -999) != team_id:
+                            pts = 0
+                            team_break = True
+                        else:
+                            pts = (rpoints[line] if line < len(rpoints)
+                                   else (rpoints[-1] if rpoints else 0))
+                    else:
+                        pts = (rpoints[line] if line < len(rpoints)
+                               else (rpoints[-1] if rpoints else 0))
+                    pts_txt = f'$O+{escape(fmt)}{pts}'
+                else:
+                    pts = (rpoints[line] if line < len(rpoints)
+                           else (rpoints[-1] if rpoints else 0))
+                    pts_txt = f'$O+{escape(fmt)}{pts}'
+                    pts_col = '0B3F'
                 if position == 'left':
                     p.append(f'<quad posn="-4.1 -{y-0.3:.2f} 0.003" sizen="4 2"'
                              f' style="Bgs1InRace" substyle="BgCard1"/>')
-                    p.append(f'<label posn="-0.6 -{y:.2f} 0.004" sizen="3 2"'
-                             f' halign="right" scale="{row_scale:.2f}" textcolor="0B3F"'
-                             f' text="{pts_txt}"/>')
+                    if mode == Gameinfo.TEAM:
+                        p.append(f'<quad posn="-3.7 -{y-0.14:.2f} 0.004" sizen="3.2 1.68"'
+                                 f' bgcolor="{_team_badge_color(team_id)}"/>')
+                        p.append(f'<label posn="-0.6 -{y:.2f} 0.005" sizen="3 2"'
+                                 f' halign="right" scale="{row_scale:.2f}" textcolor="FFFF"'
+                                 f' text="{pts_txt}"/>')
+                    elif pts_col:
+                        p.append(f'<label posn="-0.6 -{y:.2f} 0.004" sizen="3 2"'
+                                 f' halign="right" scale="{row_scale:.2f}" textcolor="{pts_col}"'
+                                 f' text="{pts_txt}"/>')
+                    else:
+                        p.append(f'<label posn="-0.6 -{y:.2f} 0.004" sizen="3 2"'
+                                 f' halign="right" scale="{row_scale:.2f}"'
+                                 f' text="{pts_txt}"/>')
                 else:
                     p.append(f'<quad posn="{width+0.1:.2f} -{y-0.3:.2f} 0.003" sizen="4 2"'
                              f' style="Bgs1InRace" substyle="BgCard1"/>')
-                    p.append(f'<label posn="{width+3.6:.2f} -{y:.2f} 0.004" sizen="3 2"'
-                             f' halign="right" scale="{row_scale:.2f}" textcolor="0B3F"'
-                             f' text="{pts_txt}"/>')
+                    if mode == Gameinfo.TEAM:
+                        p.append(f'<quad posn="{width+0.5:.2f} -{y-0.14:.2f} 0.004" sizen="3.2 1.68"'
+                                 f' bgcolor="{_team_badge_color(team_id)}"/>')
+                        p.append(f'<label posn="{width+3.6:.2f} -{y:.2f} 0.005" sizen="3 2"'
+                                 f' halign="right" scale="{row_scale:.2f}" textcolor="FFFF"'
+                                 f' text="{pts_txt}"/>')
+                    elif pts_col:
+                        p.append(f'<label posn="{width+3.6:.2f} -{y:.2f} 0.004" sizen="3 2"'
+                                 f' halign="right" scale="{row_scale:.2f}" textcolor="{pts_col}"'
+                                 f' text="{pts_txt}"/>')
+                    else:
+                        p.append(f'<label posn="{width+3.6:.2f} -{y:.2f} 0.004" sizen="3 2"'
+                                 f' halign="right" scale="{row_scale:.2f}"'
+                                 f' text="{pts_txt}"/>')
 
             # Rank, score, name
             p.append(f'<label posn="2.3 -{y:.2f} 0.004" sizen="1.7 1.7"'
@@ -616,6 +672,34 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
 
 def _get_rpoints(aseco: 'Aseco', mode: int, shown_count: int = 0) -> list[int]:
     """Get current round points list via GBX (cached) or settings fallback."""
+    # Prefer the actual current round-points table for every ranking-based mode,
+    # including TEAM. TEAM uses the same player finish points; only the team sum differs.
+    cached = getattr(_state, '_rpoints_cache', None)
+    if cached:
+        return list(cached)
+
+    # Fallback: read from settings / plugin_rpoints named systems.
+    system = getattr(getattr(aseco, 'settings', None), 'default_rpoints', '') or ''
+    rounds_points = None
+    try:
+        from pyxaseco_plugins.plugin_rpoints import ROUNDS_POINTS as _ROUNDS_POINTS
+        rounds_points = _ROUNDS_POINTS
+    except Exception:
+        try:
+            from pyxaseco.plugins.plugin_rpoints import ROUNDS_POINTS as _ROUNDS_POINTS
+            rounds_points = _ROUNDS_POINTS
+        except Exception:
+            rounds_points = None
+    if rounds_points and system in rounds_points:
+        return list(rounds_points[system][1])
+    if ',' in system:
+        try:
+            return list(map(int, system.split(',')))
+        except Exception:
+            pass
+
+    # TEAM fallback: if no explicit points system exists, derive a descending list
+    # from the currently active player count instead of using the team score limit.
     if mode == Gameinfo.TEAM:
         players = getattr(getattr(aseco, 'server', None), 'players', None)
         active_count = 0
@@ -638,63 +722,11 @@ def _get_rpoints(aseco: 'Aseco', mode: int, shown_count: int = 0) -> list[int]:
                 active_count = 0
                 connected_count = 0
 
-        max_points_team = 0
-        for holder in (
-            getattr(aseco, 'settings', None),
-            getattr(getattr(aseco, 'server', None), 'gameinfo', None),
-            getattr(aseco, 'server', None),
-        ):
-            if holder is None:
-                continue
-            for attr in (
-                'max_points_team',
-                'team_max_points',
-                'teampointsmax',
-                'maxpointsteam',
-                'TeamMaxPoints',
-                'MaxPointsTeam',
-            ):
-                try:
-                    value = int(getattr(holder, attr, 0) or 0)
-                except Exception:
-                    value = 0
-                if value > 0:
-                    max_points_team = value
-                    break
-            if max_points_team > 0:
-                break
-
         count = max(active_count, shown_count)
         if count <= 1:
             count = max(count, connected_count)
-        if max_points_team > 0:
-            count = min(count, max_points_team) if count > 0 else max_points_team
         if count > 0:
             return list(range(count, 0, -1))
-
-    # Try to use cached value set by plugin_rpoints
-    cached = getattr(_state, '_rpoints_cache', None)
-    if cached:
-        return list(cached)
-    # Fallback: read from settings
-    system = getattr(getattr(aseco, 'settings', None), 'default_rpoints', '') or ''
-    rounds_points = None
-    try:
-        from pyxaseco_plugins.plugin_rpoints import ROUNDS_POINTS as _ROUNDS_POINTS
-        rounds_points = _ROUNDS_POINTS
-    except Exception:
-        try:
-            from pyxaseco.plugins.plugin_rpoints import ROUNDS_POINTS as _ROUNDS_POINTS
-            rounds_points = _ROUNDS_POINTS
-        except Exception:
-            rounds_points = None
-    if rounds_points and system in rounds_points:
-        return list(rounds_points[system][1])
-    if ',' in system:
-        try:
-            return list(map(int, system.split(',')))
-        except Exception:
-            pass
     # TM defaults for Rounds
     return [10, 6, 4, 3, 2, 1]
 

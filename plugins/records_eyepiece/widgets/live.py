@@ -285,7 +285,9 @@ def _build_live_rankings_window(aseco: 'Aseco', page: int = 0) -> str:
         y = 1.83 * line
 
         if team_mode:
-            p.append(f'<label posn="{6.6 + offset:.2f} -{y:.2f} 0.03" sizen="6 1.7" halign="right" scale="0.9" textcolor="FFFF" text="{score_str}"/>')
+            # Team mode: colour the score to match the team (blue / red)
+            team_color = '08FF' if i == 0 else 'F50F'
+            p.append(f'<label posn="{6.6 + offset:.2f} -{y:.2f} 0.03" sizen="6 1.7" halign="right" scale="0.9" textcolor="{team_color}" text="{score_str}"/>')
         else:
             p.append(f'<label posn="{2.6 + offset:.2f} -{y:.2f} 0.03" sizen="2 1.7" halign="right" scale="0.9" text="{rank_num}."/>')
             p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.03" sizen="4 1.7" halign="right" scale="0.9" textcolor="{st.col_scores}" text="{score_str}"/>')

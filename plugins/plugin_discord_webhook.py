@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import logging
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -33,6 +34,9 @@ class DiscordWebhookConfig:
     mirror_warnings_errors: bool = True
     strip_tm_colors: bool = True
     request_timeout: int = 10
+    chat_throttle_player_threshold: int = 10
+    chat_batch_window_ms: int = 1200
+    chat_batch_max_lines: int = 8
 
 
 class _DiscordLogHandler(logging.Handler):
@@ -57,6 +61,7 @@ class DiscordWebhookState:
         self.aseco = aseco
         self.cfg = cfg
         self.queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
+        self.pending: deque[tuple[str, str]] = deque()
         self.session: aiohttp.ClientSession | None = None
         self.worker_task: asyncio.Task | None = None
         self.log_handler: _DiscordLogHandler | None = None
@@ -94,6 +99,38 @@ class DiscordWebhookState:
             logging.getLogger().addHandler(handler)
             self.log_handler = handler
 
+    def _active_player_count(self) -> int:
+        players = getattr(getattr(self.aseco, "server", None), "players", None)
+        if players is None:
+            return 0
+        server_login = str(getattr(getattr(self.aseco, "server", None), "serverlogin", "") or "")
+        try:
+            return sum(
+                1 for player in players.all()
+                if getattr(player, "login", "")
+                and getattr(player, "login", "") != server_login
+                and not getattr(player, "isspectator", False)
+            )
+        except Exception:
+            return 0
+
+    def _should_throttle_chat(self) -> bool:
+        return self._active_player_count() > max(0, int(self.cfg.chat_throttle_player_threshold or 10))
+
+    async def _next_item(self) -> tuple[tuple[str, str], bool]:
+        if self.pending:
+            return self.pending.popleft(), False
+        return await self.queue.get(), True
+
+    async def _try_next_item(self, timeout_s: float) -> tuple[tuple[str, str], bool] | None:
+        if self.pending:
+            return self.pending.popleft(), False
+        try:
+            item = await asyncio.wait_for(self.queue.get(), timeout=max(0.0, timeout_s))
+        except asyncio.TimeoutError:
+            return None
+        return item, True
+
     async def stop(self):
         if self.log_handler is not None:
             logging.getLogger().removeHandler(self.log_handler)
@@ -113,15 +150,38 @@ class DiscordWebhookState:
 
     async def _worker(self):
         while True:
-            channel, content = await self.queue.get()
+            (channel, content), from_queue = await self._next_item()
+            queue_items = 1 if from_queue else 0
             try:
-                await self._send(channel, content)
+                if channel == "chat" and self._should_throttle_chat():
+                    lines = [content]
+                    deadline = asyncio.get_running_loop().time() + (max(100, int(self.cfg.chat_batch_window_ms or 1200)) / 1000.0)
+                    max_lines = max(1, int(self.cfg.chat_batch_max_lines or 8))
+                    while len(lines) < max_lines:
+                        remaining = deadline - asyncio.get_running_loop().time()
+                        if remaining <= 0:
+                            break
+                        next_item = await self._try_next_item(remaining)
+                        if next_item is None:
+                            break
+                        (next_channel, next_content), next_from_queue = next_item
+                        if next_from_queue:
+                            queue_items += 1
+                        if next_channel == "chat" and self._should_throttle_chat():
+                            lines.append(next_content)
+                        else:
+                            self.pending.appendleft((next_channel, next_content))
+                            break
+                    await self._send(channel, "\n".join(lines))
+                else:
+                    await self._send(channel, content)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.debug("[DiscordWebhook] Send failed", exc_info=True)
             finally:
-                self.queue.task_done()
+                for _ in range(queue_items):
+                    self.queue.task_done()
 
     async def _send(self, channel: str, content: str):
         if not self.session:
@@ -207,6 +267,18 @@ def _load_config(aseco: "Aseco") -> DiscordWebhookConfig:
     cfg.strip_tm_colors = _parse_bool(_text("strip_tm_colors", str(cfg.strip_tm_colors)), cfg.strip_tm_colors)
     try:
         cfg.request_timeout = int(_text("request_timeout", str(cfg.request_timeout)) or cfg.request_timeout)
+    except Exception:
+        pass
+    try:
+        cfg.chat_throttle_player_threshold = int(_text("chat_throttle_player_threshold", str(cfg.chat_throttle_player_threshold)) or cfg.chat_throttle_player_threshold)
+    except Exception:
+        pass
+    try:
+        cfg.chat_batch_window_ms = int(_text("chat_batch_window_ms", str(cfg.chat_batch_window_ms)) or cfg.chat_batch_window_ms)
+    except Exception:
+        pass
+    try:
+        cfg.chat_batch_max_lines = int(_text("chat_batch_max_lines", str(cfg.chat_batch_max_lines)) or cfg.chat_batch_max_lines)
     except Exception:
         pass
     return cfg

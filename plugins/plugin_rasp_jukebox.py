@@ -384,7 +384,7 @@ def _safe_track_filename(track_name: str, track_id: int) -> str:
     """
     clean_name = strip_colors(track_name, for_tm=False)
     safe_name = _sanitize_windows_filename(clean_name)
-    return f'{safe_name}_({track_id}).Challenge.Gbx'
+    return f'{safe_name}_{track_id}.Challenge.Gbx'
 
 
 async def _default_tmx_section(aseco: 'Aseco') -> str:
@@ -900,6 +900,8 @@ async def admin_add_tmx_track(
 
     try:
         abs_path, rel_insert, host, track_id, metadata = await download_tmx_track(ref, tracks_root, source)
+        # Dedicated filesystem visibility can lag slightly behind the async write.
+        await asyncio.sleep(0.5)
         server_file = _challenge_file_value(rel_insert)
 
         uid = metadata.get('uid', '').strip()

@@ -691,8 +691,15 @@ async def _dedi_playerfinish(aseco: 'Aseco', finish_item):
                         aseco.format_colors(msg)
                     )
 
+            # Keep the in-memory Dedimania list fully re-ranked after inserts/moves.
+            # Without this, pushed-down records can keep stale Pos/rank values until
+            # a later full refresh, which breaks live widgets that rely on the cache.
+            for _idx, _rec in enumerate(dedi_recs):
+                if isinstance(_rec, dict):
+                    _rec['Pos'] = _idx + 1
+                    _rec['rank'] = _idx + 1
+
             if isinstance(newbest_rec, dict) and newbest_rec.get('NewBest'):
-                newbest_rec['Pos'] = i + 1
                 aseco.console(
                     '[Dedimania] player {1} finished with {2} and took the {3}. WR place!',
                     login, score, i + 1

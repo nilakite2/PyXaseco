@@ -50,6 +50,8 @@ class FlexiTime:
         self.time_left   = self.default_time * 60
         self.author_time = 0          # seconds
         self.paused      = False
+        self._mode_disabled = False
+        self._panel_visible = False
 
         self._load_config(aseco)
 
@@ -111,9 +113,9 @@ class FlexiTime:
 
     async def init_timer(self):
         if not self._is_ta_mode():
-            self.paused = True
-            await self.hide_panel()
+            await self._disable_outside_ta()
             return
+        self._mode_disabled = False
         challenge = self.aseco.server.challenge
         self.author_time = round(challenge.authortime / 1000)
         self.paused = False
@@ -153,17 +155,26 @@ class FlexiTime:
 
     async def tick(self):
         if not self._is_ta_mode():
-            self.paused = True
-            await self.hide_panel()
+            await self._disable_outside_ta()
             return
+        self._mode_disabled = False
         if not self.paused and self.time_left > 0:
             self.time_left -= 1
         await self._show_panel()
         if not self.paused and self.time_left <= 0:
             await self._next_round()
 
+    async def _disable_outside_ta(self):
+        self.paused = True
+        if self._mode_disabled:
+            return
+        self._mode_disabled = True
+        await self.hide_panel()
+
     async def _show_panel(self):
         if not self.show_panel:
+            if self._panel_visible:
+                await self.hide_panel()
             return
         colour   = self._colour()
         showtime = self._time_str(self.time_left)
@@ -179,12 +190,16 @@ class FlexiTime:
         hud = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}">{body}</manialink>'
         await self.aseco.client.query_ignore_result(
             'SendDisplayManialinkPage', hud, 0, False)
+        self._panel_visible = True
 
     async def hide_panel(self):
+        if not self._panel_visible:
+            return
         self.paused = True
         hud = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}"></manialink>'
         await self.aseco.client.query_ignore_result(
             'SendDisplayManialinkPage', hud, 0, False)
+        self._panel_visible = False
 
     async def _next_round(self):
         self.paused = True
