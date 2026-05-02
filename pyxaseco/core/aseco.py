@@ -813,17 +813,26 @@ class Aseco:
             return
 
         _uid, login, text = params[0], params[1], params[2]
-        if not text.startswith('/'):
-            return
+        await self.dispatch_chat_command(login, text)
+
+    async def dispatch_chat_command(self, login: str, text: str) -> bool:
+        """
+        Dispatch a slash command internally without needing a public chat callback.
+
+        Returns True when a registered slash command was recognized and dispatched,
+        otherwise False.
+        """
+        if not text or not str(text).startswith('/'):
+            return False
 
         # Split command name and args
-        parts = text[1:].split(None, 1)
+        parts = str(text)[1:].split(None, 1)
         cmd_name = parts[0].lower() if parts else ''
         cmd_args = parts[1] if len(parts) > 1 else ''
 
         cmd = self._chat_commands.get(cmd_name)
         if not cmd:
-            return
+            return False
 
         player = self.server.players.get_player(login)
 
@@ -831,7 +840,7 @@ class Aseco:
         if not player:
             server_login = getattr(self.server, 'serverlogin', '')
             if not server_login or login.lower() != server_login.lower():
-                return
+                return False
 
             from pyxaseco.models import Player
 
@@ -866,3 +875,4 @@ class Aseco:
                 'handler': handler_name,
                 'command': command,
             })
+        return True
