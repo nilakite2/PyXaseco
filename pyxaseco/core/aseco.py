@@ -734,17 +734,22 @@ class Aseco:
             return
         _uid, login, score = params[0], params[1], params[2]
         player = self.server.players.get_player(login)
+        mode = getattr(self.server.gameinfo, 'mode', -1)
         if score == 0:
             if player:
-                player.retired = True
+                player.retired = (mode != Gameinfo.TA)
                 player.finished_waiting = False
-                await self.release_event('onPlayerRetire', player)
+                if mode == Gameinfo.TA:
+                    player.isspectator = False
+                    player.spectatorstatus = 0
+                if player.retired:
+                    await self.release_event('onPlayerRetire', player)
             return  # retired / DNF
 
         if not player:
             return
         player.retired = False
-        player.finished_waiting = True
+        player.finished_waiting = (mode in (Gameinfo.RNDS, Gameinfo.TEAM, Gameinfo.LAPS, Gameinfo.CUP))
 
         # Build the finish_item object used by downstream race handlers.
         from pyxaseco.models import Record, Challenge as _Ch

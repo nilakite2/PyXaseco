@@ -13,6 +13,8 @@ Shows time delta vs a chosen local or dedi record at each checkpoint.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from pyxaseco.models import Gameinfo
+
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
     from pyxaseco.models import Player
@@ -30,6 +32,8 @@ def register(aseco: 'Aseco'):
     aseco.add_chat_command('ztrack', 'Shows help for zTrack-Plugin')
     aseco.register_event('onChat_ztrack',            chat_ztrack)
     aseco.register_event('onPlayerInfoChanged',      zt_player_info_changed)
+    aseco.register_event('onPlayerRetire',           zt_player_retire)
+    aseco.register_event('onPlayerFinish1',          zt_player_finish)
     aseco.register_event('onNewChallenge',           zt_new_challenge)
     aseco.register_event('onCheckpoint',             zt_checkpoint)
     aseco.register_event('onPlayerConnect',          zt_player_connect)
@@ -69,7 +73,7 @@ async def chat_ztrack(aseco: 'Aseco', command: dict):
             return
 
         # When spectating, track the target player's CPs, not the spectator's own.
-        _target = _resolve_spec_target(aseco, player)
+        _target = _resolve_view_target(aseco, player)
         _zt.setdefault(login, {}).update({
             'Mode': 'Local',
             'Rec': idx,
@@ -77,7 +81,7 @@ async def chat_ztrack(aseco: 'Aseco', command: dict):
         })
         _send(f'{{#message}}[zTrack]: CP-tracking is now comparing to {{#highlite}}local record {idx+1}')
 
-        if player.isspectator:
+        if _is_viewer_spec_like(player):
             await _send_ml(aseco, login, True)
         else:
             await _send_ml_self(aseco, login, True)
@@ -104,14 +108,14 @@ async def chat_ztrack(aseco: 'Aseco', command: dict):
             _send(f'{{#message}}[zTrack]: {{#highlite}}Dedi record {idx+1}{{#message}} has no checkpoint data')
             return
 
-        _target = _resolve_spec_target(aseco, player)
+        _target = _resolve_view_target(aseco, player)
         _zt.setdefault(login, {}).update({
             'Mode': 'Dedi',
             'Rec': idx,
             'Target': _target or login,
         })
         _send(f'{{#message}}[zTrack]: CP-tracking comparing to {{#highlite}}Dedi record {idx+1}')
-        if player.isspectator:
+        if _is_viewer_spec_like(player):
             await _send_ml(aseco, login, True)
         else:
             await _send_ml_self(aseco, login, True)
@@ -171,30 +175,60 @@ async def zt_player_disconnect(aseco: 'Aseco', player: 'Player'):
 async def zt_player_info_changed(aseco: 'Aseco', changes: dict):
     """Called when a player changes spectator status."""
     login = changes.login
-    # spectatorstatus is the packed GBX integer: digits 4-7 = PID of spectated player.
-    spec_status = int(getattr(changes, 'spectatorstatus', 0) or 0)
-    is_spec = changes.isspectator
 
     if login not in _zt:
         _zt[login] = {'Mode': '', 'Rec': 0, 'Target': login}
 
-    if is_spec:
-        # Spectating — decode target PID from packed spectatorstatus
-        target_pid = spec_status // 10000
-        target_login = _pid_to_login(aseco, target_pid) if target_pid > 0 else ''
+    if _is_viewer_spec_like(changes):
+        target_login = _resolve_view_target(aseco, changes)
         if target_login:
             _zt[login]['Target'] = target_login
             enabled = _zt[login].get('Mode', '') != ''
             if enabled:
                 await _send_ml(aseco, login, True)
         else:
-            # Auto-target or no target yet — hide until target is known
-            _zt[login]['Target'] = ''
-            await _send_ml(aseco, login, False)
+            _zt[login]['Target'] = login if bool(getattr(changes, 'finished_waiting', False)) else ''
+            enabled = _zt[login].get('Mode', '') != ''
+            if enabled:
+                await _send_ml(aseco, login, True if _zt[login]['Target'] else False)
     else:
-        # Back to playing — track own CPs
         _zt[login]['Target'] = login
         enabled = _zt[login].get('Mode', '') != ''
+        await _send_ml_self(aseco, login, enabled)
+
+
+async def zt_player_retire(aseco: 'Aseco', player: 'Player'):
+    login = getattr(player, 'login', '')
+    if not login:
+        return
+    if login not in _zt:
+        _zt[login] = {'Mode': '', 'Rec': 0, 'Target': login}
+    _zt[login]['Target'] = _resolve_view_target(aseco, player) or login
+    enabled = _zt[login].get('Mode', '') != ''
+    await _send_ml(aseco, login, enabled)
+
+
+async def zt_player_finish(aseco: 'Aseco', finish_item):
+    player = getattr(finish_item, 'player', None)
+    login = getattr(player, 'login', '')
+    if not login:
+        return
+    if login not in _zt:
+        _zt[login] = {'Mode': '', 'Rec': 0, 'Target': login}
+
+    enabled = _zt[login].get('Mode', '') != ''
+    mode = getattr(getattr(aseco, 'server', None), 'gameinfo', None)
+    mode = getattr(mode, 'mode', -1)
+    waiting_mode = mode in (Gameinfo.RNDS, Gameinfo.TEAM, Gameinfo.LAPS, Gameinfo.CUP)
+
+    if bool(getattr(player, 'retired', False)):
+        _zt[login]['Target'] = _resolve_view_target(aseco, player) or login
+        await _send_ml(aseco, login, enabled)
+    elif waiting_mode and bool(getattr(player, 'finished_waiting', False)):
+        _zt[login]['Target'] = _resolve_view_target(aseco, player) or login
+        await _send_ml(aseco, login, enabled)
+    else:
+        _zt[login]['Target'] = login
         await _send_ml_self(aseco, login, enabled)
 
 
@@ -328,13 +362,47 @@ def _resolve_spec_target(aseco: 'Aseco', player: 'Player') -> str:
     Return the login of the player a spectator is watching.
     Returns empty string if not spectating or target cannot be determined.
     """
-    if not getattr(player, 'isspectator', False):
+    if not _is_viewer_spec_like(player):
         return ''
     spec_status = int(getattr(player, 'spectatorstatus', 0) or 0)
     target_pid = spec_status // 10000
-    if target_pid <= 0:
+    own_pid = int(getattr(player, 'pid', 0) or 0)
+    if target_pid <= 0 or target_pid == own_pid:
         return ''
     return _pid_to_login(aseco, target_pid)
+
+
+def _is_viewer_spec_like(player: 'Player') -> bool:
+    if not player:
+        return False
+
+    if bool(getattr(player, 'retired', False)):
+        return True
+
+    if bool(getattr(player, 'finished_waiting', False)):
+        return True
+
+    try:
+        spec_status = int(getattr(player, 'spectatorstatus', 0) or 0)
+    except Exception:
+        spec_status = 0
+
+    if spec_status > 0 and (spec_status % 10) != 0:
+        spec_mode = (spec_status // 10) % 100
+        target_pid = spec_status // 10000
+        own_pid = int(getattr(player, 'pid', 0) or 0)
+        return spec_mode > 0 and target_pid != own_pid
+
+    return False
+
+
+def _resolve_view_target(aseco: 'Aseco', player: 'Player') -> str:
+    target_login = _resolve_spec_target(aseco, player)
+    if target_login:
+        return target_login
+    if bool(getattr(player, 'retired', False)) or bool(getattr(player, 'finished_waiting', False)):
+        return getattr(player, 'login', '') or ''
+    return ''
 
 
 def _pid_to_login(aseco: 'Aseco', pid: int) -> str:

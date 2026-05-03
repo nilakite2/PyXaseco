@@ -51,13 +51,28 @@ def _is_player_currently_spectating(player) -> bool:
         return True
 
     raw_status = getattr(player, 'spectatorstatus', None)
+    spec_status = 0
     if raw_status is not None:
         try:
-            return (int(raw_status) % 10) != 0
+            spec_status = int(raw_status or 0)
         except Exception:
-            pass
+            spec_status = 0
 
-    return bool(getattr(player, 'isspectator', False))
+    # Only treat live spectator states as spec-like for CP widget placement
+    # when the player is actually watching a target. TM can temporarily expose
+    # spectator-like status during countdown/start flow with no target at all,
+    # and that should keep the normal driving position.
+    if spec_status > 0 and (spec_status % 10) != 0:
+        spec_mode = (spec_status // 10) % 100
+        target_pid = spec_status // 10000
+        own_pid = int(getattr(player, 'pid', 0) or 0)
+        # Temporary restart/countdown states can expose spectator-ish low bits
+        # while the player is still effectively in normal driving mode. Only
+        # honor real spectator modes here.
+        return spec_mode > 0 and target_pid != own_pid
+
+    return False
+
 
 
 def _resolve_display_login(aseco: 'Aseco', viewer_login: str) -> str:
@@ -78,7 +93,9 @@ def _resolve_display_login(aseco: 'Aseco', viewer_login: str) -> str:
 
     is_spec_like = _is_player_currently_spectating(viewer)
     target_pid = spec_status // 10000 if spec_status > 0 else 0
-    if is_spec_like and target_pid > 0:
+    spec_mode = (spec_status // 10) % 100 if spec_status > 0 else 0
+    own_pid = int(getattr(viewer, 'pid', 0) or 0)
+    if is_spec_like and spec_mode > 0 and target_pid > 0 and target_pid != own_pid:
         for _p in aseco.server.players.all():
             if getattr(_p, 'pid', 0) == target_pid:
                 return _p.login
