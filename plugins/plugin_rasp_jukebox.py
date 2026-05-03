@@ -142,6 +142,17 @@ def _is_admin_login(aseco: 'Aseco', login: str) -> bool:
     )
 
 
+def _has_jukebox_player_limit_bypass(aseco: 'Aseco', player) -> bool:
+    if not player:
+        return False
+    return bool(
+        aseco.is_master_admin(player) or
+        aseco.is_admin(player) or
+        aseco.is_operator(player) or
+        _is_admin_login(aseco, getattr(player, 'login', ''))
+    )
+
+
 def _is_login_online(aseco: 'Aseco', login: str) -> bool:
     return any(player.login == login for player in aseco.server.players.all())
 
@@ -2534,7 +2545,7 @@ async def chat_jukebox(aseco: 'Aseco', command: dict):
             await _reply(aseco, login, _get_rasp_msg(aseco, 'LIST_HELP'))
             return
         # Check for existing jukebox entry by this player
-        if not aseco.allow_ability(player, 'chat_jb_multi'):
+        if not (aseco.allow_ability(player, 'chat_jb_multi') or _has_jukebox_player_limit_bypass(aseco, player)):
             for item in jukebox.values():
                 if item.get('Login') == login:
                     await _reply(aseco, login, _get_rasp_msg(aseco, 'JUKEBOX_ALREADY'))
