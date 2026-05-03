@@ -34,6 +34,7 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onPlayerInfoChanged',      zt_player_info_changed)
     aseco.register_event('onPlayerRetire',           zt_player_retire)
     aseco.register_event('onPlayerFinish1',          zt_player_finish)
+    aseco.register_event('onBeginRound',             zt_begin_round)
     aseco.register_event('onNewChallenge',           zt_new_challenge)
     aseco.register_event('onCheckpoint',             zt_checkpoint)
     aseco.register_event('onPlayerConnect',          zt_player_connect)
@@ -170,6 +171,21 @@ async def zt_player_connect(aseco: 'Aseco', player: 'Player'):
 
 async def zt_player_disconnect(aseco: 'Aseco', player: 'Player'):
     _zt.pop(player.login, None)
+
+
+async def zt_begin_round(aseco: 'Aseco', _params=None):
+    for player in aseco.server.players.all():
+        login = getattr(player, 'login', '')
+        if not login or login not in _zt:
+            continue
+
+        enabled = _zt[login].get('Mode', '') != ''
+        if _is_viewer_spec_like(player):
+            _zt[login]['Target'] = _resolve_view_target(aseco, player) or login
+            await _send_ml(aseco, login, enabled)
+        else:
+            _zt[login]['Target'] = login
+            await _send_ml_self(aseco, login, enabled)
 
 
 async def zt_player_info_changed(aseco: 'Aseco', changes: dict):
