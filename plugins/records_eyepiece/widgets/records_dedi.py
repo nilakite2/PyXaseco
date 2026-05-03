@@ -167,7 +167,6 @@ def _dedi_close_to_you(
         if item is not None:
             if item.get('self') == 0:
                 item['highlitefull'] = count >= topcount
-            item['display_rank'] = count + 1
             result_clean.append(item)
             count += 1
     

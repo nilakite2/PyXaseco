@@ -172,7 +172,6 @@ def _build_record_widget(
 
     for line, entry in enumerate(entries):
         rank = entry.get('rank')
-        display_rank = entry.get('display_rank', rank)
         nick = entry.get('nickname', '')
         score_raw = entry.get('score')
         self_flag = entry.get('self', -1)
@@ -259,7 +258,7 @@ def _build_record_widget(
 
         # Rank + score labels
         if rank is not False:
-            rank_str = f'{display_rank}.' if display_rank != '--' else '--'
+            rank_str = f'{rank}.' if rank != '--' else '--'
             p.append(
                 f'<label posn="2.3 -{y:.4f} 0.004"'
                 f' sizen="1.7 1.7" halign="right" scale="0.9"'
