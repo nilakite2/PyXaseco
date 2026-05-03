@@ -143,7 +143,12 @@ async def _on_player_disconnect(aseco: 'Aseco', player: 'Player'):
 
 async def _on_player_info_changed(aseco: 'Aseco', player: 'Player'):
     from ..widgets.bar_widgets import _draw_playerspectator_all
+    from ..widgets.checkpoint import _is_player_currently_spectating
     from ..widgets.score_widgets import draw_round_score
+
+    if player and player.login and _is_player_currently_spectating(player):
+        _state.player_cp_idx[player.login] = 0
+        _state.player_cp_delta[player.login] = ''
 
     await _draw_live_player(aseco, player.login)
     # Spectator status may have changed — redraw CP widgets so the

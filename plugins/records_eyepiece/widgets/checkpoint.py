@@ -50,6 +50,13 @@ def _is_player_currently_spectating(player) -> bool:
     if bool(getattr(player, 'finished_waiting', False)):
         return True
 
+    # CP Live treats the player object's IsSpectator flag as authoritative once
+    # the server has actually switched into spectator mode. Keeping this early
+    # check preserves true spectator behavior while the stricter packed-status
+    # guards below still protect countdown/restart edge cases.
+    if bool(getattr(player, 'isspectator', False)):
+        return True
+
     raw_status = getattr(player, 'spectatorstatus', None)
     spec_status = 0
     if raw_status is not None:
@@ -58,18 +65,13 @@ def _is_player_currently_spectating(player) -> bool:
         except Exception:
             spec_status = 0
 
-    # Only treat live spectator states as spec-like for CP widget placement
-    # when the player is actually watching a target. TM can temporarily expose
-    # spectator-like status during countdown/start flow with no target at all,
-    # and that should keep the normal driving position.
+    # Packed spectatorstatus can temporarily expose spectator-ish low bits
+    # during restart/countdown flow. Only honor it when there is a real watched
+    # target that is not the player themselves.
     if spec_status > 0 and (spec_status % 10) != 0:
-        spec_mode = (spec_status // 10) % 100
         target_pid = spec_status // 10000
         own_pid = int(getattr(player, 'pid', 0) or 0)
-        # Temporary restart/countdown states can expose spectator-ish low bits
-        # while the player is still effectively in normal driving mode. Only
-        # honor real spectator modes here.
-        return spec_mode > 0 and target_pid != own_pid
+        return target_pid > 0 and target_pid != own_pid
 
     return False
 
@@ -95,7 +97,7 @@ def _resolve_display_login(aseco: 'Aseco', viewer_login: str) -> str:
     target_pid = spec_status // 10000 if spec_status > 0 else 0
     spec_mode = (spec_status // 10) % 100 if spec_status > 0 else 0
     own_pid = int(getattr(viewer, 'pid', 0) or 0)
-    if is_spec_like and spec_mode > 0 and target_pid > 0 and target_pid != own_pid:
+    if is_spec_like and target_pid > 0 and target_pid != own_pid:
         for _p in aseco.server.players.all():
             if getattr(_p, 'pid', 0) == target_pid:
                 return _p.login
