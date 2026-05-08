@@ -23,6 +23,7 @@
 	<plugin>plugin_track</plugin>
 	<plugin>plugin_checkpoints</plugin>
 	<plugin>plugin_dedimania</plugin>
+<!--<plugin>plugin_trial_records</plugin>--> <!--Similar to Dedimania but uses tmtrialgy.com as API endpoint for all Trial records-->
 	<plugin>plugin_rasp</plugin>
 	<plugin>plugin_rasp_jukebox</plugin>
 	<plugin>plugin_rasp_chat</plugin>

@@ -184,15 +184,23 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
 
     # ── /estat pagination: dedi records ────────────────────────────────────
     if -918300 <= action <= -918200:
+        from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
         page = abs(action) - 918200
-        xml = _build_dedi_records_window(aseco, page)
+        if await _is_trial_track_active(aseco):
+            xml = await _build_trial_records_window(aseco, page)
+        else:
+            xml = _build_dedi_records_window(aseco, page)
         if xml:
             await _send(aseco, login, xml)
         return
 
     if 918200 <= action < 918300:
+        from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
         page = action - 918200
-        xml = _build_dedi_records_window(aseco, page)
+        if await _is_trial_track_active(aseco):
+            xml = await _build_trial_records_window(aseco, page)
+        else:
+            xml = _build_dedi_records_window(aseco, page)
         if xml:
             await _send(aseco, login, xml)
         return
@@ -229,6 +237,17 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         xml = _build_live_rankings_window(aseco, 0)
         if xml:
             await _send(aseco, login, xml)
+        return
+
+    # 91829 = Show TrialRecordsWindow
+    if action == 91829:
+        from ..widgets.trial_records import _get_trial_records, _build_trial_records_window
+        recs = await _get_trial_records(aseco)
+        xml = await _build_trial_records_window(aseco, 0, records=recs) if recs else ''
+        if xml:
+            await _send(aseco, login, xml)
+        else:
+            await _send_chat(aseco, login, '{#server}> {#error}No Trial records available.')
         return
 
     # 91808 = Trigger /tmxinfo

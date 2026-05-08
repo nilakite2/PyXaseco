@@ -928,9 +928,11 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
     dedi_cfg = _state.dedi.get(_effective_mode(aseco))
     if gamemode != Gameinfo.STNT and getattr(dedi_cfg, 'enabled', False):
         from .widgets.records_dedi import _get_dedi_records
+        source_rows = (_get_dedi_records() or [])[:25]
+        title = getattr(dedi_cfg, 'title', 'Dedimania Records')
         dedi_rows = []
 
-        for idx, rec in enumerate((_get_dedi_records() or [])[:25], start=1):
+        for idx, rec in enumerate(source_rows[:25], start=1):
             if not isinstance(rec, dict):
                 continue
 
@@ -958,11 +960,49 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             'manialinkid': '04',
             'icon_style': 'Icons128x128_1',
             'icon_substyle': 'Rankings',
-            'title': getattr(dedi_cfg, 'title', 'Dedimania Records'),
+            'title': title,
             'rows': dedi_rows,
             'special': False,
             'action_id': 91804,
         })
+
+        from .widgets.trial_records import _is_trial_track_active, _get_trial_records
+        if await _is_trial_track_active(aseco):
+            trial_source_rows = await _get_trial_records(aseco, 25)
+            trial_rows = []
+            for idx, rec in enumerate(trial_source_rows[:25], start=1):
+                if not isinstance(rec, dict):
+                    continue
+
+                login_id = str(rec.get('login') or rec.get('Login') or '')
+                raw_score = rec.get('score')
+                if raw_score is None:
+                    raw_score = rec.get('Best') or rec.get('Score')
+
+                score_text = rec.get('score_text')
+                if not score_text:
+                    try:
+                        score_text = format_time(int(raw_score or 0))
+                    except Exception:
+                        score_text = '--'
+
+                trial_rows.append({
+                    'rank': idx,
+                    'score': str(score_text or '--'),
+                    'nickname': _handle_special_chars(str(rec.get('nickname') or rec.get('NickName') or login_id or '?')),
+                    'login': login_id,
+                    'online': login_id in players,
+                })
+
+            toplists.append({
+                'manialinkid': '06',
+                'icon_style': 'Icons128x128_1',
+                'icon_substyle': 'Rankings',
+                'title': 'Trial Records',
+                'rows': trial_rows,
+                'special': False,
+                'action_id': 91829,
+            })
 
     # Local Records
     local_rows_raw = list(getattr(aseco.server, 'records', []) or [])

@@ -3148,12 +3148,24 @@ async def _event_jukebox(aseco: 'Aseco', answer: list):
         tracklist = getattr(player, 'tracklist', [])
         if idx < len(tracklist):
             track = tracklist[idx]
-            aseco.console('player {1} clicked command "/add {2} {3}"',
-                          login, track.get('id', ''), track.get('section', ''))
-            await chat_add(
-                aseco,
-                {'author': player, 'params': f'{track.get("id", "")} {track.get("section", "")}'.strip()}
-            )
+            if aseco.allow_ability(player, 'add'):
+                try:
+                    chat_admin = getattr(_plugin_module('chat_admin'), 'chat_admin')
+                    aseco.console('player {1} clicked command "/admin add {2} {3}"',
+                                  login, track.get('id', ''), track.get('section', ''))
+                    await chat_admin(
+                        aseco,
+                        {'author': player, 'params': f'add {track.get("id", "")} {track.get("section", "")}'.strip()}
+                    )
+                except Exception:
+                    pass
+            else:
+                aseco.console('player {1} clicked command "/add {2} {3}"',
+                              login, track.get('id', ''), track.get('section', ''))
+                await chat_add(
+                    aseco,
+                    {'author': player, 'params': f'{track.get("id", "")} {track.get("section", "")}'.strip()}
+                )
 
     elif 6201 <= action <= 6700:
         idx = action - 6201

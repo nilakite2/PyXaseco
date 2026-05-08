@@ -313,6 +313,7 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
 async def chat_estat(aseco: 'Aseco', command: dict) -> None:
     from ..widgets.records_local import _build_local_records_window
     from ..widgets.records_dedi import _build_dedi_records_window
+    from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
     from ..toplists import _build_generic_toplist_window
     from ..widgets.common import _send, _send_chat
 
@@ -329,11 +330,14 @@ async def chat_estat(aseco: 'Aseco', command: dict) -> None:
         return
 
     if params == 'DEDIRECS':
-        xml = _build_dedi_records_window(aseco, 0)
+        if await _is_trial_track_active(aseco):
+            xml = await _build_trial_records_window(aseco, 0)
+        else:
+            xml = _build_dedi_records_window(aseco, 0)
         if xml:
             await _send(aseco, login, xml)
         else:
-            await _send_chat(aseco, login, '{#server}> No Dedimania records to display.')
+            await _send_chat(aseco, login, '{#server}> No records to display.')
         return
 
     if getattr(aseco.server, 'gamestate', None) not in (None, 3) and getattr(aseco.server, 'gamestate', None) != getattr(getattr(aseco.server, '__class__', object), 'RACE', 3):

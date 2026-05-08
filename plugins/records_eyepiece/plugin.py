@@ -29,6 +29,7 @@ def register(aseco: 'Aseco'):
         _on_player_finish,
         _on_player_retire,
         _on_local_record,
+        _on_trial_record,
         _on_dedi_recs_loaded,
         _on_dedi_record,
         _on_begin_round,
@@ -70,6 +71,7 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onPlayerFinish1',             _on_player_finish)
     aseco.register_event('onPlayerRetire',              _on_player_retire)
     aseco.register_event('onLocalRecord',               _on_local_record)
+    aseco.register_event('onTrialRecord',               _on_trial_record)
     aseco.register_event('onDediRecsLoaded',            _on_dedi_recs_loaded)
     aseco.register_event('onDedimaniaRecord',           _on_dedi_record)
     aseco.register_event('onBeginRound',                _on_begin_round)
