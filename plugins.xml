@@ -5,6 +5,7 @@
 	<plugin>chat_admin</plugin>
 	<plugin>plugin_server_admin_bridge</plugin> <!--Whitelists server login as MA-->
 	<plugin>plugin_discord_webhook</plugin> <!--Hooks to Discord channel WebHook - discord_webhook.xml-->
+	<plugin>plugin_public_stats</plugin> <!--Sends "heartbeat" to tmtrialgy.com/servers API endpoint-->
 	<plugin>chat_help</plugin>
 	<plugin>chat_records</plugin>
 	<plugin>chat_records2</plugin>
