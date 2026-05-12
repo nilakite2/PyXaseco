@@ -927,9 +927,16 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
     # Preserve the expected display order.
     dedi_cfg = _state.dedi.get(_effective_mode(aseco))
     if gamemode != Gameinfo.STNT and getattr(dedi_cfg, 'enabled', False):
+        from .widgets.records_rpg import _is_rpg_track_active, _get_rpg_track, _get_rpg_records, _rpg_title
         from .widgets.records_dedi import _get_dedi_records
-        source_rows = (_get_dedi_records() or [])[:25]
+        source_rows = []
         title = getattr(dedi_cfg, 'title', 'Dedimania Records')
+        if await _is_rpg_track_active(aseco):
+            source_rows = (await _get_rpg_records(aseco, 25) or [])[:25]
+            track = await _get_rpg_track(aseco)
+            title = _rpg_title(track.get('stars') if isinstance(track, dict) else None)
+        else:
+            source_rows = (_get_dedi_records() or [])[:25]
         dedi_rows = []
 
         for idx, rec in enumerate(source_rows[:25], start=1):
@@ -967,7 +974,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
         })
 
         from .widgets.trial_records import _is_trial_track_active, _get_trial_records
-        if await _is_trial_track_active(aseco):
+        if (not await _is_rpg_track_active(aseco)) and await _is_trial_track_active(aseco):
             trial_source_rows = await _get_trial_records(aseco, 25)
             trial_rows = []
             for idx, rec in enumerate(trial_source_rows[:25], start=1):

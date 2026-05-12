@@ -386,7 +386,7 @@ async def _tr_sync_current_track(aseco: 'Aseco', _param=None):
 
 
 async def _announce_trial_record(aseco: 'Aseco', nickname: str, score: int, existing_rank: int, existing_score: int, new_rank: int) -> None:
-    nickname_text = str(nickname or '?')
+    nickname_text = strip_colors(str(nickname or '?'))
     time_text = format_time(score)
     diff = max(int(existing_score or 0) - int(score or 0), 0)
 

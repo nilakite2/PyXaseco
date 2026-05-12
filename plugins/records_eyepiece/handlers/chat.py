@@ -313,6 +313,7 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
 async def chat_estat(aseco: 'Aseco', command: dict) -> None:
     from ..widgets.records_local import _build_local_records_window
     from ..widgets.records_dedi import _build_dedi_records_window
+    from ..widgets.records_rpg import _is_rpg_track_active, _build_rpg_records_window
     from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
     from ..toplists import _build_generic_toplist_window
     from ..widgets.common import _send, _send_chat
@@ -330,7 +331,9 @@ async def chat_estat(aseco: 'Aseco', command: dict) -> None:
         return
 
     if params == 'DEDIRECS':
-        if await _is_trial_track_active(aseco):
+        if await _is_rpg_track_active(aseco):
+            xml = await _build_rpg_records_window(aseco, 0)
+        elif await _is_trial_track_active(aseco):
             xml = await _build_trial_records_window(aseco, 0)
         else:
             xml = _build_dedi_records_window(aseco, 0)
@@ -356,7 +359,7 @@ async def chat_estat(aseco: 'Aseco', command: dict) -> None:
         ['$s/estat <param> — opens a stats window:', ''],
         [],
         ['LOCALRECS',    'Scrollable list of all local records on this track'],
-        ['DEDIRECS',     'Scrollable list of all Dedimania records on this track'],
+        ['DEDIRECS',     'Scrollable list of visible RPG/Trial/Dedimania records on this track'],
         ['TOPRANKS',     'Top-ranked players (by total rank sum)'],
         ['TOPWINNERS',   'Players with most race wins on this server'],
         ['MOSTRECORDS',  'Players holding the most local records'],

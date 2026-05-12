@@ -274,6 +274,14 @@ async def _on_local_record(aseco: 'Aseco', _rec):
     await _draw_local_all(aseco)
 
 
+async def _on_rpg_record(aseco: 'Aseco', _rec):
+    from ..widgets.checkpoint import _refresh_cp_targets_all
+
+    _state.player_dedi_digest.clear()
+    _refresh_cp_targets_all(aseco)
+    await _draw_dedi_all(aseco)
+
+
 async def _on_trial_record(aseco: 'Aseco', _rec):
     from ..widgets.checkpoint import _refresh_cp_targets_all
 
@@ -787,8 +795,11 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
 
 
 async def _draw_dedi_player(aseco: 'Aseco', login: str):
+    from ..widgets.records_rpg import _is_rpg_track_active
     from ..widgets.trial_records import _is_trial_track_active
-    if await _is_trial_track_active(aseco):
+    if await _is_rpg_track_active(aseco):
+        from ..widgets.records_rpg import _draw_rpg_player as impl
+    elif await _is_trial_track_active(aseco):
         from ..widgets.trial_records import _draw_trial_player as impl
     else:
         from ..widgets.records_dedi import _draw_dedi_player as impl

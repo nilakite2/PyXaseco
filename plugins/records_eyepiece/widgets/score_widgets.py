@@ -190,13 +190,43 @@ def build_dedi_records_for_score(aseco: 'Aseco') -> str:
     sc     = getattr(_state.style, 'score_col_scores', 'DDDF')
 
     records = []
+    score_cfg = dict(cfg)
     try:
+        from .records_rpg import _rpg_title
         from .records_dedi import _get_dedi_records
 
-        for i, rec in enumerate(_get_dedi_records() or []):
+        score_cfg = dict(cfg)
+        # build_dedi_records_for_score is synchronous, so it only uses cached RPG state
+        try:
+            import sys as _sys
+            mod = (
+                _sys.modules.get('pyxaseco_plugins.plugin_records_rpg')
+                or _sys.modules.get('pyxaseco.plugins.plugin_records_rpg')
+            )
+            rpg_track = mod.get_current_track_cache() if mod and hasattr(mod, 'get_current_track_cache') else None
+            rpg_rows = list(mod._current_records) if mod and hasattr(mod, '_current_records') else []
+        except Exception:
+            rpg_track = None
+            rpg_rows = []
+
+        if isinstance(rpg_track, dict) and rpg_rows:
+            score_cfg['title'] = _rpg_title(rpg_track.get('stars'))
+            source_rows = rpg_rows
+        else:
+            source_rows = _get_dedi_records() or []
+
+        for i, rec in enumerate(source_rows):
             if not isinstance(rec, dict):
                 continue
-            nick = str(rec.get('nickname') or rec.get('NickName') or rec.get('login') or rec.get('Login') or '?')
+            nick = str(
+                rec.get('nickname_raw')
+                or rec.get('player_nickname_raw')
+                or rec.get('nickname')
+                or rec.get('NickName')
+                or rec.get('login')
+                or rec.get('Login')
+                or '?'
+            )
             score_text = str(rec.get('score_text') or '')
             if not score_text:
                 best = int(rec.get('Best') or rec.get('Score') or rec.get('score') or 0)
@@ -213,7 +243,7 @@ def build_dedi_records_for_score(aseco: 'Aseco') -> str:
         return _empty(ML_DEDI_SCORE)
 
     widget_height = lh * len(records) + 3.3
-    p = [_scoretable_header(ML_DEDI_SCORE, cfg, widget_height)]
+    p = [_scoretable_header(ML_DEDI_SCORE, score_cfg, widget_height)]
     for idx, (rank, score_text, nick) in enumerate(records):
         p.append(_scoretable_row(idx, rank, score_text, nick, sc, fmt, lh))
     p.append(_scoretable_footer())

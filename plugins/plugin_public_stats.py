@@ -118,6 +118,15 @@ def _display_and_raw(value: object) -> tuple[str, str]:
     return clean, raw
 
 
+def _server_login(aseco: "Aseco") -> str:
+    srv = getattr(aseco, "server", None)
+    for attr in ("serverlogin", "login"):
+        value = _clean_text(getattr(srv, attr, ""))
+        if value:
+            return value
+    return ""
+
+
 def _server_country(aseco: "Aseco") -> str:
     srv = getattr(aseco, "server", None)
     nation = _clean_text(getattr(srv, "nation", ""))
@@ -145,7 +154,7 @@ def _is_spectator(player) -> bool:
 
 def _player_counts(aseco: "Aseco") -> dict[str, int]:
     srv = getattr(aseco, "server", None)
-    server_login = _clean_text(getattr(srv, "serverlogin", ""))
+    server_login = _server_login(aseco)
     players = list(getattr(getattr(srv, "players", None), "all", lambda: [])() or [])
     filtered = [p for p in players if _clean_text(getattr(p, "login", "")) and _clean_text(getattr(p, "login", "")).lower() != server_login.lower()]
     spec_count = sum(1 for p in filtered if _is_spectator(p))
@@ -177,21 +186,29 @@ def _current_map_payload(aseco: "Aseco") -> dict:
 def _heartbeat_payload(aseco: "Aseco", *, is_online: bool = True) -> dict:
     srv = getattr(aseco, "server", None)
     server_name, server_name_raw = _display_and_raw(getattr(srv, "name", ""))
+    current_map = _current_map_payload(aseco)
+    counts = _player_counts(aseco)
     return {
         "schema_version": 1,
         "reported_at": _utc_now_iso(),
         "is_online": bool(is_online),
-        "server_login": _clean_text(getattr(srv, "serverlogin", "")),
+        "server_login": _server_login(aseco),
         "server_name": server_name,
         "server_name_raw": server_name_raw,
         "country": _server_country(aseco),
         "game": _clean_text(getattr(srv, "game", "")),
         "controller_version": f"PyXaseco {PYXASECO_VERSION}",
         "plugin_version": PLUGIN_VERSION,
-        "current_map": _current_map_payload(aseco),
-        "players": _player_counts(aseco),
         "uptime_seconds": int(max(time.time() - float(getattr(srv, "starttime", time.time()) or time.time()), 0)),
+        "current_map": dict(current_map),
+        "players": dict(counts),
         "recent_local_records": list(_recent_local_records[:PUBLIC_STATS_RECENT_KEEP]),
+        "current_map_uid": _clean_text(current_map.get("uid", "")),
+        "current_map_name": _clean_text(current_map.get("name", "")),
+        "current_map_author": _clean_text(current_map.get("author", "")),
+        "player_count": int(counts.get("current", 0) or 0),
+        "spec_count": int(counts.get("spectators", 0) or 0),
+        "max_players": int(counts.get("max_players", 0) or 0),
     }
 
 
@@ -203,7 +220,7 @@ def _recent_record_payload(aseco: "Aseco", rec) -> dict:
     return {
         "schema_version": 1,
         "reported_at": _utc_now_iso(),
-        "server_login": _clean_text(getattr(getattr(aseco, "server", None), "serverlogin", "")),
+        "server_login": _server_login(aseco),
         "map_uid": _clean_text(getattr(challenge, "uid", "")),
         "map_name": map_name,
         "map_name_raw": map_name_raw,
@@ -231,6 +248,9 @@ async def _post_heartbeat(aseco: "Aseco", *, force: bool = False, is_online: boo
     if not force and (now - _last_heartbeat_sent) < float(PUBLIC_STATS_HEARTBEAT_SECONDS):
         return
     payload = _heartbeat_payload(aseco, is_online=is_online)
+    if not _clean_text(payload.get("server_login")):
+        logger.warning("[PublicStats] Skipping heartbeat: server_login is empty")
+        return
     try:
         await _json_post(f"{_api_base()}{PUBLIC_STATS_HEARTBEAT_PATH}", payload)
         _last_heartbeat_sent = now
@@ -242,6 +262,9 @@ async def _post_recent_record(aseco: "Aseco", rec):
     if not _is_enabled():
         return
     payload = _recent_record_payload(aseco, rec)
+    if not _clean_text(payload.get("server_login")):
+        logger.warning("[PublicStats] Skipping recent-record POST: server_login is empty")
+        return
     _remember_recent_record(payload)
     try:
         await _json_post(f"{_api_base()}{PUBLIC_STATS_RECENT_RECORD_PATH}", payload)
@@ -273,7 +296,6 @@ async def public_stats_startup(aseco: "Aseco", _param=None):
             versions.append({"name": "plugin_public_stats", "version": PLUGIN_VERSION})
     except Exception:
         pass
-    await _post_heartbeat(aseco, force=True, is_online=True)
 
 
 async def public_stats_sync(aseco: "Aseco", _param=None):

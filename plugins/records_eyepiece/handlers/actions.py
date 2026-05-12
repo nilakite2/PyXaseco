@@ -182,11 +182,14 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             await _send(aseco, login, xml)
         return
 
-    # ── /estat pagination: dedi records ────────────────────────────────────
+    # ── /estat pagination: dedi/trial/rpg records ─────────────────────────
     if -918300 <= action <= -918200:
+        from ..widgets.records_rpg import _is_rpg_track_active, _build_rpg_records_window
         from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
         page = abs(action) - 918200
-        if await _is_trial_track_active(aseco):
+        if await _is_rpg_track_active(aseco):
+            xml = await _build_rpg_records_window(aseco, page)
+        elif await _is_trial_track_active(aseco):
             xml = await _build_trial_records_window(aseco, page)
         else:
             xml = _build_dedi_records_window(aseco, page)
@@ -195,9 +198,12 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         return
 
     if 918200 <= action < 918300:
+        from ..widgets.records_rpg import _is_rpg_track_active, _build_rpg_records_window
         from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
         page = action - 918200
-        if await _is_trial_track_active(aseco):
+        if await _is_rpg_track_active(aseco):
+            xml = await _build_rpg_records_window(aseco, page)
+        elif await _is_trial_track_active(aseco):
             xml = await _build_trial_records_window(aseco, page)
         else:
             xml = _build_dedi_records_window(aseco, page)
@@ -212,15 +218,24 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         await _open_challenge_window(aseco, login)
         return
 
-    # 91804 = Show DedimaniaRecordsWindow
+    # 91804 = Show Dedimania/Trial/RPG RecordsWindow
     if action == 91804:
+        from ..widgets.records_rpg import _is_rpg_track_active, _get_rpg_records, _build_rpg_records_window
         from ..widgets.records_dedi import _get_dedi_records
-        recs = _get_dedi_records()
-        if recs:
-            xml = _build_dedi_records_window(aseco, 0, records=recs)
+        from ..widgets.trial_records import _is_trial_track_active, _get_trial_records, _build_trial_records_window
+        if await _is_rpg_track_active(aseco):
+            recs = await _get_rpg_records(aseco)
+            xml = await _build_rpg_records_window(aseco, 0, records=recs) if recs else ""
+        elif await _is_trial_track_active(aseco):
+            recs = await _get_trial_records(aseco)
+            xml = await _build_trial_records_window(aseco, 0, records=recs) if recs else ""
+        else:
+            recs = _get_dedi_records()
+            xml = _build_dedi_records_window(aseco, 0, records=recs) if recs else ""
+        if xml:
             await _send(aseco, login, xml)
         else:
-            await _send_chat(aseco, login, '{#server}> {#error}No Dedimania records available.')
+            await _send_chat(aseco, login, '{#server}> {#error}No records available.')
         return
 
     # 91805 = Show LocalRecordsWindow
