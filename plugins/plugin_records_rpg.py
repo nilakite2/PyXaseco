@@ -499,14 +499,17 @@ def _delete_replay_file(path: Path) -> bool:
     except Exception as exc:
         logger.warning("[RPGRecords] Could not delete replay file %s: %s", path, exc)
         return False
-
-    parent = path.parent
-    try:
-        if parent.exists() and parent.is_dir() and parent.name == RPG_SAVE_SUBDIR and not any(parent.iterdir()):
-            parent.rmdir()
-    except Exception:
-        pass
     return True
+
+
+def _prepare_save_target(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        return
+    try:
+        path.unlink()
+    except Exception as exc:
+        logger.warning("[RPGRecords] Could not remove stale replay target %s before save: %s", path, exc)
 
 
 def _merge_record_into_cache(uid: str, login: str, nickname_raw: str, score: int) -> tuple[bool, int, int, int]:
@@ -636,7 +639,7 @@ async def _rpg_local_record(aseco: "Aseco", new_rec):
 
     relative_path = _build_saved_replay_relative_path(challenge, login, score)
     replay_path = _resolve_saved_replay_path(aseco, relative_path)
-    replay_path.parent.mkdir(parents=True, exist_ok=True)
+    _prepare_save_target(replay_path)
 
     try:
         saved = await _save_best_ghost_replay(aseco, login, relative_path)
