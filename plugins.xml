@@ -56,4 +56,5 @@
 <!--<plugin>plugin_stalker_actionids</plugin>-->
 	<plugin>plugin_cpll</plugin>
 	<plugin>plugin_ztrack</plugin>
+	<plugin>plugin_tmxvideo</plugin> <!--Based on original by Malun but uses "/gps" and "/gps list"-->
 </aseco_plugins>
