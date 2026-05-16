@@ -37,7 +37,7 @@ from pyxaseco.models import (
 
 logger = logging.getLogger(__name__)
 
-PYXASECO_VERSION = '1.0-Alpha'
+PYXASECO_VERSION = '1.1-Stable'
 TMF_BUILD = '2011-02-21'   # minimum required TMF dedicated server build
 
 # Dedicated server callbacks we handle

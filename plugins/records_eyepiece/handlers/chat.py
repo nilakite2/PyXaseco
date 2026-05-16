@@ -109,7 +109,7 @@ async def chat_eyepiece(aseco: 'Aseco', command: dict):
         return 'enabled' if cfg.enabled else 'disabled'
 
     rows = [
-        ['Core port',      '{#black}Eyepiece 1.0-Alpha'],
+        ['Core port',      '{#black}Eyepiece 1.1-Stable'],
         ['Mode',           '{#black}' + _mode_name(mode)],
         ['Challenge',      '{#black}' + ('enabled' if _state.challenge.enabled else 'disabled')],
         ['Local records',  '{#black}' + ena(_state.local)],
@@ -126,7 +126,7 @@ async def chat_eyepiece(aseco: 'Aseco', command: dict):
     display_manialink(
         aseco,
         login,
-        'Records-Eyepiece 1.0-Alpha',
+        'Records-Eyepiece 1.1-Stable',
         ['Icons64x64_1', 'TrackInfo', -0.01],
         rows,
         [1.15, 0.32, 0.83],

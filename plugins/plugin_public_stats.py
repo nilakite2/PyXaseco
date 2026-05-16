@@ -48,7 +48,7 @@ PUBLIC_STATS_API_TOKEN = ""
 PUBLIC_STATS_HEARTBEAT_PATH = "/api/public-stats/heartbeat"
 PUBLIC_STATS_RECENT_RECORD_PATH = "/api/public-stats/recent-record"
 
-PUBLIC_STATS_HEARTBEAT_SECONDS = 60
+PUBLIC_STATS_HEARTBEAT_SECONDS = 240
 PUBLIC_STATS_RECENT_KEEP = 5
 PUBLIC_STATS_REQUEST_TIMEOUT = 20
 
@@ -275,6 +275,7 @@ async def _post_recent_record(aseco: "Aseco", rec):
 def register(aseco: "Aseco"):
     aseco.register_event("onStartup", public_stats_startup)
     aseco.register_event("onSync", public_stats_sync)
+    aseco.register_event("onEverySecond", public_stats_tick)
     aseco.register_event("onNewChallenge", public_stats_new_challenge)
     aseco.register_event("onPlayerConnect", public_stats_player_connect)
     aseco.register_event("onPlayerDisconnect", public_stats_player_disconnect)
@@ -299,6 +300,10 @@ async def public_stats_startup(aseco: "Aseco", _param=None):
 
 
 async def public_stats_sync(aseco: "Aseco", _param=None):
+    await _post_heartbeat(aseco, force=False, is_online=True)
+
+
+async def public_stats_tick(aseco: "Aseco", _param=None):
     await _post_heartbeat(aseco, force=False, is_online=True)
 
 

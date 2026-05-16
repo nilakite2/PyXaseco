@@ -18,7 +18,7 @@ from pyxaseco.helpers import (format_text, format_time, format_time_h,
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
-PYXASECO_VERSION = 'PyXaseco 1.0-Alpha'
+PYXASECO_VERSION = 'PyXaseco 1.1-Stable'
 PYXASECO_URL     = 'github.com/nilakite2/PyXaseco'
 
 

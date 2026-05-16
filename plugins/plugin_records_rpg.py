@@ -49,6 +49,7 @@ RPG_DELETE_AFTER_UPLOAD = True
 _enabled: bool = False
 _current_track: dict | None = None
 _current_records: list[dict] = []
+_last_status_key: tuple[str, bool, int, int] | None = None
 
 
 def _api_base() -> str:
@@ -322,7 +323,6 @@ async def get_rpg_records(uid: str, limit: int | None = None) -> list[dict]:
 
 
 async def get_current_rpg_track(aseco: "Aseco") -> dict | None:
-    global _current_track, _current_records
     challenge = getattr(aseco.server, "challenge", None)
     uid = _track_uid(challenge)
     if not uid:
@@ -330,16 +330,8 @@ async def get_current_rpg_track(aseco: "Aseco") -> dict | None:
         return None
     if _cache_for_uid(uid):
         return dict(_current_track)
-    try:
-        payload = await _json_request(_rpg_records_url(uid))
-    except Exception:
-        return None
-    track, rows = _normalize_rpg_records_payload(payload, uid)
-    if not track or not rows:
-        return None
-    _current_track = dict(track)
-    _current_records = list(rows)
-    return dict(_current_track)
+    await _sync_current_track(aseco)
+    return dict(_current_track) if _cache_for_uid(uid) else None
 
 
 async def get_current_rpg_records(aseco: "Aseco", limit: int | None = None) -> list[dict]:
@@ -361,6 +353,19 @@ def _clear_current_cache() -> None:
     global _current_track, _current_records
     _current_track = None
     _current_records = []
+
+
+def _announce_track_status(aseco: "Aseco", uid: str, active: bool, *, stars: int = 0, count: int = 0) -> None:
+    global _last_status_key
+    key = (_clean_text(uid), bool(active), int(stars or 0), int(count or 0))
+    if _last_status_key == key:
+        return
+    _last_status_key = key
+    if not active:
+        aseco.console("[RPGRecords] Inactive on {1}; fallback to Dedimania", uid)
+        return
+    aseco.console("[RPGRecords] Active on {1} (stars={2})", uid, stars)
+    aseco.console("[RPGRecords] Fetched {1} RPG records for {2}", count, uid)
 
 
 async def _sync_current_track(aseco: "Aseco") -> None:
@@ -392,7 +397,7 @@ async def _sync_current_track(aseco: "Aseco") -> None:
         except Exception:
             pass
         logger.warning("[RPGRecords] Record fetch failed for %s: %s", uid, exc)
-        aseco.console("[RPGRecords] Inactive on {1}; fallback to Dedimania", uid)
+        _announce_track_status(aseco, uid, False)
         return
 
     track, rows = _normalize_rpg_records_payload(payload, uid)
@@ -402,7 +407,7 @@ async def _sync_current_track(aseco: "Aseco") -> None:
             aseco.server.rpg_records_active = False
         except Exception:
             pass
-        aseco.console("[RPGRecords] Inactive on {1}; fallback to Dedimania", uid)
+        _announce_track_status(aseco, uid, False)
         return
 
     _current_track = dict(track)
@@ -411,12 +416,13 @@ async def _sync_current_track(aseco: "Aseco") -> None:
         aseco.server.rpg_records_active = True
     except Exception:
         pass
-    aseco.console(
-        "[RPGRecords] Active on {1} (stars={2})",
+    _announce_track_status(
+        aseco,
         _storage_uid(_current_track) or uid,
-        _safe_int(_current_track.get("stars"), 0),
+        True,
+        stars=_safe_int(_current_track.get("stars"), 0),
+        count=len(_current_records),
     )
-    aseco.console("[RPGRecords] Fetched {1} RPG records for {2}", len(_current_records), uid)
 
 
 async def _announce_rpg_record(aseco: "Aseco", nickname: str, score: int, existing_rank: int, existing_score: int, new_rank: int) -> None:
@@ -595,6 +601,7 @@ def _merge_record_into_cache(uid: str, login: str, nickname_raw: str, score: int
 
 def register(aseco: "Aseco"):
     aseco.register_event("onStartup", _rpg_load_settings)
+    aseco.register_event("onSync", _rpg_sync_current_track)
     aseco.register_event("onNewChallenge", _rpg_sync_current_track)
     aseco.register_event("onLocalRecord", _rpg_local_record)
     aseco.add_chat_command("rpgrecs", "Displays all RPG Records on current track")

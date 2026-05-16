@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 PLUGIN_NAME = 'plugin_records_eyepiece.py'
-PLUGIN_VERSION = '1.0-Alpha'
+PLUGIN_VERSION = '1.1-Stable'
 PLUGIN_MANIALINK_PREFIX = '918'
 PLUGIN_LINE_HEIGHT = 1.8
 MIN_PYXASECO_VERSION = CORE_PYXASECO_VERSION
