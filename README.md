@@ -4,12 +4,13 @@ PyXaseco v1.2 is the structured controller branch for **TrackMania Forever**.
 
 It keeps compatibility with the validated controller behavior (1.1-Stable), but reorganizes the runtime around:
 
-Not all functionality has been ported from PyXaseco 1.1-Stable yet, validation and controller rework in progress.
-
 - TOML-first config
 - category-based plugin naming
 - clearer ownership boundaries
 - incremental migration instead of a full rewrite
+
+## NOTE
+Not all functionality has been ported from PyXaseco 1.1-Stable yet, validation and controller rework in progress.
 
 ## Status
 
