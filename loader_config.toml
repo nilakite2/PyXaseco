@@ -1,0 +1,12 @@
+[plugin_loader]
+phase = 2
+source_of_truth_now = "plugins.toml"
+planning_manifest = "plugins.toml"
+legacy_flat_names = true
+category_style_names = true
+package_paths_enabled = true
+
+[notes]
+item_1 = "category names now resolve directly into subfolders"
+item_2 = "legacy plugin entry names are redirected by the loader"
+item_3 = "plugin dependency aliases remain preserved for compatibility"

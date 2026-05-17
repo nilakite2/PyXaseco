@@ -1,0 +1,1071 @@
+[chat_admin]
+pm_buffer_len = 30
+pm_line_len = 40
+auto_scorepanel = true
+rounds_finishpanel = true
+
+[plugin_chatlog]
+chat_len = 30
+line_len = 70
+
+[plugin_rasp_chat]
+pm_buf_len = 30
+line_len = 70
+
+[plugin_cplive_v3]
+max_display_rows = 24
+pos_x = -64.4
+pos_y = 19
+widget_update_interval = 100
+min_widget_update_interval = 50
+strict_mode = false
+leader_mode = false
+allow_nick_style_toggle = true
+plain_nicks = false
+show_spectators = true
+use_spectator_icon = true
+show_spectator_targets = true
+toggle_key = 0
+
+[plugin_dedimania]
+dedi_timeout = 1800
+dedi_refresh = 240
+
+[plugin_freezone]
+testmode = true
+debugmode = false
+notify = 0
+notify_mute = "{1} has been forced to spectator (FreeZone)."
+notify_unmute = "{1} is now allowed to play (FreeZone)."
+
+[mistral_idlekick]
+kick_play_after = 2
+kick_spec_after = 4
+kick_spec_too = true
+spec_play_first = false
+reset_on_chat = true
+reset_on_checkpoint = true
+reset_on_finish = false
+
+[plugin_rasp_karma]
+feature_karma = false
+allow_public_karma = false
+karma_show_start = false
+karma_show_details = false
+karma_show_votes = false
+karma_require_finish = 0
+remind_karma = 0
+
+[plugin_donate]
+donation_values = [20, 50, 100, 200, 500, 1000, 2000]
+min_donation = 10
+public_appr_threshold = 100
+
+[plugin_msglog]
+msg_buf_len = 21
+msg_win_len = 5
+msg_line_len = 800
+chat_window_len = 28
+
+[plugin_rasp_jukebox]
+tmx_download_dir = "TMX"
+
+[jfreu_plugin]
+servername = "YOUR SERVER NAME"
+servertop = "$449TOP"
+autochangename = false
+infomessages = 1
+badwords = false
+badwordsban = false
+badwordsnum = 3
+badwordstime = 10
+unspecvote = true
+novote = false
+ranklimit = false
+limit = 500000
+hardlimit = 1000000
+autorank = false
+offset = 999
+autolimit = 500000
+autorankminplayers = 10
+autorankvip = false
+maxplayers = 20
+kickhirank = false
+pf = 0
+
+[plugin_bestcps]
+pos_x = -48.66
+pos_y = 46.66
+number = 7
+newline = 7
+rows = 1
+orientation = 0
+
+[plugin_bestsecs]
+pos_x = 50.9
+pos_y = -30.0
+announce_sec = true
+announce_own = true
+remove_on_delete = true
+window_rounds = true
+window_ta = true
+window_team = true
+window_cup = true
+window_lap = true
+window_stunts = true
+
+[plugin_bestruns]
+x = -55.66
+y = 45.65
+nb_bestruns = 7
+nb_bestruns_with_cp = 7
+nb_max_checkpoints = 9
+
+[plugin_bestfinishes]
+x = 35.0
+y = 48.0
+scale = 1.0
+nb_bestfinishes = 5
+
+[plugin_flexitime]
+admin_level = 3
+default_time = 180
+custom_time = true
+author_mult = 5
+min_time = 45
+use_chat = true
+show_panel = true
+colour = "fff"
+warn_time = 300
+warn_colour = "ff4"
+danger_time = 60
+danger_colour = "f44"
+panel_x = 60.0
+panel_y = 20.0
+panel_paused_x = 120.0
+panel_width = 18.0
+panel_height = 5.0
+panel_quad_x = 8.0
+label_x = 3.5
+label_y = 0.1
+panel_scale = 1.0
+label_scale = 0.6
+
+[plugin_best_cp_times_v2]
+pos_x = 49.7
+pos_y = -20.0
+width = 15.0
+height = 18.2
+number = 2000
+custom_ui = true
+show_spectators = true
+textsize = 1.0
+textscale = 0.9
+
+[plugin_records_eyepiece]
+
+[plugin_records_eyepiece.features]
+refresh_interval = 10
+mark_online_player_records = true
+illuminate_names = true
+sort_team = true
+number_format = "english"
+shorten_numbers = false
+
+[plugin_records_eyepiece.features.karma]
+min_votes = 30
+calculation_method = "tmkarma"
+
+[plugin_records_eyepiece.features.songlist]
+sorting = true
+force_songlist = true
+
+[plugin_records_eyepiece.features.tracklist]
+sorting = "author"
+force_tracklist = true
+
+[plugin_records_eyepiece.show_progress_indicator]
+tracklist = 120
+
+[plugin_records_eyepiece.style]
+
+[plugin_records_eyepiece.style.widget_race]
+background_style = "Bgs1InRace"
+background_substyle = "NavButton"
+title_style = "BgsPlayerCard"
+title_substyle = "BgRacePlayerName"
+top_style = "BgsPlayerCard"
+top_substyle = "BgCardSystem"
+highlite_self_style = "BgsPlayerCard"
+highlite_self_substyle = "BgCardSystem"
+highlite_other_style = "BgsPlayerCard"
+highlite_other_substyle = "BgCardSystem"
+formatting_codes = ""
+
+[plugin_records_eyepiece.style.widget_race.colors]
+default = "FFFF"
+scores = "DDDF"
+top = "FF0F"
+better = "F00F"
+worse = "CCCF"
+self = "3F5F"
+background_rank = "AAA5"
+background_score = "AAA3"
+background_name = "AAA1"
+
+[plugin_records_eyepiece.style.widget_score]
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+title_style = "BgsPlayerCard"
+title_substyle = "ProgressBar"
+formatting_codes = ""
+
+[plugin_records_eyepiece.style.widget_score.colors]
+default = "FFFF"
+scores = "DDDF"
+
+[plugin_records_eyepiece.style.window]
+headline_bgcolor = "09FC"
+headline_textcolor = "FFFF"
+window_bgcolor = "001B"
+
+[plugin_records_eyepiece.style.window.lightbox]
+enabled = false
+bgcolor = "0008"
+
+[plugin_records_eyepiece.custom_ui]
+enabled = true
+notice = true
+challenge_info = true
+net_infos = true
+chat = true
+checkpoint_list = true
+round_scores = true
+scoretable = true
+
+[plugin_records_eyepiece.welcome_window]
+enabled = false
+autohide = 10
+icon_style = "Icons128x128_1"
+icon_substyle = "Credits"
+message = "$FF0Welcome {player}!{br}{br}However, we ask you to urgently comply with the rules. They serve the gaming culture on this server and are all participating players have fun together! All violators will be kicked or banned depending on the seriousness of the offense.{br}{br}We think a certain minimum level of decency can be expected of all players. These include for example, a normal tone on this server. When insults, abuse and other non appropriate behavior appropriate action being taken.{br}{br}Play fair on this server! Behave like normal people. We think that the rules above should not be too difficult to follow. They reflect the interests of all players resist on this server.{br}{br}$w$oAnd now have fun at {server}!"
+
+[plugin_records_eyepiece.welcome_window.hide]
+ranked_player = false
+
+[plugin_records_eyepiece.welcome_window.image]
+normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/welcome-records-eyepiece-normal.jpg"
+focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/welcome-records-eyepiece-focus.jpg"
+link = "http://www.undef.name/"
+
+[plugin_records_eyepiece.challenge_widget]
+enabled = true
+width = 15.5
+
+[plugin_records_eyepiece.challenge_widget.icons]
+
+[plugin_records_eyepiece.challenge_widget.icons.last_track]
+icon_style = "Icons128x128_1"
+icon_substyle = "NewTrack"
+
+[plugin_records_eyepiece.challenge_widget.icons.current_track]
+icon_style = "Icons128x128_1"
+icon_substyle = "Challenge"
+
+[plugin_records_eyepiece.challenge_widget.icons.next_track]
+icon_style = "Icons128x128_1"
+icon_substyle = "LoadTrack"
+
+[plugin_records_eyepiece.challenge_widget.title]
+last_track = "Last Track"
+current_track = "Current Track"
+next_track = "Next Track"
+
+[plugin_records_eyepiece.challenge_widget.race]
+pos_x = 49.05
+pos_y = 48
+
+[plugin_records_eyepiece.challenge_widget.score]
+pos_x = 48.7
+pos_y = 48
+
+[plugin_records_eyepiece.music_widget]
+enabled = false
+advertise = true
+title = "Current Song"
+width = 15.5
+pos_x = 33.45
+pos_y = 48
+icon_style = "Icons64x64_1"
+icon_substyle = "Music"
+
+[plugin_records_eyepiece.checkpointcount_widget]
+enabled = true
+text_color = "DDEF"
+pos_x = -7.9
+pos_y = -34.1
+background_style = "Bgs1InRace"
+background_substyle = "NavButton"
+
+[plugin_records_eyepiece.dedimania_records]
+title = "Dedimania Records"
+width = 15.5
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.dedimania_records.gamemode]
+
+[plugin_records_eyepiece.dedimania_records.gamemode.rounds]
+enabled = true
+pos_x = -64.7
+pos_y = 23.65
+entries = 12
+topcount = 3
+
+[plugin_records_eyepiece.dedimania_records.gamemode.time_attack]
+enabled = true
+pos_x = 49.2
+pos_y = 0.7
+entries = 10
+topcount = 3
+
+[plugin_records_eyepiece.dedimania_records.gamemode.team]
+enabled = true
+pos_x = -64.7
+pos_y = 23.65
+entries = 12
+topcount = 3
+
+[plugin_records_eyepiece.dedimania_records.gamemode.laps]
+enabled = true
+pos_x = -64.7
+pos_y = 23.65
+entries = 12
+topcount = 3
+
+[plugin_records_eyepiece.dedimania_records.gamemode.stunts]
+enabled = false
+
+[plugin_records_eyepiece.dedimania_records.gamemode.cup]
+enabled = true
+pos_x = -64.7
+pos_y = 10.65
+entries = 12
+topcount = 3
+
+[plugin_records_eyepiece.ultimania_records]
+title = "Ultimania Records"
+width = 15.5
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.ultimania_records.gamemode]
+
+[plugin_records_eyepiece.ultimania_records.gamemode.rounds]
+enabled = false
+
+[plugin_records_eyepiece.ultimania_records.gamemode.time_attack]
+enabled = false
+
+[plugin_records_eyepiece.ultimania_records.gamemode.team]
+enabled = false
+
+[plugin_records_eyepiece.ultimania_records.gamemode.laps]
+enabled = false
+
+[plugin_records_eyepiece.ultimania_records.gamemode.stunts]
+enabled = false
+pos_x = -64.7
+pos_y = 23.65
+entries = 16
+topcount = 3
+
+[plugin_records_eyepiece.ultimania_records.gamemode.cup]
+enabled = false
+
+[plugin_records_eyepiece.local_records]
+title = "Local Records"
+width = 15.5
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.local_records.gamemode]
+
+[plugin_records_eyepiece.local_records.gamemode.rounds]
+enabled = true
+pos_x = -64.7
+pos_y = -1.2
+entries = 11
+topcount = 3
+
+[plugin_records_eyepiece.local_records.gamemode.time_attack]
+enabled = true
+pos_x = 49.2
+pos_y = 22.1
+entries = 10
+topcount = 3
+
+[plugin_records_eyepiece.local_records.gamemode.team]
+enabled = true
+pos_x = -64.7
+pos_y = -1.2
+entries = 11
+topcount = 3
+
+[plugin_records_eyepiece.local_records.gamemode.laps]
+enabled = true
+pos_x = -64.7
+pos_y = -1.2
+entries = 11
+topcount = 3
+
+[plugin_records_eyepiece.local_records.gamemode.stunts]
+enabled = true
+pos_x = 49.2
+pos_y = 6.6
+entries = 10
+topcount = 3
+
+[plugin_records_eyepiece.local_records.gamemode.cup]
+enabled = true
+pos_x = -64.7
+pos_y = -1.2
+entries = 11
+topcount = 3
+
+[plugin_records_eyepiece.live_rankings]
+title = "Live Rankings"
+width = 15.5
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.live_rankings.gamemode]
+
+[plugin_records_eyepiece.live_rankings.gamemode.rounds]
+enabled = true
+display_type = "scores"
+format = "{score} ({remaining})"
+pos_x = 49.2
+pos_y = -10.7
+entries = 8
+topcount = 3
+
+[plugin_records_eyepiece.live_rankings.gamemode.time_attack]
+enabled = false
+pos_x = 33.5
+pos_y = 48
+entries = 5
+topcount = 0
+
+[plugin_records_eyepiece.live_rankings.gamemode.team]
+enabled = true
+pos_x = 49.2
+pos_y = -21.5
+entries = 2
+topcount = 2
+
+[plugin_records_eyepiece.live_rankings.gamemode.laps]
+enabled = true
+display_type = "checkpoints"
+pos_x = 49.2
+pos_y = -10.4
+entries = 8
+topcount = 3
+
+[plugin_records_eyepiece.live_rankings.gamemode.stunts]
+enabled = true
+pos_x = 49.2
+pos_y = -14.8
+entries = 6
+topcount = 3
+
+[plugin_records_eyepiece.live_rankings.gamemode.cup]
+enabled = true
+pos_x = 49.2
+pos_y = -14.3
+entries = 7
+topcount = 3
+
+[plugin_records_eyepiece.round_score]
+title = "Round Score"
+width = 15.5
+
+[plugin_records_eyepiece.round_score.race]
+icon_style = "Icons64x64_1"
+icon_substyle = "RestartRace"
+
+[plugin_records_eyepiece.round_score.warmup]
+icon_style = "BgRaceScore2"
+icon_substyle = "Warmup"
+
+[plugin_records_eyepiece.round_score.gamemode]
+
+[plugin_records_eyepiece.round_score.gamemode.rounds]
+enabled = true
+
+[plugin_records_eyepiece.round_score.gamemode.rounds.race]
+pos_x = 49.2
+pos_y = 17.8
+entries = 14
+topcount = 3
+
+[plugin_records_eyepiece.round_score.gamemode.rounds.warmup]
+pos_x = 49.2
+pos_y = 10.7
+entries = 10
+topcount = 3
+
+[plugin_records_eyepiece.round_score.gamemode.time_attack]
+enabled = false
+
+[plugin_records_eyepiece.round_score.gamemode.team]
+enabled = true
+
+[plugin_records_eyepiece.round_score.gamemode.team.race]
+pos_x = 49.2
+pos_y = 17.8
+entries = 20
+topcount = 3
+
+[plugin_records_eyepiece.round_score.gamemode.team.warmup]
+pos_x = 49.2
+pos_y = 10.7
+entries = 16
+topcount = 3
+
+[plugin_records_eyepiece.round_score.gamemode.laps]
+enabled = true
+
+[plugin_records_eyepiece.round_score.gamemode.laps.race]
+pos_x = 49.2
+pos_y = 16.6
+entries = 13
+topcount = 3
+
+[plugin_records_eyepiece.round_score.gamemode.laps.warmup]
+pos_x = 49.2
+pos_y = 11
+entries = 10
+topcount = 3
+
+[plugin_records_eyepiece.round_score.gamemode.stunts]
+enabled = false
+
+[plugin_records_eyepiece.round_score.gamemode.cup]
+enabled = true
+
+[plugin_records_eyepiece.round_score.gamemode.cup.race]
+pos_x = 49.2
+pos_y = 17.8
+entries = 16
+topcount = 3
+
+[plugin_records_eyepiece.round_score.gamemode.cup.warmup]
+pos_x = 49.2
+pos_y = 10.7
+entries = 12
+topcount = 3
+
+[plugin_records_eyepiece.join_leave_info]
+enabled = true
+messages_in_window = false
+add_rights = true
+join_message = "{#server}>> {#message}{title}: {#highlite}{nickname}$Z$S{#message} Zone: {#highlite}{zone}{#message} Visits: {#highlite}{visits}{#message} Ladder: {#highlite}{ladderrank}{#message} Rank: {#highlite}{serverrank}{#message}"
+leave_message = "{#server}>> {#highlite}{nickname}$Z$S{#message} from {#highlite}{nation}{#message} has left the game after {#highlite}{playtime}{#message} playtime."
+
+[plugin_records_eyepiece.winning_payout]
+enabled = false
+minimum_server_coppers = 250
+
+[plugin_records_eyepiece.winning_payout.players]
+minimum_amount = 8
+rank_limit = 10000
+maximum_coppers = 60
+reset_limit = 86400
+
+[plugin_records_eyepiece.winning_payout.pay_coppers]
+first = 20
+second = 15
+third = 10
+
+[plugin_records_eyepiece.winning_payout.ignore]
+operator = false
+admin = false
+masteradmin = false
+
+[plugin_records_eyepiece.winning_payout.widget]
+title = "Finish Winners"
+pos_x = 37.8
+pos_y = -30.7
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+title_style = "BgsPlayerCard"
+title_substyle = "ProgressBar"
+icon_style = "BgRaceScore2"
+icon_substyle = "Fame"
+
+[plugin_records_eyepiece.winning_payout.colors]
+won = "5F0F"
+coppers = "FF9F"
+rank_limit = "F00F"
+disconnected = "F00F"
+no_tmu = "FF0F"
+
+[plugin_records_eyepiece.donation_widget]
+enabled = false
+text_color = "FC0F"
+amounts = "20,50,100,200,500,1000,1500,2000,2500,5000"
+public_appreciation_threshold = 50
+
+[plugin_records_eyepiece.donation_widget.widget]
+pos_x = -47.9
+pos_y = 18.2
+icon_style = "Icons128x128_1"
+icon_substyle = "Coppers"
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+button_style = "Bgs1InRace"
+button_substyle = "BgIconBorder"
+button_color = "000F"
+
+[plugin_records_eyepiece.ladderlimit_widget]
+enabled = false
+text_color = "FC0F"
+roc_server = true
+pos_x = -63.85
+pos_y = 39.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.gamemode_widget]
+enabled = false
+text_color = "FC0F"
+pos_x = -59.05
+pos_y = 39.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.player_spectator_widget]
+enabled = true
+text_color = "FC0F"
+pos_x = -54.5
+pos_y = 41.1
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.current_ranking_widget]
+enabled = false
+text_color = "FC0F"
+pos_x = -49.45
+pos_y = 39.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.tmexchange_widget]
+enabled = false
+text_color = "FC0F"
+pos_x = 25.1
+pos_y = 39.3
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.toplist_widget]
+enabled = false
+text_color = "FC0F"
+pos_x = 29.9
+pos_y = 39.3
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.trackcount_widget]
+enabled = true
+text_color = "FC0F"
+pos_x = -59.2
+pos_y = 47.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.visitors_widget]
+enabled = true
+text_color = "FC0F"
+pos_x = -63.9
+pos_y = 47.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.clock_widget]
+enabled = true
+timeformat = "H:i"
+default_timezone = "Europe/Berlin"
+text_color = "FC0F"
+
+[plugin_records_eyepiece.clock_widget.race]
+pos_x = -54.5
+pos_y = 47.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.clock_widget.score]
+pos_x = 41.05
+pos_y = 33.2
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[plugin_records_eyepiece.favorite_widget]
+enabled = false
+text_color = "FC0F"
+
+[plugin_records_eyepiece.favorite_widget.race]
+pos_x = 44.3
+pos_y = 39.3
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[plugin_records_eyepiece.favorite_widget.score]
+pos_x = -47.9
+pos_y = 33.2
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[plugin_records_eyepiece.next_environment_widget]
+enabled = true
+text_color = "FC0F"
+pos_x = 49.1
+pos_y = -40.9
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[plugin_records_eyepiece.next_gamemode_widget]
+enabled = true
+text_color = "FC0F"
+pos_x = 53.9
+pos_y = -40.9
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[plugin_records_eyepiece.eyepiece_widget]
+text_color = "FC0F"
+
+[plugin_records_eyepiece.eyepiece_widget.race]
+enabled = false
+pos_x = -62
+pos_y = 47
+
+[plugin_records_eyepiece.eyepiece_widget.score]
+enabled = true
+pos_x = 58.7
+pos_y = -40.9
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[plugin_records_eyepiece.scoretable_lists]
+
+[plugin_records_eyepiece.scoretable_lists.top_average_times]
+enabled = true
+title = "Average Last Round"
+pos_x = -63.5
+pos_y = 29.5
+entries = 9
+icon_style = "BgRaceScore2"
+icon_substyle = "ScoreLink"
+
+[plugin_records_eyepiece.scoretable_lists.dedimania_records]
+enabled = true
+title = "Dedimania Records"
+pos_x = -63.5
+pos_y = -8
+entries = 8
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.scoretable_lists.ultimania_records]
+enabled = false
+title = "Ultimania Records"
+pos_x = -63.5
+pos_y = -8
+entries = 8
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.scoretable_lists.local_records]
+enabled = true
+title = "Local Records"
+pos_x = -63.5
+pos_y = 9.85
+entries = 8
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.scoretable_lists.top_rankings]
+enabled = true
+title = "Top Ranks"
+pos_x = -63.5
+pos_y = 47.5
+entries = 6
+icon_style = "BgRaceScore2"
+icon_substyle = "Podium"
+
+[plugin_records_eyepiece.scoretable_lists.top_winners]
+enabled = true
+title = "Top Winners"
+pos_x = -47.9
+pos_y = 47.5
+entries = 6
+icon_style = "Icons128x32_1"
+icon_substyle = "RT_Cup"
+
+[plugin_records_eyepiece.scoretable_lists.most_records]
+enabled = true
+title = "Most Records"
+pos_x = -32.3
+pos_y = 47.5
+entries = 6
+icon_style = "Icons64x64_1"
+icon_substyle = "RestartRace"
+
+[plugin_records_eyepiece.scoretable_lists.most_finished]
+enabled = true
+title = "Most Finished"
+pos_x = -16.7
+pos_y = 47.5
+entries = 6
+icon_style = "Icons128x128_1"
+icon_substyle = "Race"
+
+[plugin_records_eyepiece.scoretable_lists.top_playtime]
+enabled = true
+title = "Hours Played"
+pos_x = -1.1
+pos_y = 47.5
+entries = 6
+icon_style = "Icons128x32_1"
+icon_substyle = "RT_TimeAttack"
+
+[plugin_records_eyepiece.scoretable_lists.top_donators]
+enabled = true
+title = "Top Donators"
+pos_x = 14.5
+pos_y = 47.5
+entries = 6
+icon_style = "Icons128x128_1"
+icon_substyle = "Coppers"
+
+[plugin_records_eyepiece.scoretable_lists.top_nations]
+enabled = true
+title = "Top Nations"
+pos_x = 30.1
+pos_y = 47.5
+entries = 6
+icon_style = "Icons64x64_1"
+icon_substyle = "ToolLeague1"
+
+[plugin_records_eyepiece.scoretable_lists.top_tracks]
+enabled = true
+title = "Top Tracks"
+pos_x = 47.8
+pos_y = 17.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "NewTrack"
+
+[plugin_records_eyepiece.scoretable_lists.top_voters]
+enabled = true
+title = "Top Voters"
+pos_x = 47.8
+pos_y = 1.5
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Invite"
+
+[plugin_records_eyepiece.scoretable_lists.top_visitors]
+enabled = true
+title = "Top Visitors"
+pos_x = 47.8
+pos_y = -14.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.scoretable_lists.top_active_players]
+enabled = false
+title = "Top Active Players"
+pos_x = 47.8
+pos_y = -14.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.scoretable_lists.top_winning_payouts]
+enabled = false
+title = "Top Finish Winners"
+pos_x = 47.8
+pos_y = -14.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Coppers"
+
+[plugin_records_eyepiece.scoretable_lists.top_betwins]
+enabled = false
+title = "Top Betwins"
+display = "average"
+pos_x = 47.8
+pos_y = -14.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Coppers"
+
+[plugin_records_eyepiece.scoretable_lists.top_roundscore]
+enabled = false
+title = "Top Roundscore"
+pos_x = 47.8
+pos_y = -14.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[plugin_records_eyepiece.placement_widget]
+enabled = true
+
+[plugin_records_eyepiece.nicemode]
+enabled = true
+force = false
+refresh_interval = 10
+
+[plugin_records_eyepiece.nicemode.limits]
+lower_limit = 24
+upper_limit = 25
+
+[plugin_records_eyepiece.nicemode.colors]
+top = "FF0F"
+worse = "19FF"
+
+[plugin_records_eyepiece.nicemode.allow]
+dedimania_records = true
+ultimania_records = false
+local_records = true
+live_rankings = true
+
+[plugin_records_eyepiece.messages]
+widgets_disabled = "{#server}>> Your record widgets are now hidden, press F7 to reactivate them."
+widgets_enabled = "{#server}>> Your record widgets are now shown, press F7 to hide them."
+widgets_preference_disabled = "{#server}>> Your record widgets are now permanent hidden and your preference was saved, type {#highlite}/eyepiece show{#server} to reactivate them."
+widgets_preference_enabled = "{#server}>> Your record widgets are now permanent shown and your preference was saved, type {#highlite}/eyepiece hide{#server} to hide them."
+toggling_disabled = "{#server}>> Sorry, you can not toggle the record widgets at the moment. There are too many players on the server, so they are in static mode now."
+disallow_windows_at_score = "{#server}>> Could not display this window at score! Please try again when the race is started."
+winning_mail_body = "{#karma}You won several races and won {#highlite}{1} Coppers{#karma}!{br}$L[tmtp://#addfavourite={2}]Please add {3}{#karma} to favorites!$L"
+
+[plugin_records_eyepiece.images]
+widget_open_left = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/edge-open-ld-dark.png"
+widget_close_left = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/edge-close-lu-dark.png"
+widget_open_right = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/edge-open-rd-dark.png"
+widget_open_small = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/edge-open-ld-light.png"
+widget_plus_normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-plus-normal.png"
+widget_plus_focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-plus-focus.png"
+widget_minus_normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-minus-normal.png"
+widget_minus_focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-minus-focus.png"
+widget_ok_normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-ok-normal.png"
+widget_ok_focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-ok-focus.png"
+tmx_logo_normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/logo-tmx-normal.png"
+tmx_logo_focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/logo-tmx-focus.png"
+worldmap = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/worldmap-pure.png"
+no_screenshot = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/no-screenshot-tmf.jpg"
+progress_indicator = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/progress_bar_yellow_2D.bik"
+
+[plugin_records_eyepiece.images.environment]
+
+[plugin_records_eyepiece.images.environment.enabled]
+icon_bay = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-bay-enabled.png"
+icon_coast = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-coast-enabled.png"
+icon_desert = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-desert-enabled.png"
+icon_island = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-island-enabled.png"
+icon_rally = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-rally-enabled.png"
+icon_snow = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-enabled.png"
+icon_stadium = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-stadium-enabled.png"
+
+[plugin_records_eyepiece.images.environment.focus]
+icon_bay = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-bay-focus.png"
+icon_coast = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-coast-focus.png"
+icon_desert = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-desert-focus.png"
+icon_island = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-island-focus.png"
+icon_rally = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-rally-focus.png"
+icon_snow = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-focus.png"
+icon_stadium = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-stadium-focus.png"
+
+[plugin_records_eyepiece.images.environment.disabled]
+icon_bay = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-bay-disabled.png"
+icon_coast = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-coast-disabled.png"
+icon_desert = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-desert-disabled.png"
+icon_island = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-island-disabled.png"
+icon_rally = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-rally-disabled.png"
+icon_snow = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-disabled.png"
+icon_stadium = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-stadium-disabled.png"
+
+[plugin_records_eyepiece.images.mood]
+
+[plugin_records_eyepiece.images.mood.enabled]
+sunrise = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunrise-normal.png"
+day = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-day-normal.png"
+sunset = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunset-normal.png"
+night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-normal.png"
+
+[plugin_records_eyepiece.images.mood.focus]
+sunrise = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunrise-focus.png"
+day = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-day-focus.png"
+sunset = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunset-focus.png"
+night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-focus.png"
+
+[plugin_records_eyepiece.images.mood.disabled]
+sunrise = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunrise-disabled.png"
+day = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-day-disabled.png"
+sunset = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunset-disabled.png"
+night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-disabled.png"
+
+[plugin_rasp]
+feature_ranks = true
+feature_stats = true
+always_show_pb = false
+nextrank_show_rp = true
+prune_records_times = false
+reset_cache_start = true
+maxrecs = 500
+minrank = 3
+maxavg = 10
+feature_votes = true
+vote_in_window = false
+allow_spec_startvote = false
+allow_spec_voting = false
+disable_upon_admin = false
+disable_while_sb = false
+allow_kickvotes = false
+allow_admin_kick = false
+allow_ignorevotes = false
+allow_admin_ignore = false
+ladder_fast_restart = false
+auto_vote_starter = false
+max_laddervotes = 1
+max_replayvotes = 1
+max_skipvotes = 1
+replays_limit = 0
+vote_ratios = [0.5, 0.5, 0.5, 0.5, 0.6, 0.5, 0.5]
+r_expire_limit = [1, 3, 3, 3, 3, 3, 3]
+r_show_reminder = true
+r_points_limits = false
+ta_expire_limit = [120, 240, 240, 180, 180, 180, 180]
+ta_show_reminder = true
+ta_show_interval = 60
+ta_time_limits = false
+r_ladder_max = 0.5
+r_replay_min = 0.5
+r_skip_max = 0.8
+ta_ladder_max = 0.5
+ta_replay_min = 0.5
+ta_skip_max = 0.8
+global_explain = 1
+
+[jfreu_vips]
+vip_list = []
+vip_team_list = []
+
+[jfreu_bans]
+login = []
+time = []

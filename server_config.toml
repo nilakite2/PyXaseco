@@ -1,0 +1,17 @@
+[controller]
+name = "PyXaseco_v1.2"
+phase = 1
+mode = "compatibility-first"
+
+[ownership]
+join_leave_messages = "feature_jfreu"
+visits = "core_localdb"
+tmx_resolution = "service_tmx"
+local_records = "feature_rasp"
+dedimania_records = "service_dedimania"
+public_status_heartbeat = "bridge_public_stats"
+
+[notes]
+item_1 = "phase 1 keeps compatibility redirects in the plugin loader"
+item_2 = "legacy plugin names are preserved internally through loader aliases"
+item_3 = "package/subfolder loader work is now active for the MVP loadout"

@@ -336,7 +336,7 @@ class Aseco:
     # Startup
     # ------------------------------------------------------------------
 
-    async def run(self, config_file: str = 'config.xml'):
+    async def run(self, config_file: str = 'config.toml'):
         """Main entry point. Loads config, connects, runs event loop."""
         print('# initialize PyXaseco ' + '=' * 60)
         logger.info('PyXaseco %s starting', PYXASECO_VERSION)
@@ -344,7 +344,7 @@ class Aseco:
         # Resolve the config file path; if relative, make it absolute
         # relative to the current working directory (where the user runs from).
         config_path = Path(config_file).resolve()
-        # All other config-relative files live in the same directory as config.xml
+        # All other config-relative files live in the same directory as config.toml
         self._base_dir = config_path.parent
 
         # Load config
@@ -377,9 +377,9 @@ class Aseco:
         load_bannedips(bannedips_path, self.settings)
 
         # Load plugins
-        plugins_xml = self._base_dir / 'plugins.xml'
-        self.console_text('[PyXaseco] Loading plugins list [{1}]', str(plugins_xml))
-        plugin_files = load_plugins_list(plugins_xml)
+        plugins_toml = self._base_dir / 'plugins.toml'
+        self.console_text('[PyXaseco] Loading plugins list [{1}]', str(plugins_toml))
+        plugin_files = load_plugins_list(plugins_toml)
         plugins_dir  = self._base_dir / 'plugins'
         self._plugin_loader = PluginLoader(plugins_dir)
         self._plugin_loader.load_all(plugin_files, self)

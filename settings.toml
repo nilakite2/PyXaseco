@@ -1,0 +1,67 @@
+[server]
+welcome_msg_window = false
+lock_password = ""
+log_all_chat = true
+extra_chatlog_file = true
+chatpmlog_times = true
+cheater_action = 0
+script_timeout = 60
+show_min_recs = 8
+show_recs_before = 2
+show_recs_after = 2
+show_recs_range = true
+show_tmxrec = 1
+show_playtime = 1
+show_curtrack = 0
+default_tracklist = "MatchSettings.txt"
+writetracklist_random = true
+help_explanation = false
+lists_colornicks = true
+lists_colortracks = true
+topclans_minplayers = 2
+global_win_multiple = 50
+display_checkpoints = true
+enable_cpsspec = false
+auto_enable_cps = true
+auto_enable_dedicps = false
+auto_admin_addip = true
+adminops_file = "adminops.toml"
+bannedips_file = "bannedips.toml"
+blacklist_file = "blacklist.txt"
+guestlist_file = "guestlist.txt"
+trackhist_file = "trackhist.txt"
+admin_client_version = ""
+player_client_version = ""
+default_rpoints = "f1new"
+afk_force_spec = true
+clickable_lists = true
+show_rec_logins = true
+recs_in_window = false
+rounds_in_window = false
+window_timeout = 6
+sb_stats_panels = false
+window_style = "DarkBlur"
+admin_panel = "AdminBelowChat"
+donate_panel = "DonateBelowCPList"
+records_panel = "RecordsRightBottom"
+vote_panel = "VoteBelowChat"
+
+[localdatabase]
+display = true
+limit = 50
+
+[dedimania]
+welcome = "{#welcome}Welcome to the Dedimania world record system at www.dedimania.com - see {#highlite}/helpdedi"
+timeout_msg = "{#dedimsg}Dedimania system timed out - retrying in {#highlite}{1}{#dedimsg} minutes"
+name = "Dedimania"
+url = "http://dedimania.net:8002/Dedimania"
+log_news = true
+show_welcome = false
+show_min_recs = 8
+show_recs_before = 1
+show_recs_after = 1
+show_recs_range = true
+display_recs = true
+show_rec_logins = true
+recs_in_window = false
+limit_recs = 30

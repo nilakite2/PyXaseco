@@ -1,0 +1,6 @@
+phase = 1
+controller = "PyXaseco_v1.2"
+
+[loadout]
+enabled = ["core/localdb", "core/rounds", "core/track", "service/tmx", "service/dedimania", "service/trial_records", "service/records_rpg", "chat/admin", "bridge/server_admin_bridge", "chat/help", "chat/records", "chat/records2", "chat/recrels", "chat/dedimania", "chat/players", "chat/players2", "chat/wins", "chat/laston", "chat/lastwin", "chat/stats", "chat/server", "chat/songmod", "chat/me", "ui/style", "ui/panels", "feature/rasp", "feature/rasp_jukebox", "feature/rasp_chat", "feature/rasp_nextmap", "feature/rasp_nextrank", "feature/rasp_votes", "feature/jfreu", "feature/cplive", "ui/records_eyepiece", "ui/banner", "bridge/public_stats"]
+optional = ["bridge/discord", "plugin_chatlog", "plugin_checkpoints", "plugin_donate", "plugin_uptodate", "plugin_rpoints", "plugin_bestsecs", "plugin_bestcps", "plugin_tgj_allbutton", "plugin_best_checkpoint_times", "plugin_bestfinishes", "plugin_mania_karma", "plugin_freezone", "plugin_fufi_menu", "plugin_flexitime", "plugin_cpll", "plugin_ztrack", "plugin_tmxvideo", "plugin_winner_anthem"]

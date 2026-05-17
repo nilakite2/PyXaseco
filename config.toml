@@ -1,0 +1,13 @@
+[aseco]
+lock_password = ""
+
+[masteradmins]
+tmlogin = []
+ipaddress = []
+
+[tmserver]
+login = "SuperAdmin"
+password = "SuperAdmin"
+ip = "127.0.0.1"
+port = 5000
+timeout = 180

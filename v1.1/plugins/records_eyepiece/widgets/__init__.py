@@ -1,0 +1,1 @@
+"""Eyepiece widgets package."""

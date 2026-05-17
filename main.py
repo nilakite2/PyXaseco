@@ -3,9 +3,9 @@
 PyXaseco — Python port of Xaseco for TrackMania Forever.
 
 Usage:
-    python main.py [config.xml] [--debug]
+    python main.py [config.toml] [--debug]
 
-Run this from the folder that contains config.xml, plugins.xml, etc.
+Run this from the folder that contains config.toml, plugins.toml, etc.
 """
 
 import asyncio
@@ -32,8 +32,8 @@ def setup_logging(debug: bool):
 
 async def main():
     parser = argparse.ArgumentParser(description='PyXaseco - TMF server controller')
-    parser.add_argument('config', nargs='?', default='config.xml',
-                        help='Config file (default: config.xml)')
+    parser.add_argument('config', nargs='?', default='config.toml',
+                        help='Config file (default: config.toml)')
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug logging')
     args = parser.parse_args()
@@ -41,7 +41,7 @@ async def main():
     setup_logging(args.debug)
 
     # Resolve config to an absolute path so sibling files
-    # (plugins.xml, adminops.xml, plugins/ folder, etc.) are always
+    # (plugins.toml, adminops.toml, plugins/ folder, etc.) are always
     # found correctly regardless of working directory.
     config_path = str(Path(args.config).resolve())
 
