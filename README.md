@@ -55,44 +55,18 @@ Current categories:
 - `ui/*`
 - `bridge/*`
 
-## Installation
-
-1. Create and activate a Python 3.12 environment.
-2. Install dependencies from `requirements.txt`.
-3. Copy or create:
-   - `config.toml`
-   - `plugins.toml`
-   - `settings.toml`
-   - `messages.toml`
-   - `plugin_defaults.toml`
-   - `adminops.toml`
-   - `bannedips.toml`
-   - `nations.toml`
-4. Provide secrets in `.env` when needed.
-5. Start the controller with `main.py`.
-
-### Windows example
-
-```bat
-py -3.12 -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-py -3.12 main.py config.toml
-```
-
-### Linux example
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python3.12 main.py config.toml
-```
+## Installation good old simple way
+1. Download the files "Code -> Download ZIP".
+2. Unpack inside of your root server folder where dedicated server is.
+3. Install Python dependencies.
+4. Review and update the XML config files (config.xml, localdatabase.xml, dedimania.xml, maniakarma.xml).
+5. Attach existing Xaseco DB or import the base database schema.
+6. Review config of "PyXaseco.bat" and start it.
 
 ### Debug mode
 
 ```bash
-python3.12 main.py config.toml --debug
+py -3.12 main.py config.toml --debug
 ```
 
 ## Notes
@@ -100,4 +74,3 @@ python3.12 main.py config.toml --debug
 - Active runtime config is TOML-first.
 - `.env` is intended for credentials and environment-specific secrets.
 - `plugin_defaults.toml` currently holds shared plugin-owned settings until later split-out work is done.
-- If you are looking for the migration notes rather than the public overview, use `00README.md` and `..\pyxaseco_v1.2.md`.
