@@ -1,5 +1,5 @@
-"""
-chat_admin.py — Port of plugins/chat.admin.php
+﻿"""
+chat_admin.py - Port of plugins/chat.admin.php
 
 Full admin command system: server settings, map control, player moderation,
 jukebox admin, access control, track management and more.
@@ -258,7 +258,7 @@ def register(aseco: 'Aseco'):
         ('shutdown',      'Shuts down XASECO', True),
         ('shutdownall',   'Shuts down Server & XASECO', True),
     ]
-        # Commands registered by other plugins — must not get admin aliases
+        # Commands registered by other plugins - must not get admin aliases
     aseco._admin_command_meta = [(name, help_text) for name, help_text, _flag in admin_cmds]
 
     _read_adminops_toml(aseco)
@@ -299,7 +299,7 @@ async def _display_admin_panel_if_available(aseco: 'Aseco', player):
         if not aseco.is_any_admin(player):
             return
 
-        from pyxaseco.plugins.plugin_panels import display_admpanel
+        from pyxaseco.plugins.ui.panels import display_admpanel
         await display_admpanel(aseco, player)
     except Exception:
         pass
@@ -855,9 +855,9 @@ async def _get_offline_player_from_db(aseco: 'Aseco', value: str):
 
     try:
         try:
-            from pyxaseco.plugins.plugin_localdatabase import get_pool
+            from pyxaseco.plugins.core.localdb import get_pool
         except ImportError:
-            from pyxaseco_plugins.plugin_localdatabase import get_pool
+            from pyxaseco.plugins.core.localdb import get_pool
 
         pool = await get_pool()
         if not pool:
@@ -944,9 +944,9 @@ async def _admin_display_name(aseco: 'Aseco', login: str) -> str:
 
     try:
         try:
-            from pyxaseco.plugins.plugin_localdatabase import get_pool
+            from pyxaseco.plugins.core.localdb import get_pool
         except ImportError:
-            from pyxaseco_plugins.plugin_localdatabase import get_pool
+            from pyxaseco.plugins.core.localdb import get_pool
 
         pool = await get_pool()
         if not pool:
@@ -990,7 +990,7 @@ async def _find_track_uid_by_filename(aseco: 'Aseco', fname: str) -> str:
         pass
 
     try:
-        from pyxaseco.plugins.plugin_rasp_jukebox import _parse_gbx_metadata
+        from pyxaseco.plugins.feature.rasp_jukebox import _parse_gbx_metadata
         gbx_path = _resolve_track_path(aseco, fname)
         if gbx_path.exists():
             metadata = await asyncio.to_thread(_parse_gbx_metadata, gbx_path)
@@ -1014,7 +1014,7 @@ async def _remove_track_from_rotation(aseco: 'Aseco', fname: str, uid: str = '')
         return
 
     try:
-        from pyxaseco.plugins.plugin_rasp_jukebox import (
+        from pyxaseco.plugins.feature.rasp_jukebox import (
             _matchsettings_path, _remove_matchsettings_entry_by_uid
         )
         await asyncio.to_thread(
@@ -1032,7 +1032,7 @@ async def _erase_track_from_localdb(aseco: 'Aseco', uid: str):
         return
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return
@@ -1450,7 +1450,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
         jb_selected = False
     
         try:
-            from pyxaseco.plugins.plugin_rasp_jukebox import force_jukebox_next, jukebox
+            from pyxaseco.plugins.feature.rasp_jukebox import force_jukebox_next, jukebox
     
             if jukebox:
                 _uid, skipped_jb = next(iter(jukebox.items()))
@@ -1478,7 +1478,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub in ('previous', 'prev'):
         try:
-            from pyxaseco.plugins.plugin_rasp_jukebox import jb_buffer
+            from pyxaseco.plugins.feature.rasp_jukebox import jb_buffer
 
             if not isinstance(jb_buffer, list) or len(jb_buffer) < 2:
                 await _reply(
@@ -1577,7 +1577,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub in ('dropjukebox', 'djb'):
         try:
-            from pyxaseco.plugins.plugin_rasp_jukebox import jukebox
+            from pyxaseco.plugins.feature.rasp_jukebox import jukebox
             if not jukebox:
                 await _reply(aseco, login, '{#server}> {#error}Jukebox is empty!')
                 return
@@ -1604,7 +1604,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub in ('clearjukebox', 'cjb'):
         try:
-            from pyxaseco.plugins.plugin_rasp_jukebox import jukebox
+            from pyxaseco.plugins.feature.rasp_jukebox import jukebox
             jukebox.clear()
             await _broadcast(aseco, _fmt_admin(aseco, admin, chattitle,
                                                'clears the entire jukebox!'))
@@ -1613,7 +1613,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub == 'clearhist':
         try:
-            from pyxaseco.plugins.plugin_rasp_jukebox import jb_buffer
+            from pyxaseco.plugins.feature.rasp_jukebox import jb_buffer
 
             buf = jb_buffer
             if not isinstance(buf, list):
@@ -1677,8 +1677,8 @@ async def chat_admin(aseco: 'Aseco', command: dict):
     elif sub == 'pass':
         # Force-pass any ongoing vote
         try:
-            from pyxaseco.plugins.plugin_rasp_votes import chatvote, tmxadd
-            from pyxaseco.plugins.plugin_rasp_jukebox import chat_y
+            from pyxaseco.plugins.feature.rasp_votes import chatvote, tmxadd
+            from pyxaseco.plugins.feature.rasp_jukebox import chat_y
             if chatvote or tmxadd:
                 # Set votes to 0 so next /y passes
                 if chatvote:
@@ -1694,7 +1694,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub in ('cancel', 'can'):
         try:
-            from pyxaseco.plugins.plugin_rasp_votes import chatvote, tmxadd
+            from pyxaseco.plugins.feature.rasp_votes import chatvote, tmxadd
             if chatvote:
                 aseco.console('{1} [{2}] cancelled vote', logtitle, login)
                 msg = format_text('{#server}>> {#error}Vote cancelled by admin.')
@@ -2747,7 +2747,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
         for trkid in track_ids:
             try:
-                from pyxaseco.plugins.plugin_rasp_jukebox import (
+                from pyxaseco.plugins.feature.rasp_jukebox import (
                     admin_add_tmx_track, jukebox as _jb
                 )
                 ok, info = await admin_add_tmx_track(
@@ -2781,7 +2781,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
     elif sub == 'addthis':
         try:
             # If the current track came from a temporary TMX add, move it to the permanent list.
-            from pyxaseco.plugins.plugin_rasp_jukebox import tmxplayed
+            from pyxaseco.plugins.feature.rasp_jukebox import tmxplayed
         except Exception:
             tmxplayed = None
 
@@ -2795,7 +2795,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 return
 
             try:
-                from pyxaseco.plugins.plugin_rasp_jukebox import (
+                from pyxaseco.plugins.feature.rasp_jukebox import (
                     _matchsettings_path, _ensure_matchsettings_entry
                 )
             except Exception:
@@ -2814,7 +2814,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 )
 
             try:
-                import pyxaseco.plugins.plugin_rasp_jukebox as rasp_jukebox_mod
+                import pyxaseco.plugins.feature.rasp_jukebox as rasp_jukebox_mod
                 rasp_jukebox_mod.tmxplayed = False
             except Exception:
                 pass
@@ -2845,7 +2845,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 await aseco.release_event('onTracklistChanged', ['add', rel_insert])
     
                 try:
-                    from pyxaseco.plugins.plugin_rasp_jukebox import (
+                    from pyxaseco.plugins.feature.rasp_jukebox import (
                         _parse_gbx_metadata, _matchsettings_path, _ensure_matchsettings_entry
                     )
     
@@ -2866,7 +2866,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                         )
     
                         # Sync LocalDB
-                        from pyxaseco.plugins.plugin_localdatabase import get_pool
+                        from pyxaseco.plugins.core.localdb import get_pool
                         pool = await get_pool()
                         if pool:
                             async with pool.acquire() as conn:
@@ -2968,7 +2968,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
     
         await _delegate_if_exists(
             aseco, login,
-            'pyxaseco.plugins.plugin_panels.admin_panel',
+            'pyxaseco.plugins.ui.panels.admin_panel',
             aseco, panel_command,
             unavailable_msg='{#server}> {#admin}Panel command unavailable - include plugin_panels.py'
         )
@@ -2976,7 +2976,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
     elif sub in ('style', 'admpanel', 'donpanel', 'recpanel', 'votepanel'):
         await _delegate_if_exists(
             aseco, login,
-            'pyxaseco.plugins.plugin_panels.chat_panel_pref',
+            'pyxaseco.plugins.ui.panels.chat_panel_pref',
             aseco, command,
             unavailable_msg='{#server}> {#admin}Panel preferences unavailable - include plugin_panels.py'
         )
@@ -3041,9 +3041,9 @@ async def chat_admin(aseco: 'Aseco', command: dict):
     elif sub in ('delrec', 'prunerecs'):
         await _delegate_if_exists(
             aseco, login,
-            'pyxaseco.plugins.plugin_records_eyepiece.chat_admin_records',
+            'pyxaseco.plugins.ui.records_eyepiece.plugin.chat_admin_records',
             aseco, command,
-            unavailable_msg='{#server}> {#admin}Record admin commands unavailable - include plugin_records_eyepiece.py'
+            unavailable_msg='{#server}> {#admin}Record admin commands unavailable - include ui/records_eyepiece/plugin'
         )
 
     elif sub == 'forcespec':
@@ -3088,9 +3088,9 @@ async def chat_admin(aseco: 'Aseco', command: dict):
     elif sub in ('coppers', 'pay'):
         await _delegate_if_exists(
             aseco, login,
-            'pyxaseco.plugins.plugin_donate.chat_admin_donate',
+            'pyxaseco.plugins.core.donate.chat_admin_donate',
             aseco, command,
-            unavailable_msg='{#server}> {#admin}Coppers functions unavailable - include plugin_donate.py'
+            unavailable_msg='{#server}> {#admin}Coppers functions unavailable - include core/donate'
         )
 
     elif sub == 'relays':
@@ -3218,7 +3218,7 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 )
 
     elif sub == 'uptodate':
-        from pyxaseco.plugins.plugin_uptodate import admin_uptodate
+        from pyxaseco.plugins.core.uptodate import admin_uptodate
         await admin_uptodate(aseco, command)
 
     elif sub == 'debug':
@@ -3532,3 +3532,4 @@ async def _event_admin(aseco: 'Aseco', answer: list):
 
     except Exception as e:
         logger.warning('[Admin] event_admin failed: %s', e)
+

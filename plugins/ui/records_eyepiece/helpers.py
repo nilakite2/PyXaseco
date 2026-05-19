@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 from typing import Any
@@ -6,26 +6,15 @@ from typing import Any
 from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 
-try:
-    from pyxaseco.plugins.plugin_tmxinfo import (
-        get_tmx_image_for_uid as _plugin_get_tmx_image_for_uid,
-        get_tmx_section as _plugin_get_tmx_section,
-        get_tmx_trackinfo_for_uid as _plugin_get_tmx_trackinfo_for_uid,
-        resolve_tmx_track_id as _plugin_resolve_tmx_track_id,
-        tmx_prefix_for_section as _plugin_tmx_prefix_for_section,
-        tmx_public_host_for_prefix as _plugin_tmx_public_host_for_prefix,
-        tmx_site_for_prefix as _plugin_tmx_site_for_prefix,
-    )
-except Exception:
-    from pyxaseco.plugins.service_tmx import (
-        get_tmx_image_for_uid as _plugin_get_tmx_image_for_uid,
-        get_tmx_section as _plugin_get_tmx_section,
-        get_tmx_trackinfo_for_uid as _plugin_get_tmx_trackinfo_for_uid,
-        resolve_tmx_track_id as _plugin_resolve_tmx_track_id,
-        tmx_prefix_for_section as _plugin_tmx_prefix_for_section,
-        tmx_public_host_for_prefix as _plugin_tmx_public_host_for_prefix,
-        tmx_site_for_prefix as _plugin_tmx_site_for_prefix,
-    )
+from pyxaseco.plugins.service.tmx import (
+    get_tmx_image_for_uid as _plugin_get_tmx_image_for_uid,
+    get_tmx_section as _plugin_get_tmx_section,
+    get_tmx_trackinfo_for_uid as _plugin_get_tmx_trackinfo_for_uid,
+    resolve_tmx_track_id as _plugin_resolve_tmx_track_id,
+    tmx_prefix_for_section as _plugin_tmx_prefix_for_section,
+    tmx_public_host_for_prefix as _plugin_tmx_public_host_for_prefix,
+    tmx_site_for_prefix as _plugin_tmx_site_for_prefix,
+)
 
 from .config import _state
 
@@ -271,3 +260,5 @@ async def _enrich_tracks_with_tmx(aseco, tracks: list[dict[str, Any]], mode: int
     for track in seq:
         await _enrich_track_with_tmx(aseco, track, mode, need_mood=need_mood, need_times=need_times, need_env=need_env)
     return tracks
+
+

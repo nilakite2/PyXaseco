@@ -7,8 +7,7 @@ Active runtime config now comes from TOML files:
   - adminops.toml
   - bannedips.toml
 
-The legacy XML parser remains available only for deferred second-pass areas
-such as styles/ and panels/.
+The legacy XML parser remains available only for deferred or disabled assets.
 """
 
 from __future__ import annotations
@@ -57,7 +56,7 @@ def load_toml_file(path: str | Path) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Generic XML parser retained for deferred panels/styles migration
+# Generic XML parser retained for deferred/disabled legacy assets
 # ---------------------------------------------------------------------------
 
 def parse_xml_file(path: str | Path) -> dict:

@@ -531,7 +531,7 @@ async def ldb_player_finish(aseco: 'Aseco', params: list):
             # Try to attach checkpoint data from plugin_checkpoints now,
             # so both in-memory records and DB rows get real CP times.
             try:
-                from pyxaseco.plugins.plugin_checkpoints import checkpoints
+                from pyxaseco.plugins.core.checkpoints import checkpoints
                 cp = checkpoints.get(login)
                 if cp and getattr(cp, 'curr_cps', None):
                     new_rec.checks = [int(x) for x in cp.curr_cps]

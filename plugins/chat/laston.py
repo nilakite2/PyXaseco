@@ -1,7 +1,7 @@
-"""
-chat_laston.py — Port of plugins/chat.laston.php
+﻿"""
+chat_laston.py - Port of plugins/chat.laston.php
 
-/laston [login] — Shows when a player was last online.
+/laston [login] - Shows when a player was last online.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ async def chat_laston(aseco: 'Aseco', command: dict):
             target_nick  = None
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return
@@ -74,3 +74,4 @@ async def chat_laston(aseco: 'Aseco', command: dict):
            f'$z$s{{#server}} was last online on: {{#highlite}}{ts}')
     await aseco.client.query_ignore_result(
         'ChatSendServerMessageToLogin', aseco.format_colors(msg), login)
+

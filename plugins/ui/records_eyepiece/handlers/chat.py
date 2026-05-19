@@ -66,17 +66,14 @@ async def chat_togglewidgets(aseco: 'Aseco', command: dict):
 
         # Restore ManiaKarma only for this player.
         try:
-            mania_karma = (
-                sys.modules.get('pyxaseco_plugins.plugin_mania_karma')
-                or sys.modules.get('pyxaseco.plugins.plugin_mania_karma')
-            )
+            mania_karma = sys.modules.get('pyxaseco.plugins.feature.mania_karma')
             if mania_karma is None:
                 try:
-                    import pyxaseco_plugins.plugin_mania_karma as mania_karma  # type: ignore
+                    import pyxaseco.plugins.feature.mania_karma as mania_karma  # type: ignore
                 except Exception:
-                    import pyxaseco.plugins.plugin_mania_karma as mania_karma  # type: ignore
+                    mania_karma = None
 
-            if mania_karma._cfg.gm_cfg(mania_karma._cfg.current_state).enabled:
+            if mania_karma and mania_karma._cfg.gm_cfg(mania_karma._cfg.current_state).enabled:
                 widgets = ['skeleton_score', 'cups_values'] if mania_karma._cfg.current_state == 7 else ['skeleton_race', 'cups_values']
                 await mania_karma._send_widget_combination(aseco, widgets, player)
                 await mania_karma._send_widget_combination(aseco, ['player_marker'], player)
@@ -109,7 +106,7 @@ async def chat_eyepiece(aseco: 'Aseco', command: dict):
         return 'enabled' if cfg.enabled else 'disabled'
 
     rows = [
-        ['Core port',      '{#black}Eyepiece 1.1-Stable'],
+        ['Core port',      '{#black}Eyepiece 1.2-DEV'],
         ['Mode',           '{#black}' + _mode_name(mode)],
         ['Challenge',      '{#black}' + ('enabled' if _state.challenge.enabled else 'disabled')],
         ['Local records',  '{#black}' + ena(_state.local)],
@@ -126,7 +123,7 @@ async def chat_eyepiece(aseco: 'Aseco', command: dict):
     display_manialink(
         aseco,
         login,
-        'Records-Eyepiece 1.1-Stable',
+        'Records-Eyepiece 1.2-DEV',
         ['Icons64x64_1', 'TrackInfo', -0.01],
         rows,
         [1.15, 0.32, 0.83],

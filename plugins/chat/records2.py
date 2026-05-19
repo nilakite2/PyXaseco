@@ -1,9 +1,9 @@
-"""
-chat_records2.py — Port of plugins/chat.records2.php
+﻿"""
+chat_records2.py - Port of plugins/chat.records2.php
 
 Provides:
-  show_trackrecs() — universal ranking message (called by aseco core + /newrecs /liverecs)
-  get_recs()       — per-player ranked record list from DB (used by /best /worst /summary /stats)
+  show_trackrecs() - universal ranking message (called by aseco core + /newrecs /liverecs)
+  get_recs()       - per-player ranked record list from DB (used by /best /worst /summary /stats)
   /newrecs /liverecs /best /worst /summary /topsums /toprecs
 """
 
@@ -143,7 +143,7 @@ async def event_beginrace_recs(aseco: 'Aseco', _challenge):
 
 
 # ---------------------------------------------------------------------------
-# get_recs — per-player ranked record list from DB
+# get_recs - per-player ranked record list from DB
 # ---------------------------------------------------------------------------
 
 async def get_recs(aseco: 'Aseco', player_id: int) -> dict:
@@ -151,7 +151,7 @@ async def get_recs(aseco: 'Aseco', player_id: int) -> dict:
     Return dict of {uid: rank} for all tracks where player_id has a record.
     """
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return {}
@@ -368,7 +368,7 @@ async def chat_summary(aseco: 'Aseco', command: dict):
 
     maxrecs = 0
     try:
-        from pyxaseco.plugins.plugin_rasp import maxrecs as _mr
+        from pyxaseco.plugins.feature.rasp import maxrecs as _mr
         maxrecs = _mr
     except ImportError:
         pass
@@ -427,7 +427,7 @@ async def chat_summary(aseco: 'Aseco', command: dict):
 
 
 # ---------------------------------------------------------------------------
-# /topsums — Top 100 of top-3 record holders
+# /topsums - Top 100 of top-3 record holders
 # ---------------------------------------------------------------------------
 
 async def chat_topsums(aseco: 'Aseco', command: dict):
@@ -439,7 +439,7 @@ async def chat_topsums(aseco: 'Aseco', command: dict):
         return
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return
@@ -505,7 +505,7 @@ async def chat_topsums(aseco: 'Aseco', command: dict):
 
 
 # ---------------------------------------------------------------------------
-# /toprecs — Top 100 ranked record holders
+# /toprecs - Top 100 ranked record holders
 # ---------------------------------------------------------------------------
 
 async def chat_toprecs(aseco: 'Aseco', command: dict):
@@ -517,10 +517,10 @@ async def chat_toprecs(aseco: 'Aseco', command: dict):
         return
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         maxrecs = 0
         try:
-            from pyxaseco.plugins.plugin_rasp import maxrecs as _mr
+            from pyxaseco.plugins.feature.rasp import maxrecs as _mr
             maxrecs = _mr
         except ImportError:
             pass
@@ -582,3 +582,4 @@ async def chat_toprecs(aseco: 'Aseco', command: dict):
 
     except Exception as e:
         logger.warning('chat_toprecs error: %s', e)
+

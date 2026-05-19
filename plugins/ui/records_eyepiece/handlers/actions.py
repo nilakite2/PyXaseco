@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
@@ -70,12 +70,12 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
     from ..toplists import _build_generic_toplist_window, _build_top_nations_window, _build_toplist_window, draw_all_score_columns, hide_all_score_columns
     from ..widgets.common import _send, _send_chat
 
-    # ── TracklistWindow: close ──────────────────────────────────────────────
+    # -- TracklistWindow: close ----------------------------------------------
     if action == ML_WINDOW:
         await _close_tracklist_window(aseco, login)
         return
 
-    # ── TracklistWindow: pagination prev (negative) ────────────────────────
+    # -- TracklistWindow: pagination prev (negative) ------------------------
     if -TL_PREV_BASE - 250 <= action < -TL_PREV_BASE + 1 and action < 0:
         page = abs(action) - TL_PREV_BASE - 1
         if getattr(player, '_tl_tracks', None) is not None:
@@ -88,7 +88,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             )
         return
 
-    # ── TracklistWindow: pagination next (positive) ────────────────────────
+    # -- TracklistWindow: pagination next (positive) ------------------------
     if TL_NEXT_BASE <= action <= TL_NEXT_BASE + 250:
         page = action - TL_NEXT_BASE
         if getattr(player, '_tl_tracks', None) is not None:
@@ -101,7 +101,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             )
         return
 
-    # ── TracklistWindow: jukebox a track (TL_JB_BASE + idx) ───────────────
+    # -- TracklistWindow: jukebox a track (TL_JB_BASE + idx) ---------------
     if TL_JB_BASE < action <= TL_JB_BASE + 5000:
         global_idx = action - TL_JB_BASE
         tracks = getattr(player, '_tl_tracks', [])
@@ -116,7 +116,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             } for t in tracks]
 
             try:
-                from pyxaseco.plugins.plugin_rasp_jukebox import chat_jukebox
+                from pyxaseco.plugins.feature.rasp_jukebox import chat_jukebox
                 await chat_jukebox(aseco, {'author': player, 'params': str(global_idx)})
             except Exception as e:
                 logger.debug('[Eyepiece] TL jukebox click: %s', e)
@@ -130,12 +130,12 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             )
         return
 
-    # ── TracklistWindow: drop from jukebox (negative, < -TL_DROP_BASE) ────
+    # -- TracklistWindow: drop from jukebox (negative, < -TL_DROP_BASE) ----
     if -(TL_DROP_BASE + 100) <= action < -TL_DROP_BASE:
         jb_pos = abs(action) - TL_DROP_BASE
 
         try:
-            from pyxaseco.plugins.chat_admin import chat_admin
+            from pyxaseco.plugins.chat.admin import chat_admin
             await chat_admin(aseco, {'author': player, 'params': f'dropjukebox {jb_pos}'})
         except Exception as e:
             logger.debug('[Eyepiece] TL dropjukebox: %s', e)
@@ -149,7 +149,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         )
         return
 
-    # ── /estat pagination: local records ───────────────────────────────────
+    # -- /estat pagination: local records -----------------------------------
     if -918149 <= action <= -918100:
         page = abs(action) - 918100
         xml = await _build_local_records_window(aseco, page)
@@ -182,7 +182,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             await _send(aseco, login, xml)
         return
 
-    # ── /estat pagination: dedi/trial/rpg records ─────────────────────────
+    # -- /estat pagination: dedi/trial/rpg records -------------------------
     if -918300 <= action <= -918200:
         from ..widgets.records_rpg import _is_rpg_track_active, _build_rpg_records_window
         from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
@@ -211,7 +211,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             await _send(aseco, login, xml)
         return
 
-    # ── ManialinkId-based actions (918xx) ──────────────────────────────────
+    # -- ManialinkId-based actions (918xx) ----------------------------------
 
     # 91802 = ML_TOGGLE (challenge widget click -> challenge window)
     if action == ML_TOGGLE:
@@ -268,7 +268,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
     # 91808 = Trigger /tmxinfo
     if action == 91808:
         try:
-            from pyxaseco.plugins.plugin_tmxinfo import chat_tmxinfo
+            from pyxaseco.plugins.service.tmx import chat_tmxinfo
             await chat_tmxinfo(aseco, {'author': player, 'params': ''})
         except Exception as e:
             logger.debug('[Eyepiece] TMX info click: %s', e)
@@ -629,6 +629,8 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             await _send_tracklist_author_filter(aseco, player, idx)
         return
 
-    # ── Default: togglewidgets ──────────────────────────────────────────────
+    # -- Default: togglewidgets ----------------------------------------------
     if action == ACTION_TOGGLE:
         await chat_togglewidgets(aseco, {'author': player, 'params': ''})
+
+

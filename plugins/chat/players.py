@@ -1,17 +1,14 @@
-"""
-chat_players.py — Port of plugins/chat.players.php
+﻿"""
+chat_players.py - Port of plugins/chat.players.php
 
-/players [filter] — Displays current list of nicks/logins with clickable /stats.
+/players [filter] - Displays current list of nicks/logins with clickable /stats.
 """
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import ML_ID_MAIN, strip_colors, display_manialink_multi
 
-try:
-    from pyxaseco.plugins.plugin_localdatabase import map_country
-except Exception:
-    from pyxaseco.plugins.core_localdb import map_country
+from pyxaseco.plugins.core.localdb import map_country
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -96,7 +93,7 @@ async def chat_players(aseco: 'Aseco', command: dict):
 
 
 async def event_players(aseco: 'Aseco', answer: list):
-    """Handle ManiaLink player list clicks (action 2001-2200) → open /stats."""
+    """Handle ManiaLink player list clicks (action 2001-2200) -> open /stats."""
     if len(answer) < 3:
         return
     action = int(answer[2])
@@ -112,5 +109,7 @@ async def event_players(aseco: 'Aseco', answer: list):
             xml = f'<manialink id="{ML_ID_MAIN}"></manialink>'
             await aseco.client.query_ignore_result(
                 'SendDisplayManialinkPageToLogin', login, xml, 0, False)
-            from pyxaseco.plugins.chat_stats import chat_stats
+            from pyxaseco.plugins.chat.stats import chat_stats
             await chat_stats(aseco, {'author': player, 'params': target_login})
+
+

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
@@ -117,7 +117,7 @@ async def _draw_cpdelta_player(aseco: 'Aseco', login: str):
         await _hide(aseco, login, ML_CPDELTA)
         return
 
-    # Spectators don't drive — hide the Local/Dedi time delta overlay.
+    # Spectators don't drive - hide the Local/Dedi time delta overlay.
     _player = aseco.server.players.get_player(login)
     if _is_player_currently_spectating(_player):
         await _hide(aseco, login, ML_CPDELTA)
@@ -273,7 +273,7 @@ def _find_local_cp_target(aseco: 'Aseco', login: str) -> tuple[str, list[int], i
 
 def _get_dedi_records_for_current_challenge(aseco: 'Aseco') -> list[dict]:
     try:
-        from pyxaseco.plugins.plugin_dedimania import dedi_db
+        from pyxaseco.plugins.service.dedimania import dedi_db
         chal = dedi_db.get('Challenge', {}) if isinstance(dedi_db, dict) else {}
         recs = chal.get('Records', [])
         dedi_uid = str(chal.get('Uid') or chal.get('UID') or '')
@@ -367,3 +367,4 @@ def _format_cp_delta(ms: int) -> str:
     if mn > 0:
         return f'{sign}{mn}:{sc:02d}.{hun:02d}'
     return f'{sign}{sc}.{hun:02d}'
+

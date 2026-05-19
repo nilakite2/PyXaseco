@@ -1,4 +1,4 @@
-"""
+﻿"""
 Clock timezone selection window for Records-Eyepiece.
 
 Action ID scheme (ManialinkId = '918'):
@@ -25,8 +25,8 @@ ML_WINDOW = 91800
 ML_SUBWIN = 91801
 
 ACT_CLOCK_OPEN  = 91803
-ACT_GROUP_BASE  = 918300   # 918300 + group_index → show that group's TZ list
-ACT_TZ_BASE     = 918350   # 918350 + flat_tz_index → select that timezone
+ACT_GROUP_BASE  = 918300   # 918300 + group_index - show that group's TZ list
+ACT_TZ_BASE     = 918350   # 918350 + flat_tz_index - select that timezone
 
 WORLDMAP_URL = 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/worldmap-pure.png'
 
@@ -40,7 +40,7 @@ TIMEZONES: dict[str, list[tuple[str, str]]] = {
         ('Botsuana / Gaborone', 'Africa/Gaborone'), ('Burkina Faso / Ouagadougou', 'Africa/Ouagadougou'),
         ('Burundi / Bujumbura', 'Africa/Bujumbura'), ('Central African Republic / Bangui', 'Africa/Bangui'),
         ('Chad / Ndjamena', 'Africa/Ndjamena'), ('Congo / Brazzaville', 'Africa/Brazzaville'),
-        ('Congo / Kinshasa', 'Africa/Kinshasa'), ("Côte d'Ivoire / Abidjan", 'Africa/Abidjan'),
+        ('Congo / Kinshasa', 'Africa/Kinshasa'), ("CÃ´te d'Ivoire / Abidjan", 'Africa/Abidjan'),
         ('Djibouti / Djibouti', 'Africa/Djibouti'), ('Egypt / Cairo', 'Africa/Cairo'),
         ('Equatorial Guinea / Malabo', 'Africa/Malabo'), ('Eritrea / Asmara', 'Africa/Asmara'),
         ('Ethiopia / Addis Ababa', 'Africa/Addis_Ababa'), ('Gabun / Libreville', 'Africa/Libreville'),
@@ -202,7 +202,7 @@ for _g in GROUPS:
 async def _ensure_tz_column() -> None:
     """Add timezone column to players_extra if it doesn't exist."""
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -220,7 +220,7 @@ async def _ensure_tz_column() -> None:
 async def _load_player_tz(player_id: int) -> str | None:
     """Load saved timezone for a player. Returns 'Display|Zone' or None."""
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -238,7 +238,7 @@ async def _load_player_tz(player_id: int) -> str | None:
 async def _save_player_tz(player_id: int, display: str, zone: str) -> None:
     """Save player timezone preference to DB."""
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -250,7 +250,7 @@ async def _save_player_tz(player_id: int, display: str, zone: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Window builder — worldmap + group list
+# Window builder - worldmap + group list
 # ---------------------------------------------------------------------------
 
 def _build_tz_worldmap_window(current_display: str) -> str:
@@ -353,7 +353,7 @@ def _build_tz_group_window(group_idx: int, current_display: str) -> str:
     p.append('<quad posn="0.8 -1.3 0.02" sizen="78.4 3" bgcolor="29F9"/>')
     p.append('<quad posn="0.8 -4.3 0.03" sizen="78.4 0.1" bgcolor="FFF9"/>')
     p.append('<quad posn="1.8 -1 0.04" sizen="3.2 3.2" style="Icons128x32_1" substyle="RT_TimeAttack"/>')
-    title = escape(f'{group_name} — select your timezone')
+    title = escape(f'{group_name} - select your timezone')
     p.append(f'<label posn="5.5 -1.9 0.04" sizen="74 0" textsize="2" scale="0.9" textcolor="FFFF" text="{title}"/>')
 
     # Back button (returns to worldmap)
@@ -464,3 +464,4 @@ async def load_player_tz(aseco: 'Aseco', player) -> None:
         zone = parts[1].strip()
         if zone:
             _state.player_timezone[player.login] = zone
+

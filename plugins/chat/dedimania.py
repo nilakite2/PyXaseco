@@ -1,5 +1,5 @@
-"""
-chat_dedimania.py — Port of plugins/chat.dedimania.php
+﻿"""
+chat_dedimania.py - Port of plugins/chat.dedimania.php
 
 Commands:
   /helpdedi, /dedihelp
@@ -67,7 +67,7 @@ def register(aseco: 'Aseco'):
 # ---------------------------------------------------------------------------
 
 def _get_dedi_db() -> dict:
-    from pyxaseco.plugins.plugin_dedimania import dedi_db
+    from pyxaseco.plugins.service.dedimania import dedi_db
     return dedi_db
 
 
@@ -150,7 +150,7 @@ async def _send(aseco: 'Aseco', login: str, message: str):
 
 
 # ---------------------------------------------------------------------------
-# show_dedirecs — universal Dedimania ranking message
+# show_dedirecs - universal Dedimania ranking message
 # ---------------------------------------------------------------------------
 
 async def show_dedirecs(aseco: 'Aseco', name: str, uid: str,
@@ -697,7 +697,7 @@ async def _show_dedi_cp_times(aseco: 'Aseco', command: dict, diff: bool):
 
 async def _get_unranked_time(aseco: 'Aseco', player_id: int):
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return None
@@ -713,3 +713,4 @@ async def _get_unranked_time(aseco: 'Aseco', player_id: int):
                 return int(row[0]) if row else None
     except Exception:
         return None
+

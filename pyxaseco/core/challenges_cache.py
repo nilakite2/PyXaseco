@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import logging
@@ -16,12 +16,7 @@ _backfill_task: asyncio.Task | None = None
 
 
 def _plugin_module(name: str):
-    for mod_name in (f'pyxaseco_plugins.{name}', f'pyxaseco.plugins.{name}'):
-        try:
-            return importlib.import_module(mod_name)
-        except ImportError:
-            continue
-    raise ImportError(name)
+    return importlib.import_module(f'pyxaseco.plugins.{name}')
 
 
 def _track_uid(track: dict | None) -> str:
@@ -378,7 +373,7 @@ async def _fetch_tmx_meta_for_uid(aseco: 'Aseco', uid: str) -> dict:
     if not uid:
         return {}
     try:
-        mod = _plugin_module('plugin_tmxinfo')
+        mod = _plugin_module('service.tmx')
         getter = getattr(mod, 'get_tmx_trackmeta_for_uid', None)
         if callable(getter):
             return await getter(aseco, uid) or {}
@@ -515,3 +510,4 @@ async def _backfill_missing_rows(aseco: 'Aseco', pool):
             )
     except Exception as exc:
         logger.warning('[ChallengesCache] Backfill failed: %s', exc)
+

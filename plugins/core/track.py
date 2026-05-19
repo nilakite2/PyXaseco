@@ -1,9 +1,9 @@
-"""
-plugin_track.py — Port of plugins/plugin.track.php
+﻿"""
+plugin_track.py - Port of plugins/plugin.track.php
 
-/track    — Shows info about the current track
-/playtime — Shows time current track has been playing
-/time     — Shows current server time & date
+/track    - Shows info about the current track
+/playtime - Shows time current track has been playing
+/time     - Shows current server time & date
 
 Also fires onNewChallenge2 events for timing and CURRENT_TRACK display.
 """
@@ -24,7 +24,7 @@ _replays_counter: int = 0
 
 def _build_public_tmx_track_url(aseco: 'Aseco', challenge=None):
     try:
-        from pyxaseco.plugins.plugin_tmxinfo import build_public_tmx_track_url as impl
+        from pyxaseco.plugins.service.tmx import build_public_tmx_track_url as impl
     except Exception:
         return None
     return impl(aseco, challenge=challenge)
@@ -173,3 +173,4 @@ async def chat_time(aseco: 'Aseco', command: dict):
     await aseco.client.query_ignore_result(
         'ChatSendServerMessageToLogin', aseco.format_colors(message),
         command['author'].login)
+

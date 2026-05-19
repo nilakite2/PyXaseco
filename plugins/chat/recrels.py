@@ -1,5 +1,5 @@
-"""
-chat_recrels.py — Port of plugins/chat.recrels.php
+﻿"""
+chat_recrels.py - Port of plugins/chat.recrels.php
 
 /firstrec /lastrec /nextrec /diffrec /recrange
 """
@@ -133,7 +133,7 @@ async def chat_nextrec(aseco: 'Aseco', command: dict):
         await aseco.client.query_ignore_result(
             'ChatSendServerMessageToLogin', aseco.format_colors(msg), login)
     else:
-        # Player not ranked — look for unranked time in rs_times
+        # Player not ranked - look for unranked time in rs_times
         unranked_score = await _get_unranked_time(aseco, player.id)
         if unranked_score is not None:
             last = aseco.server.records.get_record(total - 1)
@@ -240,7 +240,7 @@ async def chat_recrange(aseco: 'Aseco', command: dict):
 async def _get_unranked_time(aseco: 'Aseco', player_id: int):
     """Return player's best unranked time from rs_times, or None."""
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return None
@@ -256,3 +256,4 @@ async def _get_unranked_time(aseco: 'Aseco', player_id: int):
                 return int(row[0]) if row else None
     except Exception:
         return None
+

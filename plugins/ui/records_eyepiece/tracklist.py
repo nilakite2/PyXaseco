@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 ML_WINDOW = 91800
 ML_SUBWIN = 91801
 
-TL_PAGE_SIZE = 20      # tracks per page (4 cols × 5 rows)
+TL_PAGE_SIZE = 20      # tracks per page (4 cols x 5 rows)
 TL_COLS = 4
 TL_ROWS = 5
 
@@ -73,7 +73,7 @@ async def _fetch_tracklist_data(aseco: 'Aseco') -> list:
     extra_meta: dict = {}
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         from pyxaseco.core.challenges_cache import get_metadata_map
 
         pool = await get_pool()
@@ -81,7 +81,7 @@ async def _fetch_tracklist_data(aseco: 'Aseco') -> list:
             async with pool.acquire() as conn:
                 async with conn.cursor() as cur:
                     # challenges table only has: Id, Uid, Name, Author, Environment
-                    # AuthorTime is not stored in DB — comes from GBX GetChallengeList
+                    # AuthorTime is not stored in DB - comes from GBX GetChallengeList
                     await cur.execute(
                         'SELECT Id, Uid FROM challenges WHERE Uid IS NOT NULL'
                     )
@@ -149,7 +149,7 @@ async def _get_player_local_records(aseco: 'Aseco', player) -> dict:
         return {}
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
 
         pool = await get_pool()
         if not pool:
@@ -193,7 +193,7 @@ async def _get_player_track_stats(aseco: 'Aseco', player) -> dict:
         return {}
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
 
         pool = await get_pool()
         if not pool:
@@ -233,7 +233,7 @@ async def _get_player_track_stats(aseco: 'Aseco', player) -> dict:
 
 def _get_maxrecs(aseco: 'Aseco') -> int:
     try:
-        from pyxaseco.plugins.plugin_rasp import _rasp
+        from pyxaseco.plugins.feature.rasp import _rasp
         return int(_rasp.get('maxrecs', 50) or 50)
     except Exception:
         return 50
@@ -250,17 +250,17 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
     Layout (from PHP):
       Window: frame posn="-40.1 30.45"
       Content frame: posn="2.5 -5.7 0.05"
-      Cards: 4 cols × 5 rows
+      Cards: 4 cols x 5 rows
     """
     try:
-        from pyxaseco.plugins.plugin_rasp_jukebox import jukebox, jb_buffer
+        from pyxaseco.plugins.feature.rasp_jukebox import jukebox, jb_buffer
     except ImportError:
         jukebox = {}
         jb_buffer = []
 
     maxrecs = 50
     try:
-        from pyxaseco.plugins.plugin_rasp import _rasp
+        from pyxaseco.plugins.feature.rasp import _rasp
         maxrecs = _rasp.get('maxrecs', 50)
     except Exception:
         pass
@@ -433,9 +433,9 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
 
 def _build_tracklist_filter_window(aseco: 'Aseco', player) -> str:
     """
-    Port of re_buildTracklistFilterWindow() — card-grid of filter options.
+    Port of re_buildTracklistFilterWindow() - card-grid of filter options.
     Each card has an action that opens the tracklist with that filter applied.
-    Action IDs: 91840–91846.
+    Action IDs: 91840-91846.
     """
     mode = getattr(aseco.server.gameinfo, 'mode', -1)
     is_stnt = (mode == Gameinfo.STNT)
@@ -692,7 +692,7 @@ async def _send_tracklist_window(
 
     title = ''
     try:
-        from pyxaseco.plugins.plugin_rasp_jukebox import jukebox, jb_buffer
+        from pyxaseco.plugins.feature.rasp_jukebox import jukebox, jb_buffer
     except ImportError:
         jukebox = {}
         jb_buffer = []
@@ -869,3 +869,4 @@ async def _send_trackauthorlist_window(aseco: 'Aseco', player, page: int = 0):
     player._tl_author_page = page
     xml = _build_trackauthorlist_window(page, authors)
     await _send(aseco, player.login, xml)
+

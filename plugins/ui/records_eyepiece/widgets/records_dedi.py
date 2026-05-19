@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
@@ -176,9 +176,9 @@ def _dedi_close_to_you(
 def _get_dedi_records() -> list:
     try:
         try:
-            from pyxaseco.plugins.plugin_dedimania import dedi_db
+            from pyxaseco.plugins.service.dedimania import dedi_db
         except Exception:
-            from pyxaseco_plugins.plugin_dedimania import dedi_db
+            from pyxaseco.plugins.service.dedimania import dedi_db
         if not isinstance(dedi_db, dict):
             return []
         challenge = dedi_db.get('Challenge', {})
@@ -337,3 +337,4 @@ def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | No
 
     append_window_end(p)
     return ''.join(p)
+

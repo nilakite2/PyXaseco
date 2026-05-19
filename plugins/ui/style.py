@@ -1,14 +1,14 @@
-"""
-plugin_style.py — Port of plugins/plugin.style.php
+﻿"""
+plugin_style.py - Port of plugins/plugin.style.php
 
-Loads ManiaLink window style templates from styles/*.xml files.
+Loads ManiaLink window style templates from styles/styles.toml.
 /style help | list | default | off | <name>
 """
 
 from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
-from pyxaseco.core.config import parse_xml_file
+from pyxaseco.core.config import load_toml_file
 from pyxaseco.helpers import display_manialink, display_manialink_multi
 
 if TYPE_CHECKING:
@@ -24,6 +24,41 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onChat_style', chat_style)
 
 
+def _styles_file(aseco: 'Aseco') -> Path:
+    return aseco._base_dir / 'styles' / 'styles.toml'
+
+
+def _load_styles_config(aseco: 'Aseco') -> dict[str, dict]:
+    data = load_toml_file(_styles_file(aseco))
+    styles = data.get('styles', {})
+    return styles if isinstance(styles, dict) else {}
+
+
+def _normalise_style_block(block: dict) -> dict:
+    def _section(name: str) -> list[dict]:
+        raw = block.get(name, {})
+        if not isinstance(raw, dict):
+            raw = {}
+        return [{
+            key.upper(): [str(value)]
+            for key, value in raw.items()
+        }]
+
+    return {
+        'WINDOW': _section('window'),
+        'HEADER': _section('header'),
+        'BODY': _section('body'),
+        'BUTTON': _section('button'),
+    }
+
+
+def _get_style_data(aseco: 'Aseco', style_name: str) -> dict | None:
+    block = _load_styles_config(aseco).get(style_name, {})
+    if not isinstance(block, dict) or not block:
+        return None
+    return {'STYLES': _normalise_style_block(block)}
+
+
 async def style_default(aseco: 'Aseco', _param):
     """Load the server-default style on startup."""
     style_name = aseco.settings.window_style
@@ -32,21 +67,19 @@ async def style_default(aseco: 'Aseco', _param):
 
 
 def _load_server_style(aseco: 'Aseco', style_name: str):
-    styles_dir = aseco._base_dir / 'styles'
-    style_file = styles_dir / f'{style_name}.xml'
-    data = parse_xml_file(style_file)
+    data = _get_style_data(aseco, style_name)
     if data and 'STYLES' in data:
         aseco.style = data['STYLES']
-        aseco.console('Load default style [{1}]', str(style_file))
+        aseco.console('Load default style [{1}]', f'styles/{style_name}.toml')
     else:
-        aseco.console('[PyXaseco] WARNING: Could not parse style file: {1}', str(style_file))
+        aseco.console('[PyXaseco] WARNING: Could not parse style file: {1}', f'styles/{style_name}.toml')
 
 
 async def init_player_style(aseco: 'Aseco', player: 'Player'):
     """Load a player's saved personal style on connect"""
-    # ldb_getStyle is provided by plugin_localdatabase — skip gracefully if absent
+    # ldb_getStyle is provided by plugin_localdatabase - skip gracefully if absent
     try:
-        from pyxaseco.plugins.plugin_localdatabase import ldb_get_style
+        from pyxaseco.plugins.core.localdb import ldb_get_style
         style_name = await ldb_get_style(aseco, player.login)
         if style_name:
             _load_player_style(aseco, player, style_name)
@@ -55,13 +88,11 @@ async def init_player_style(aseco: 'Aseco', player: 'Player'):
 
 
 def _load_player_style(aseco: 'Aseco', player: 'Player', style_name: str):
-    styles_dir = aseco._base_dir / 'styles'
-    style_file = styles_dir / f'{style_name}.xml'
-    data = parse_xml_file(style_file)
+    data = _get_style_data(aseco, style_name)
     if data and 'STYLES' in data:
         player.style = data['STYLES']
     else:
-        aseco.console('[PyXaseco] WARNING: Could not parse player style: {1}', str(style_file))
+        aseco.console('[PyXaseco] WARNING: Could not parse player style: {1}', f'styles/{style_name}.toml')
 
 
 async def chat_style(aseco: 'Aseco', command: dict):
@@ -83,8 +114,7 @@ async def chat_style(aseco: 'Aseco', command: dict):
                           help_data, [0.8, 0.05, 0.15, 0.6], 'OK')
 
     elif param == 'list':
-        styles_dir = aseco._base_dir / 'styles'
-        files = sorted(p.stem for p in styles_dir.glob('*.xml'))[:50]
+        files = sorted(_load_styles_config(aseco).keys())[:50]
         files += ['default', 'off']
 
         player.tracklist = [{'style': f} for f in files]
@@ -117,9 +147,7 @@ async def chat_style(aseco: 'Aseco', command: dict):
                    '{#highlite}' + aseco.settings.window_style + '{#server} !')
             _save_style(aseco, login, aseco.settings.window_style)
         else:
-            styles_dir = aseco._base_dir / 'styles'
-            style_file = styles_dir / f'{style}.xml'
-            data = parse_xml_file(style_file)
+            data = _get_style_data(aseco, style)
             if data and 'STYLES' in data:
                 player.style = data['STYLES']
                 msg = '{#server}> Style {#highlite}' + param + '{#server} selected!'
@@ -137,7 +165,7 @@ async def chat_style(aseco: 'Aseco', command: dict):
 
 def _save_style(aseco: 'Aseco', login: str, style_name: str):
     try:
-        from pyxaseco.plugins.plugin_localdatabase import ldb_set_style
+        from pyxaseco.plugins.core.localdb import ldb_set_style
         import asyncio
         asyncio.ensure_future(ldb_set_style(aseco, login, style_name))
     except (ImportError, Exception):
@@ -165,3 +193,4 @@ async def event_style(aseco: 'Aseco', answer: list):
             cmd['params'] = 'list'
             aseco.console('player {1} clicked command "/style list"', login)
             await chat_style(aseco, cmd)
+

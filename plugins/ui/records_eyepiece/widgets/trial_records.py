@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import copy
 import logging
@@ -22,22 +22,15 @@ logger = logging.getLogger(__name__)
 
 
 async def _get_trial_plugin():
-    mod = (
-        sys.modules.get('pyxaseco_plugins.plugin_trial_records')
-        or sys.modules.get('pyxaseco.plugins.plugin_trial_records')
-    )
+    mod = sys.modules.get('pyxaseco.plugins.service.trial_records')
     if mod is not None:
         return mod
     try:
-        from pyxaseco.plugins import plugin_trial_records as mod
+        from pyxaseco.plugins.service import trial_records as mod
         return mod
     except Exception:
-        try:
-            from pyxaseco_plugins import plugin_trial_records as mod
-            return mod
-        except Exception:
-            logger.debug('[Records-Eyepiece] Trial Records plugin module not available.')
-            return None
+        logger.debug('[Records-Eyepiece] Trial Records plugin module not available.')
+        return None
 
 
 def _trial_title(points: object | None = None) -> str:
@@ -325,3 +318,4 @@ async def _build_trial_records_window(aseco: 'Aseco', page: int = 0, records: li
 
     append_window_end(p)
     return ''.join(p)
+

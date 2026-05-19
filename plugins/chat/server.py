@@ -1,11 +1,11 @@
-"""
-chat_server.py — Port of plugins/chat.server.php
+﻿"""
+chat_server.py - Port of plugins/chat.server.php
 
-/server   — Server info window
-/xaseco   — PyXaseco info window
-/pyxaseco — PyXaseco info window
-/plugins  — List of active plugins
-/nations  — Top 10 visiting nations
+/server   - Server info window
+/xaseco   - PyXaseco info window
+/pyxaseco - PyXaseco info window
+/plugins  - List of active plugins
+/nations  - Top 10 visiting nations
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ from pyxaseco.helpers import (format_text, format_time, format_time_h,
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
-PYXASECO_VERSION = 'PyXaseco 1.1-Stable'
-PYXASECO_URL     = 'github.com/nilakite2/PyXaseco'
+PYXASECO_VERSION = 'PyXaseco 1.2-DEV'
+PYXASECO_URL     = 'github.com/nilakite2/PyXaseco/tree/PyXaseco_1.2_TOML_dotenv'
 
 
 def _wrap_comment_tm_aware(comment: str, max_visible: int = 35) -> list[str]:
@@ -57,7 +57,7 @@ def _wrap_comment_tm_aware(comment: str, max_visible: int = 35) -> list[str]:
             result.append(raw)
             continue
 
-        # Need to wrap — walk character by character tracking visible width,
+        # Need to wrap - walk character by character tracking visible width,
         # treating $l[url] as a single zero-width atom so it is never split.
         parts: list[str] = []
         current = ''
@@ -69,7 +69,7 @@ def _wrap_comment_tm_aware(comment: str, max_visible: int = 35) -> list[str]:
         while i < len(raw):
             ch = raw[i]
 
-            # $l[url], $L[url], $h[url], $H[url] — consume as one indivisible atom
+            # $l[url], $L[url], $h[url], $H[url] - consume as one indivisible atom
             if (ch == '$' and i + 1 < len(raw) and raw[i+1].lower() in 'lh'
                     and i + 2 < len(raw) and raw[i+2] == '['):
                 end = raw.find(']', i + 3)
@@ -80,7 +80,7 @@ def _wrap_comment_tm_aware(comment: str, max_visible: int = 35) -> list[str]:
                 i = end + 1
                 continue
 
-            # Other $-codes — consume and add no visible length
+            # Other $-codes - consume and add no visible length
             if ch == '$' and i + 1 < len(raw):
                 nxt = raw[i + 1]
                 if nxt in '0123456789abcdefABCDEF':
@@ -160,11 +160,11 @@ async def chat_server(aseco: 'Aseco', command: dict):
     player = command['author']
     login  = player.login
 
-    # ── DB stats: players, nations, total playtime ──────────────────────
+    # - DB stats: players, nations, total playtime -----------
     players_count = nations_count = 0
     playdays = playhours = playmins = 0
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if pool:
             async with pool.acquire() as conn:
@@ -181,7 +181,7 @@ async def chat_server(aseco: 'Aseco', command: dict):
     except Exception:
         playtime_rem = 0
 
-    # ── Server uptime ─────────────────────────────────────────────────────
+    # - Server uptime ---------------------------
     try:
         network = await aseco.client.query('GetNetworkStats')
         aseco.server.uptime = network.get('Uptime', 0)
@@ -190,7 +190,7 @@ async def chat_server(aseco: 'Aseco', command: dict):
     updays      = aseco.server.uptime // (24 * 3600)
     uptime_rem  = aseco.server.uptime % (24 * 3600)
 
-    # ── Extra server settings (multicall equivalent) ──────────────────────
+    # - Extra server settings (multicall equivalent) -----------
     comment = ''
     coppers = 0
     cuprpc  = 0
@@ -208,26 +208,26 @@ async def chat_server(aseco: 'Aseco', command: dict):
     except Exception:
         pass
 
-    # ── Maxrecs ───────────────────────────────────────────────────────────
+    # - Maxrecs ------------------------------
     maxrecs = 0
     try:
-        from pyxaseco.plugins.plugin_rasp import maxrecs as _mr
+        from pyxaseco.plugins.feature.rasp import maxrecs as _mr
         maxrecs = _mr
     except ImportError:
         pass
 
-    # ── Admin contact ─────────────────────────────────────────────────────
+    # - Admin contact ---------------------------
     admin_contact = ''
     try:
-        from pyxaseco.plugins.plugin_rasp import admin_contact as _ac
+        from pyxaseco.plugins.feature.rasp import admin_contact as _ac
         admin_contact = _ac or ''
     except ImportError:
         pass
 
-    # ── Feature votes flag ────────────────────────────────────────────────
+    # - Feature votes flag ------------------------
     feature_votes = False
     try:
-        from pyxaseco.plugins.plugin_rasp import feature_votes as _fv
+        from pyxaseco.plugins.feature.rasp import feature_votes as _fv
         feature_votes = bool(_fv)
     except ImportError:
         pass
@@ -321,7 +321,7 @@ async def chat_xaseco(aseco: 'Aseco', command: dict):
 
     admin_contact = ''
     try:
-        from pyxaseco.plugins.plugin_rasp import admin_contact as _ac
+        from pyxaseco.plugins.feature.rasp import admin_contact as _ac
         admin_contact = _ac or ''
     except ImportError:
         pass
@@ -388,7 +388,7 @@ async def chat_nations(aseco: 'Aseco', command: dict):
     login  = player.login
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             await aseco.client.query_ignore_result(
@@ -425,8 +425,9 @@ async def chat_nations(aseco: 'Aseco', command: dict):
 
 
 # ---------------------------------------------------------------------------
-# Small helper — avoid circular import of strip_colors from helpers
+# Small helper - avoid circular import of strip_colors from helpers
 # ---------------------------------------------------------------------------
 def strip_colors_fn(text: str) -> str:
     from pyxaseco.helpers import strip_colors
     return strip_colors(text, for_tm=False)
+

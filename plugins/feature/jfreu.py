@@ -1,7 +1,7 @@
 ﻿"""
-jfreu_plugin.py â€” Port of plugins/jfreu.plugin.php + jfreu.chat.php
+jfreu_plugin.py - Port of plugins/jfreu.plugin.php + jfreu.chat.php
 
-Jfreu's plugin v0.14 â€” rank limiting, VIP system, badwords filter,
+Jfreu's plugin v0.14 - rank limiting, VIP system, badwords filter,
 SpecOnly management, unspec voting, player join/leave messages,
 random info messages, and a comprehensive /jfreu admin command panel.
 
@@ -686,10 +686,10 @@ async def _show_join_message(aseco: 'Aseco', player: 'Player', nation: str):
     rank_str = format(getattr(player, 'ladderrank', 0), ',').replace(',', '$n $m')
 
     try:
-        from pyxaseco.plugins.plugin_rasp import _rasp_messages, feature_ranks
+        from pyxaseco.plugins.feature.rasp import _rasp_messages, feature_ranks
         rank_info = None
         if feature_ranks:
-            from pyxaseco.plugins.plugin_localdatabase import get_pool, get_player_id
+            from pyxaseco.plugins.core.localdb import get_pool, get_player_id
             pool = await get_pool()
             if pool:
                 pid = await get_player_id(player.login)
@@ -734,7 +734,7 @@ def _normalize_join_nation(player: 'Player') -> str:
         return zone
 
     if len(nation) > 14:
-        from pyxaseco.plugins.plugin_localdatabase import map_country
+        from pyxaseco.plugins.core.localdb import map_country
         return map_country(nation)
 
     return nation or zone
@@ -2027,4 +2027,5 @@ def _get_player_param(aseco, requester, param: str, offline: bool = False):
         stub.ladderrank = 0
         return stub
     return None
+
 

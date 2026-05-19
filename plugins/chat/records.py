@@ -1,5 +1,5 @@
-"""
-chat_records.py — Port of plugins/chat.records.php
+﻿"""
+chat_records.py - Port of plugins/chat.records.php
 
 /recs [help|pb|new|live|first|last|next|diff|range]
   Shows local records on the current track, with optional sub-commands.
@@ -39,23 +39,23 @@ async def chat_recs(aseco: 'Aseco', command: dict):
         await _dispatch(aseco, command, 'liverecs')
         return
     elif param == 'first':
-        from pyxaseco.plugins.chat_recrels import chat_firstrec
+        from pyxaseco.plugins.chat.recrels import chat_firstrec
         await chat_firstrec(aseco, command)
         return
     elif param == 'last':
-        from pyxaseco.plugins.chat_recrels import chat_lastrec
+        from pyxaseco.plugins.chat.recrels import chat_lastrec
         await chat_lastrec(aseco, command)
         return
     elif param == 'next':
-        from pyxaseco.plugins.chat_recrels import chat_nextrec
+        from pyxaseco.plugins.chat.recrels import chat_nextrec
         await chat_nextrec(aseco, command)
         return
     elif param == 'diff':
-        from pyxaseco.plugins.chat_recrels import chat_diffrec
+        from pyxaseco.plugins.chat.recrels import chat_diffrec
         await chat_diffrec(aseco, command)
         return
     elif param == 'range':
-        from pyxaseco.plugins.chat_recrels import chat_recrange
+        from pyxaseco.plugins.chat.recrels import chat_recrange
         await chat_recrange(aseco, command)
         return
 
@@ -126,7 +126,7 @@ async def _dispatch(aseco: 'Aseco', command: dict, target: str):
     """Dispatch sub-command to the relevant handler."""
     if target == 'pb':
         try:
-            from pyxaseco.plugins.plugin_rasp import chat_pb
+            from pyxaseco.plugins.feature.rasp import chat_pb
             await chat_pb(aseco, command)
         except ImportError:
             pass
@@ -137,6 +137,8 @@ async def _dispatch(aseco: 'Aseco', command: dict, target: str):
                 'ChatSendServerMessageToLogin', aseco.format_colors(msg),
                 command['author'].login)
             return
-        from pyxaseco.plugins.chat_records2 import show_trackrecs
+        from pyxaseco.plugins.chat.records2 import show_trackrecs
         mode = 0 if target == 'newrecs' else 2
         await show_trackrecs(aseco, command['author'].login, mode, 0)
+
+

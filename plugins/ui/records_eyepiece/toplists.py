@@ -1,20 +1,20 @@
-"""
-toplists.py — Records-Eyepiece toplist windows + score-screen column widgets.
+﻿"""
+toplists.py - Records-Eyepiece toplist windows + score-screen column widgets.
 
 Score-screen column widgets (shown at onEndRace, hidden at onEndRace1):
-  ML 91818  TopRankings       — avg rank from rs_rank table
-  ML 91819  TopWinners        — wins from players table
-  ML 91820  MostRecords       — mostrecords from players_extra
-  ML 91821  MostFinished      — mostfinished from players_extra
-  ML 91822  TopPlaytime       — TimePlayed from players (>3600 s)
-  ML 91823  TopDonators       — donations from players_extra
-  ML 91824  TopNations        — nation count from players (with flag)
-  ML 91825  TopTracks         — highest-karma tracks from tracklist cache
-  ML 91826  TopVoters         — karma vote count from rs_karma
-  ML 91845  TopRoundscore     — roundpoints from players_extra
-  ML 91846  TopWinningPayouts — winningpayout from players_extra
-  ML 91847  TopVisitors       — visits from players_extra
-  ML 91848  TopActivePlayers  — most recently active players (UpdatedAt)
+  ML 91818  TopRankings       - avg rank from rs_rank table
+  ML 91819  TopWinners        - wins from players table
+  ML 91820  MostRecords       - mostrecords from players_extra
+  ML 91821  MostFinished      - mostfinished from players_extra
+  ML 91822  TopPlaytime       - TimePlayed from players (>3600 s)
+  ML 91823  TopDonators       - donations from players_extra
+  ML 91824  TopNations        - nation count from players (with flag)
+  ML 91825  TopTracks         - highest-karma tracks from tracklist cache
+  ML 91826  TopVoters         - karma vote count from rs_karma
+  ML 91845  TopRoundscore     - roundpoints from players_extra
+  ML 91846  TopWinningPayouts - winningpayout from players_extra
+  ML 91847  TopVisitors       - visits from players_extra
+  ML 91848  TopActivePlayers  - most recently active players (UpdatedAt)
 
 These all use the same SCORETABLE_LISTS header template (15.5-wide widget).
 The popup windows (opened by clicking bar widgets) are also here.
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Manialink IDs — score-screen column widgets
+# Manialink IDs - score-screen column widgets
 # ---------------------------------------------------------------------------
 ML_TOP_RANKINGS       = 91818
 ML_TOP_WINNERS        = 91819
@@ -118,7 +118,7 @@ def _flag_path(code: str) -> str:
 async def _db_query(sql: str, params: tuple = ()) -> list[tuple]:
     """Run a SELECT and return rows as list of tuples. Returns [] on error."""
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -137,8 +137,8 @@ async def _query_ranked_record_counts(aseco: 'Aseco', limit: int) -> list[tuple]
     Returns rows shaped like: (login, nickname, count)
     """
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
-        from pyxaseco.plugins.chat_records2 import _get_challenge_list
+        from pyxaseco.plugins.core.localdb import get_pool
+        from pyxaseco.plugins.chat.records2 import _get_challenge_list
     except Exception as exc:
         logger.warning('[Records-Eyepiece] Ranked-record helper import failed: %r', exc)
         return []
@@ -149,7 +149,7 @@ async def _query_ranked_record_counts(aseco: 'Aseco', limit: int) -> list[tuple]
 
     maxrecs = 0
     try:
-        from pyxaseco.plugins.plugin_rasp import maxrecs as _mr
+        from pyxaseco.plugins.feature.rasp import maxrecs as _mr
         maxrecs = int(_mr or 0)
     except Exception:
         maxrecs = 0
@@ -670,7 +670,7 @@ async def hide_all_score_columns(aseco: 'Aseco') -> None:
 
 
 # ---------------------------------------------------------------------------
-# Popup windows (opened by clicking bar widgets) — single-login send
+# Popup windows (opened by clicking bar widgets) - single-login send
 # ---------------------------------------------------------------------------
 
 
@@ -1370,3 +1370,4 @@ async def _build_top_nations_window(aseco: 'Aseco') -> str:
 
     append_window_end(p)
     return ''.join(p)
+

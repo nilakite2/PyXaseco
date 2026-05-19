@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import copy
 import logging
@@ -37,22 +37,15 @@ def _pick_display_name(*candidates: object) -> str:
 
 
 async def _get_rpg_plugin():
-    mod = (
-        sys.modules.get("pyxaseco_plugins.plugin_records_rpg")
-        or sys.modules.get("pyxaseco.plugins.plugin_records_rpg")
-    )
+    mod = sys.modules.get("pyxaseco.plugins.service.records_rpg")
     if mod is not None:
         return mod
     try:
-        from pyxaseco.plugins import plugin_records_rpg as mod
+        from pyxaseco.plugins.service import records_rpg as mod
         return mod
     except Exception:
-        try:
-            from pyxaseco_plugins import plugin_records_rpg as mod
-            return mod
-        except Exception:
-            logger.debug("[Records-Eyepiece] RPG Records plugin module not available.")
-            return None
+        logger.debug("[Records-Eyepiece] RPG Records plugin module not available.")
+        return None
 
 
 def _stars_compact(stars: object | None) -> str:
@@ -332,3 +325,4 @@ async def _build_rpg_records_window(aseco: "Aseco", page: int = 0, records: list
 
     append_window_end(p)
     return "".join(p)
+

@@ -1,5 +1,5 @@
-"""
-plugin_dedimania.py — Port of plugins/plugin.dedimania.php
+﻿"""
+plugin_dedimania.py - Port of plugins/plugin.dedimania.php
 
 Protocol: Every HTTP POST is a system.multicall that starts with
 dedimania.Authenticate, followed by actual API call(s), then
@@ -56,7 +56,7 @@ def _auth_struct() -> dict:
         'Login':       dedi_db.get('Login', ''),
         'Password':    dedi_db.get('Password', ''),
         'Tool':        'PYXASECO',
-        'Version':     '1.0',
+        'Version':     '1.2-DEV',
         'Nation':      dedi_db.get('Nation', ''),
         'Packmask':    dedi_db.get('Packmask', ''),
         'PlayersGame': True,
@@ -163,7 +163,7 @@ async def _dedi_init(aseco: 'Aseco', _data):
             logger.warning('[Dedimania] plugin defaults overlay failed: %s', exc)
 
         if not dedi_db['Login'] or dedi_db['Login'] in ('', 'YOUR_SERVER_LOGIN'):
-            aseco.console('[Dedimania] Not configured — skipping.')
+            aseco.console('[Dedimania] Not configured - skipping.')
             return
 
         aseco.console('************* (Dedimania) *************')
@@ -576,7 +576,7 @@ async def _dedi_playerfinish(aseco: 'Aseco', finish_item):
         return
 
     try:
-        from pyxaseco.plugins.plugin_checkpoints import checkpoints
+        from pyxaseco.plugins.core.checkpoints import checkpoints
         cp = checkpoints.get(login)
         if cp and getattr(cp, 'curr_cps', None):
             curr_fin = getattr(cp, 'curr_fin', score)
@@ -751,11 +751,17 @@ def _collect_players(aseco: 'Aseco') -> list:
 
 async def _get_next_uid(aseco: 'Aseco') -> str:
     try:
-        from pyxaseco.plugins.plugin_rasp_jukebox import jukebox
+        from pyxaseco.plugins.feature.rasp_jukebox import jukebox
         if jukebox:
-            first = jukebox[0]
-            if isinstance(first, dict):
-                return first.get('uid', '') or ''
+            if isinstance(jukebox, dict):
+                first_uid = next(iter(jukebox), '')
+                first = jukebox.get(first_uid)
+                if isinstance(first, dict):
+                    return first.get('uid', '') or first_uid or ''
+            elif isinstance(jukebox, list):
+                first = jukebox[0]
+                if isinstance(first, dict):
+                    return first.get('uid', '') or ''
     except Exception:
         pass
 
@@ -802,3 +808,4 @@ async def _server_info(aseco: 'Aseco') -> dict:
         'LadderMode': opts.get('CurrentLadderMode', 0),
         'NextFiveUID': await _get_next_uid(aseco),
     }
+

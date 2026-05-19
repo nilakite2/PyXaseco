@@ -1,9 +1,9 @@
-"""
-chat_players2.py — Port of plugins/chat.players2.php
+﻿"""
+chat_players2.py - Port of plugins/chat.players2.php
 
-/ranks     — Displays list of online ranks/nicks
-/clans     — Displays list of online clans/nicks
-/topclans  — Displays top ranked clans
+/ranks     - Displays list of online ranks/nicks
+/clans     - Displays list of online clans/nicks
+/topclans  - Displays top ranked clans
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ async def _get_rank_value(login: str) -> int | None:
     Return numeric server rank position for a login, or None if unranked.
     """
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool, get_player_id
+        from pyxaseco.plugins.core.localdb import get_pool, get_player_id
 
         pool = await get_pool()
         if not pool:
@@ -145,7 +145,7 @@ async def chat_topclans(aseco: "Aseco", command: dict):
     player: Player = command["author"]
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
 
         pool = await get_pool()
         if not pool:

@@ -1,29 +1,29 @@
-"""
+﻿"""
 widgets/bar_widgets.py
 
-All 4.6×6.5 bar widgets that appear in the corners of the HUD:
+All 4.6x6.5 bar widgets that appear in the corners of the HUD:
 
 Race-state (shown during gameplay):
-  ML 91809  TrackcountWidget      — track count, opens tracklist window
-  ML 91807  GamemodeWidget        — current gamemode name + limit
-  ML 91808  VisitorsWidget        — total visitor count
-  ML 91837  PlayerSpectatorWidget — player/spectator counts
-  ML 91838  LadderLimitWidget     — ladder range e.g. "40-80k"
-  ML 91844  CurrentRankingWidget  — live ladder rank (per player)
-  ML 91849  TMExchangeWidget      — TMX world record for this map
-  ML 91810  ToplistWidget         — button to open top-list window
-  ML 91835  AddToFavoriteWidget   — add-to-favorites button
-  ML 91806  ClockWidget           — server/player clock (sent per timezone group)
+  ML 91809  TrackcountWidget      - track count, opens tracklist window
+  ML 91807  GamemodeWidget        - current gamemode name + limit
+  ML 91808  VisitorsWidget        - total visitor count
+  ML 91837  PlayerSpectatorWidget - player/spectator counts
+  ML 91838  LadderLimitWidget     - ladder range e.g. "40-80k"
+  ML 91844  CurrentRankingWidget  - live ladder rank (per player)
+  ML 91849  TMExchangeWidget      - TMX world record for this map
+  ML 91810  ToplistWidget         - button to open top-list window
+  ML 91835  AddToFavoriteWidget   - add-to-favorites button
+  ML 91806  ClockWidget           - server/player clock (sent per timezone group)
 
 Score-state (shown on score screen, sent at onEndRace):
-  ML 91841  NextEnvironmentWidget — upcoming environment icon
-  ML 91836  NextGamemodeWidget    — upcoming gamemode icon
-  ML 91833  EyepieceWidget/Score  — Records-Eyepiece logo bar
+  ML 91841  NextEnvironmentWidget - upcoming environment icon
+  ML 91836  NextGamemodeWidget    - upcoming gamemode icon
+  ML 91833  EyepieceWidget/Score  - Records-Eyepiece logo bar
 
 Each widget is a standalone async function:
-  _draw_<name>_all(aseco)       — broadcast to all players
-  _draw_<name>_player(aseco, login)  — send to one player (Clock only)
-  _hide_<name>(aseco)           — broadcast empty manialink
+  _draw_<name>_all(aseco)       - broadcast to all players
+  _draw_<name>_player(aseco, login)  - send to one player (Clock only)
+  _hide_<name>(aseco)           - broadcast empty manialink
 """
 
 from __future__ import annotations
@@ -62,12 +62,12 @@ ML_RAMPAGE_DISCORD  = 5834287
 ML_RAMPAGE_FORCE    = 5834288
 
 # Action IDs
-ACT_SHOW_TRACKLIST      = 91820    # action 91820 → open TracklistWindow
-ACT_SHOW_TOPNATIONS     = 91809    # action 91809 → TopNationsWindow
-ACT_SHOW_TOPLIST        = 918153   # action 918153 → ToplistWindow
-ACT_SHOW_CURRENTRANKING = 91806    # action 91806 → LiveRankingsWindow
+ACT_SHOW_TRACKLIST      = 91820    # action 91820 - open TracklistWindow
+ACT_SHOW_TOPNATIONS     = 91809    # action 91809 - TopNationsWindow
+ACT_SHOW_TOPLIST        = 918153   # action 918153 - ToplistWindow
+ACT_SHOW_CURRENTRANKING = 91806    # action 91806 - LiveRankingsWindow
 ACT_CLOCK_DETAILS       = 91803    # ManialinkId.'03' = '918'+'03' = 91803
-ACT_SHOW_TMXINFO        = 91808    # action 91808 → trigger /tmxinfo
+ACT_SHOW_TMXINFO        = 91808    # action 91808 - trigger /tmxinfo
 ACT_RAMPAGE_DISCORD     = 5834287
 ACT_RAMPAGE_FORCE       = 5834288
 
@@ -308,7 +308,7 @@ async def _hide_visitors(aseco: 'Aseco') -> None:
 async def _refresh_visitor_count(aseco: 'Aseco') -> None:
     """Query total visitor count from DB and cache in _state.visitor_count."""
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -516,8 +516,8 @@ async def _draw_tmexchange_all(aseco: 'Aseco') -> None:
     try:
         import sys
         panels = (
-            sys.modules.get('pyxaseco_plugins.plugin_panels')
-            or sys.modules.get('pyxaseco.plugins.plugin_panels')
+            sys.modules.get('pyxaseco.plugins.ui.panels')
+            or sys.modules.get('pyxaseco.plugins.ui.panels')
         )
         if panels is not None:
             cache = getattr(panels, '_records_cache', {}) or {}
@@ -671,7 +671,7 @@ async def _hide_favorite(aseco: 'Aseco') -> None:
 # ---------------------------------------------------------------------------
 
 def _compute_clock(timezone: str, timeformat: str) -> tuple[str, str]:
-    # Primary: system local time — always correct on the server regardless of platform
+    # Primary: system local time - always correct on the server regardless of platform
     now_local = datetime.now().astimezone()
 
     # Try to display time in the requested timezone if different from system tz
@@ -984,3 +984,4 @@ async def hide_all_score_bars(aseco: 'Aseco') -> None:
     for ml_id in (ML_NEXT_ENV, ML_NEXT_GAMEMODE, ML_EYEPIECE_SCORE,
                   ML_FAVORITE, ML_CLOCK):
         await _broadcast(aseco, _empty(ml_id))
+

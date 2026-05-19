@@ -1,5 +1,5 @@
-"""
-plugin_rasp_votes.py — Port of plugins/plugin.rasp_votes.php
+﻿"""
+plugin_rasp_votes.py - Port of plugins/plugin.rasp_votes.php
 
 Chat-based voting system: /endround /ladder /replay /skip /kick /ignore /cancel
 Works with plugin_rasp_jukebox which provides /y and the actual vote-pass logic.
@@ -70,10 +70,7 @@ disabled_scoreboard: bool = False
 
 
 def _plugin_module(module_name: str):
-    try:
-        return __import__(f'pyxaseco.plugins.{module_name}', fromlist=['*'])
-    except ImportError:
-        return __import__(f'pyxaseco_plugins.{module_name}', fromlist=['*'])
+    return __import__(f'pyxaseco.plugins.{module_name}', fromlist=['*'])
 
 
 
@@ -138,7 +135,7 @@ async def _vote_panels_off(aseco: 'Aseco'):
         if not is_tmf:
             return
 
-        from pyxaseco.plugins.plugin_panels import allvotepanels_off
+        from pyxaseco.plugins.ui.panels import allvotepanels_off
         result = allvotepanels_off(aseco)
         if hasattr(result, '__await__'):
             await result
@@ -157,7 +154,7 @@ async def _vote_panels_on(aseco: 'Aseco', login: str):
         if not is_tmf:
             return
 
-        from pyxaseco.plugins.plugin_panels import allvotepanels_on
+        from pyxaseco.plugins.ui.panels import allvotepanels_on
         result = allvotepanels_on(aseco, login, aseco.format_colors('{#vote}'))
         if hasattr(result, '__await__'):
             await result
@@ -200,7 +197,7 @@ async def _broadcast(aseco: 'Aseco', msg: str):
 
 async def _broadcast_tmxadd(aseco: 'Aseco', msg: str):
     try:
-        from pyxaseco.plugins.plugin_rasp_jukebox import jukebox_in_window
+        from pyxaseco.plugins.feature.rasp_jukebox import jukebox_in_window
     except Exception:
         jukebox_in_window = False
 
@@ -225,7 +222,7 @@ async def _reply(aseco: 'Aseco', login: str, msg: str):
 
 def _get_rasp_msg(aseco: 'Aseco', key: str) -> str:
     try:
-        _rasp_mod = _plugin_module('plugin_rasp')
+        _rasp_mod = _plugin_module('feature.rasp')
         _rasp = getattr(_rasp_mod, '_rasp', {})
         msgs = _rasp.get('messages', {}) if isinstance(_rasp, dict) else getattr(_rasp, 'messages', {})
         value = msgs.get(key, '{#server}> {#error}' + key)
@@ -283,7 +280,7 @@ async def _check_mode_vote_window(
 
     elif mode == TA and ta_time_limits:
         try:
-            from pyxaseco.plugins.plugin_track import time_playing
+            from pyxaseco.plugins.core.track import time_playing
 
             played = time_playing(aseco)
 
@@ -345,7 +342,7 @@ async def _init_votes(aseco: 'Aseco', _data):
     disabled_scoreboard = False
 
     try:
-        _rasp_mod = _plugin_module('plugin_rasp')
+        _rasp_mod = _plugin_module('feature.rasp')
         s = _rasp_mod
         feature_votes        = getattr(s, 'feature_votes', feature_votes)
         vote_ratios          = getattr(s, 'vote_ratios', vote_ratios)
@@ -445,17 +442,17 @@ async def _on_player_info_changed(aseco: 'Aseco', player) -> None:
     if is_spec:
         if not allow_spec_voting and not aseco.is_any_admin(player):
             try:
-                from pyxaseco.plugins.plugin_panels import votepanel_off
+                from pyxaseco.plugins.ui.panels import votepanel_off
                 await votepanel_off(aseco, login)
             except Exception:
                 pass
             if login in plrvotes:
                 plrvotes.remove(login)
     else:
-        # Returned to play — show vote panel if a vote is active and they haven't voted yet
+        # Returned to play - show vote panel if a vote is active and they haven't voted yet
         if (chatvote or tmxadd) and login not in plrvotes:
             try:
-                from pyxaseco.plugins.plugin_panels import display_votepanel
+                from pyxaseco.plugins.ui.panels import display_votepanel
                 ycolor = aseco.format_colors('{#vote}')
                 await display_votepanel(aseco, player,
                                         ycolor + 'Yes - F5', '$333No - F6', 0)
@@ -530,7 +527,7 @@ async def _ta_expire_votes(aseco: 'Aseco', _data):
         return
 
     try:
-        from pyxaseco.plugins.plugin_track import time_playing
+        from pyxaseco.plugins.core.track import time_playing
         played = time_playing(aseco)
     except Exception:
         return
@@ -655,7 +652,7 @@ async def _start_vote(aseco: 'Aseco', command: dict,
     r_expire_num = 0
     ta_show_num = 0
     try:
-        from pyxaseco.plugins.plugin_track import time_playing
+        from pyxaseco.plugins.core.track import time_playing
         ta_expire_start = time_playing(aseco)
     except Exception:
         ta_expire_start = 0.0
@@ -668,7 +665,7 @@ async def _start_vote(aseco: 'Aseco', command: dict,
     await _vote_panels_on(aseco, login)
 
     if auto_vote_starter:
-        from pyxaseco.plugins.plugin_rasp_jukebox import chat_y
+        from pyxaseco.plugins.feature.rasp_jukebox import chat_y
         await chat_y(aseco, command)
     return True
 
@@ -746,7 +743,7 @@ async def chat_replay(aseco: 'Aseco', command: dict):
         return
 
     try:
-        from pyxaseco.plugins.plugin_rasp_jukebox import jukebox
+        from pyxaseco.plugins.feature.rasp_jukebox import jukebox
         if aseco.server.challenge.uid in jukebox:
             await _reply(aseco, login, '{#server}> {#error}Track is already getting replayed!')
             return
@@ -884,3 +881,5 @@ def _get_player_param(aseco, requester, param: str, offline: bool = False):
         stub.ladderrank = 0
         return stub
     return None
+
+

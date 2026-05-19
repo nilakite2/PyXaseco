@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 # Phase 1 startup identity / compatibility
 # ---------------------------------------------------------------------------
 
-PLUGIN_NAME = 'plugin_records_eyepiece.py'
-PLUGIN_VERSION = '1.1-Stable'
+PLUGIN_NAME = 'ui/records_eyepiece/plugin'
+PLUGIN_VERSION = '1.2-DEV'
 PLUGIN_MANIALINK_PREFIX = '918'
 PLUGIN_LINE_HEIGHT = 1.8
 MIN_PYXASECO_VERSION = CORE_PYXASECO_VERSION
@@ -773,14 +773,14 @@ def validate_phase1_runtime(aseco: 'Aseco') -> None:
     runtime_version = str(getattr(aseco, 'PYXASECO_VERSION', '') or CORE_PYXASECO_VERSION)
     if _version_tuple(runtime_version) < _version_tuple(MIN_PYXASECO_VERSION):
         raise RuntimeError(
-            f'[plugin_records_eyepiece.py] Not supported PyXaseco version ({runtime_version})! '
+            f'[{PLUGIN_NAME}] Not supported PyXaseco version ({runtime_version})! '
             f'Please update to min. version {MIN_PYXASECO_VERSION}!'
         )
 
     game_token = _runtime_game_token(aseco)
     if game_token not in SUPPORTED_GAME_TOKENS:
         raise RuntimeError(
-            f'[plugin_records_eyepiece.py] This plugin supports only TMF/TmForever, '
+            f'[{PLUGIN_NAME}] This plugin supports only TMF/TmForever, '
             f'can not start with a "{game_token}" Dedicated-Server!'
         )
 
@@ -795,17 +795,17 @@ def validate_phase1_dependencies(aseco: 'Aseco') -> None:
     loaded = set(_loaded_plugins(aseco))
 
     required_groups = [
-        ('plugin_localdatabase', 'core_localdb'),
-        ('plugin_tmxinfo', 'service_tmx'),
-        ('plugin_rasp_jukebox', 'feature_rasp_jukebox'),
+        ('core/localdb',),
+        ('service/tmx',),
+        ('feature/rasp_jukebox',),
     ]
     if any(cfg.enabled for cfg in _state.dedi.values()):
-        required_groups.append(('plugin_dedimania', 'service_dedimania'))
+        required_groups.append(('service/dedimania',))
 
     missing = sorted(group[0] for group in required_groups if not any(name in loaded for name in group))
     if missing:
         raise RuntimeError(
-            '[plugin_records_eyepiece.py] Unmet requirements! Missing plugin(s): ' + ', '.join(missing)
+            f'[{PLUGIN_NAME}] Unmet requirements! Missing plugin(s): ' + ', '.join(missing)
         )
 
     forbidden = []
@@ -816,7 +816,7 @@ def validate_phase1_dependencies(aseco: 'Aseco') -> None:
 
     if forbidden:
         raise RuntimeError(
-            '[plugin_records_eyepiece.py] This plugin can not run together with: ' + ', '.join(forbidden)
+            f'[{PLUGIN_NAME}] This plugin can not run together with: ' + ', '.join(forbidden)
         )
 
 

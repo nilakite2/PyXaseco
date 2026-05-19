@@ -1,5 +1,5 @@
-"""
-plugin_rasp.py — Port of plugins/plugin.rasp.php
+﻿"""
+plugin_rasp.py - Port of plugins/plugin.rasp.php
 
 RASP ranking engine:
   - Calculates and stores player averages in rs_rank
@@ -294,7 +294,7 @@ async def rasp_new_challenge(aseco: 'Aseco', challenge):
             await _show_pb(aseco, player, challenge_id, True)
 
 # ---------------------------------------------------------------------------
-# End of race — recalculate ranks
+# End of race - recalculate ranks
 # ---------------------------------------------------------------------------
 
 async def rasp_end_race(aseco: 'Aseco', _params):
@@ -308,7 +308,7 @@ async def rasp_end_race(aseco: 'Aseco', _params):
 
 
 # ---------------------------------------------------------------------------
-# Player finish — store time in rs_times
+# Player finish - store time in rs_times
 # ---------------------------------------------------------------------------
 
 async def rasp_player_finish(aseco: 'Aseco', params: list):
@@ -335,7 +335,7 @@ async def rasp_player_finish(aseco: 'Aseco', params: list):
 
 async def _insert_time(player_id: int, challenge_id: int, score: int):
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if pool is None:
             return
@@ -351,7 +351,7 @@ async def _insert_time(player_id: int, challenge_id: int, score: int):
 
 
 # ---------------------------------------------------------------------------
-# Player connect — show rank + PB
+# Player connect - show rank + PB
 # ---------------------------------------------------------------------------
 
 async def rasp_player_connect(aseco: 'Aseco', player: 'Player'):
@@ -368,7 +368,7 @@ async def rasp_player_connect(aseco: 'Aseco', player: 'Player'):
 async def _reset_ranks(aseco: 'Aseco'):
     """Recalculate rs_rank for all players."""
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if pool is None:
             return
@@ -432,7 +432,7 @@ async def _clean_data(aseco: 'Aseco'):
     records/rs_times entries when prune_records_times is enabled.
     """
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if pool is None:
             return
@@ -567,7 +567,7 @@ async def _show_pb(aseco: 'Aseco', player: 'Player', challenge_id: int, always_s
 
     if not found and player.id > 0:
         try:
-            from pyxaseco.plugins.plugin_localdatabase import get_pool
+            from pyxaseco.plugins.core.localdb import get_pool
             pool = await get_pool()
             if pool:
                 order = 'DESC' if is_stnt else 'ASC'
@@ -590,7 +590,7 @@ async def _show_pb(aseco: 'Aseco', player: 'Player', challenge_id: int, always_s
     avg_str = 'No Average'
     if player.id > 0:
         try:
-            from pyxaseco.plugins.plugin_localdatabase import get_pool
+            from pyxaseco.plugins.core.localdb import get_pool
             pool = await get_pool()
             if pool:
                 async with pool.acquire() as conn:
@@ -622,7 +622,7 @@ async def _show_pb(aseco: 'Aseco', player: 'Player', challenge_id: int, always_s
 async def _show_rank(aseco: 'Aseco', login: str):
     """Show current server rank to a player."""
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool, get_player_id
+        from pyxaseco.plugins.core.localdb import get_pool, get_player_id
         pool = await get_pool()
         if not pool:
             return
@@ -696,7 +696,7 @@ async def chat_top100(aseco: 'Aseco', command: dict):
 
 async def _show_top_ranked(aseco: 'Aseco', player: 'Player', limit: int, head: str):
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return
@@ -736,7 +736,7 @@ async def chat_topwins(aseco: 'Aseco', command: dict):
     player = command['author']
     head = 'Current TOP 100 Victors:'
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return
@@ -766,7 +766,7 @@ async def chat_active(aseco: 'Aseco', command: dict):
     player = command['author']
     head = 'TOP 100 Most Active Players:'
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return
@@ -792,3 +792,4 @@ async def chat_active(aseco: 'Aseco', command: dict):
                     ['BgRaceScore2', 'LadderRank']]]
     player.msgs.extend(pages)
     display_manialink_multi(aseco, player)
+

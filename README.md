@@ -2,15 +2,12 @@
 
 PyXaseco v1.2 is the structured controller branch for **TrackMania Forever**.
 
-It keeps compatibility with the validated controller behavior (1.1-Stable), but reorganizes the runtime around:
+It keeps parity with the validated controller behavior, but reorganizes the runtime around:
 
 - TOML-first config
 - category-based plugin naming
 - clearer ownership boundaries
 - incremental migration instead of a full rewrite
-
-## NOTE
-Not all functionality has been ported from PyXaseco 1.1-Stable yet, validation and controller rework in progress.
 
 ## Status
 
@@ -21,7 +18,7 @@ What is already in place:
 - Python 3.12 async controller core
 - TOML-based active runtime config
 - active plugin tree split into `core`, `service`, `chat`, `feature`, `ui`, and `bridge`
-- compatibility aliases for many legacy plugin import names
+- TOML-based active panel/style catalogs in `panels/panels.toml` and `styles/styles.toml`
 - active record services for:
   - local DB
   - Dedimania
@@ -30,8 +27,7 @@ What is already in place:
 
 What is still deferred:
 
-- `panels/*.xml`
-- `styles/*.xml`
+- plugins and config kept under `disabled/`
 
 ## Active Runtime Files
 
@@ -43,6 +39,8 @@ What is still deferred:
 - `adminops.toml`
 - `bannedips.toml`
 - `nations.toml`
+- `panels/panels.toml`
+- `styles/styles.toml`
 
 ## Active Loadout
 

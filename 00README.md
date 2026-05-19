@@ -17,7 +17,7 @@ It already uses:
 - Python 3.12
 - TOML-first active runtime config
 - category-based plugin naming
-- compatibility aliases for legacy plugin imports where still needed
+- category-only active runtime loading
 
 ## Source of Truth
 
@@ -31,15 +31,12 @@ Active runtime files:
 - `adminops.toml`
 - `bannedips.toml`
 - `nations.toml`
+- `panels/panels.toml`
+- `styles/styles.toml`
 
 Active loadout comes from:
 
 - `plugins.toml`
-
-Deferred second-pass config still left as XML:
-
-- `panels/*.xml`
-- `styles/*.xml`
 
 Everything under `disabled/` is also still treated as deferred.
 
@@ -91,7 +88,7 @@ Everything under `disabled/` is also still treated as deferred.
 
 - `ui/style`
 - `ui/panels`
-- `ui/records_eyepiece`
+- `ui/records_eyepiece/plugin`
 - `ui/banner`
 
 ### Bridges

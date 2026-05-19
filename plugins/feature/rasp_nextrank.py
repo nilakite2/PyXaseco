@@ -1,7 +1,7 @@
-"""
-plugin_rasp_nextrank.py — Port of plugins/plugin.rasp_nextrank.php
+﻿"""
+plugin_rasp_nextrank.py - Port of plugins/plugin.rasp_nextrank.php
 
-/nextrank — Shows the next better ranked player.
+/nextrank - Shows the next better ranked player.
 """
 
 from __future__ import annotations
@@ -36,10 +36,10 @@ async def chat_nextrank(aseco: 'Aseco', command: dict):
         return
 
     try:
-        from pyxaseco.plugins.plugin_rasp import (
+        from pyxaseco.plugins.feature.rasp import (
             feature_ranks, minrank, nextrank_show_rp, _rasp_messages
         )
-        from pyxaseco.plugins.plugin_localdatabase import get_pool, get_player_id
+        from pyxaseco.plugins.core.localdb import get_pool, get_player_id
     except ImportError:
         return
 
@@ -148,3 +148,4 @@ async def chat_nextrank(aseco: 'Aseco', command: dict):
                     )
 
     await _send_login(aseco, login, message)
+

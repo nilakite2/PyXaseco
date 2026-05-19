@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
@@ -230,7 +230,7 @@ async def _get_next_track_info(aseco: 'Aseco', mode: int) -> dict:
     Prefer jukebox first, then dedicated next challenge info if available.
     """
     try:
-        from pyxaseco.plugins.plugin_rasp_jukebox import get_jukebox
+        from pyxaseco.plugins.feature.rasp_jukebox import get_jukebox
         jb = get_jukebox()
         if isinstance(jb, dict) and jb:
             _uid, item = next(iter(jb.items()))
@@ -470,7 +470,7 @@ async def _last_track_from_history(aseco: 'Aseco') -> dict:
         }
 
         try:
-            from pyxaseco.plugins.plugin_localdatabase import get_pool
+            from pyxaseco.plugins.core.localdb import get_pool
             pool = await get_pool()
         except Exception:
             pool = None
@@ -629,3 +629,4 @@ async def _build_last_current_next_window(aseco: 'Aseco') -> str:
     ))
     append_window_end(p)
     return ''.join(p)
+

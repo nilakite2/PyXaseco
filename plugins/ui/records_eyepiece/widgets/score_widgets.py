@@ -1,5 +1,5 @@
-"""
-widgets/score_widgets.py — Phase 3 & 4 score-state widgets for Records-Eyepiece.
+﻿"""
+widgets/score_widgets.py - Phase 3 & 4 score-state widgets for Records-Eyepiece.
 
 Phase 3:  RoundScoreWidget (ML 91831)
 Phase 4:  ScoreTable list widgets shown at score screen:
@@ -133,7 +133,7 @@ def _get_score_cfg(key: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4a — LocalRecordsForScore (ML 91816)
+# Phase 4a - LocalRecordsForScore (ML 91816)
 # ---------------------------------------------------------------------------
 
 def build_local_records_for_score(aseco: 'Aseco') -> str:
@@ -176,7 +176,7 @@ def build_local_records_for_score(aseco: 'Aseco') -> str:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4b — DediRecordsForScore (ML 91815)
+# Phase 4b - DediRecordsForScore (ML 91815)
 # ---------------------------------------------------------------------------
 
 def build_dedi_records_for_score(aseco: 'Aseco') -> str:
@@ -200,8 +200,8 @@ def build_dedi_records_for_score(aseco: 'Aseco') -> str:
         try:
             import sys as _sys
             mod = (
-                _sys.modules.get('pyxaseco_plugins.plugin_records_rpg')
-                or _sys.modules.get('pyxaseco.plugins.plugin_records_rpg')
+                _sys.modules.get('pyxaseco.plugins.service.records_rpg')
+                or _sys.modules.get('pyxaseco.plugins.service.records_rpg')
             )
             rpg_track = mod.get_current_track_cache() if mod and hasattr(mod, 'get_current_track_cache') else None
             rpg_rows = list(mod._current_records) if mod and hasattr(mod, '_current_records') else []
@@ -251,7 +251,7 @@ def build_dedi_records_for_score(aseco: 'Aseco') -> str:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4c — TopAverageTimesForScore (ML 91834)
+# Phase 4c - TopAverageTimesForScore (ML 91834)
 # ---------------------------------------------------------------------------
 
 def build_avg_times_for_score(aseco: 'Aseco') -> str:
@@ -301,7 +301,7 @@ def build_avg_times_for_score(aseco: 'Aseco') -> str:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4d — DonationWidget (ML 91843)
+# Phase 4d - DonationWidget (ML 91843)
 # ---------------------------------------------------------------------------
 
 def build_donation_widget(aseco: 'Aseco') -> str:
@@ -354,7 +354,7 @@ def build_donation_widget(aseco: 'Aseco') -> str:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4e — WinningPayoutWidget (ML 91842)
+# Phase 4e - WinningPayoutWidget (ML 91842)
 # ---------------------------------------------------------------------------
 
 def build_winning_payout_widget(aseco: 'Aseco') -> str:
@@ -453,7 +453,7 @@ def build_winning_payout_widget(aseco: 'Aseco') -> str:
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 — RoundScoreWidget (ML 91831)
+# Phase 3 - RoundScoreWidget (ML 91831)
 # ---------------------------------------------------------------------------
 
 def build_round_score_widget(aseco: 'Aseco') -> str:
@@ -545,7 +545,7 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
                  f' scale="0.9" autonewline="1" textcolor="FA0F"'
                  f' text="No Score during&#10;Warm-Up!"/>')
     elif not round_scores:
-        # Empty — no one finished yet
+        # Empty - no one finished yet
         p.append(f'<label posn="2.3 -3 0.004" sizen="1.7 1.7"'
                  f' halign="right" scale="0.9" text="{escape(fmt)}--."/ >')
         p.append(f'<label posn="{score_x:.2f} -3 0.004" sizen="{score_w:.2f} 1.7"'
@@ -712,14 +712,10 @@ def _get_rpoints(aseco: 'Aseco', mode: int, shown_count: int = 0) -> list[int]:
     system = getattr(getattr(aseco, 'settings', None), 'default_rpoints', '') or ''
     rounds_points = None
     try:
-        from pyxaseco_plugins.plugin_rpoints import ROUNDS_POINTS as _ROUNDS_POINTS
+        from pyxaseco.plugins.feature.rpoints import ROUNDS_POINTS as _ROUNDS_POINTS
         rounds_points = _ROUNDS_POINTS
     except Exception:
-        try:
-            from pyxaseco.plugins.plugin_rpoints import ROUNDS_POINTS as _ROUNDS_POINTS
-            rounds_points = _ROUNDS_POINTS
-        except Exception:
-            rounds_points = None
+        rounds_points = None
     if rounds_points and system in rounds_points:
         return list(rounds_points[system][1])
     if ',' in system:
@@ -762,7 +758,7 @@ def _get_rpoints(aseco: 'Aseco', mode: int, shown_count: int = 0) -> list[int]:
 
 
 # ---------------------------------------------------------------------------
-# Send helpers — broadcast to all players
+# Send helpers - broadcast to all players
 # ---------------------------------------------------------------------------
 
 async def draw_round_score(aseco: 'Aseco') -> None:
@@ -790,3 +786,4 @@ async def hide_all_score_lists(aseco: 'Aseco') -> None:
     for ml in (ML_LOCAL_SCORE, ML_DEDI_SCORE, ML_AVG_TIMES,
                ML_DONATION, ML_WINNING_PAYOUT):
         await _broadcast(aseco, _empty(ml))
+

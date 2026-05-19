@@ -1,5 +1,5 @@
-"""
-plugin_panels.py — port of plugins/plugin.panels.php
+﻿"""
+plugin_panels.py - port of plugins/plugin.panels.php
 
 Covers:
 - loading default panel templates from /panels
@@ -17,6 +17,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pyxaseco.core.config import load_toml_file
 from pyxaseco.helpers import display_manialink, display_manialink_multi, format_text, format_time
 
 if TYPE_CHECKING:
@@ -117,6 +118,22 @@ def _panels_dir(aseco: "Aseco") -> Path:
     return _base_dir(aseco) / "panels"
 
 
+def _panels_file(aseco: "Aseco") -> Path:
+    return _panels_dir(aseco) / "panels.toml"
+
+
+def _load_panel_templates(aseco: "Aseco") -> dict[str, str]:
+    data = load_toml_file(_panels_file(aseco))
+    templates = data.get("templates", {})
+    if not isinstance(templates, dict):
+        return {}
+    return {
+        str(name): str(xml)
+        for name, xml in templates.items()
+        if isinstance(name, str) and xml is not None
+    }
+
+
 def _server_is_tmf(aseco: "Aseco") -> bool:
     try:
         return aseco.server.get_game() == "TMF"
@@ -147,8 +164,7 @@ def _empty_panel_xml(panel_id: int) -> str:
 
 
 def _read_panel_file(aseco: "Aseco", panel_name: str) -> str:
-    panel_file = _panels_dir(aseco) / f"{panel_name}.xml"
-    return panel_file.read_text(encoding="utf-8", errors="ignore")
+    return _load_panel_templates(aseco).get(panel_name, "")
 
 
 def _player_panel(player: "Player", key: str) -> str:
@@ -204,7 +220,7 @@ async def _get_player_panel_names_from_db(aseco: "Aseco", login: str) -> dict[st
     Reads players_extra.panels through plugin_localdatabase and normalizes it.
     """
     try:
-        from pyxaseco.plugins.plugin_localdatabase import ldb_get_panels
+        from pyxaseco.plugins.core.localdb import ldb_get_panels
         raw = await ldb_get_panels(aseco, login)
         return _parse_panels_db_value(raw)
     except Exception as e:
@@ -237,7 +253,7 @@ async def _persist_all_panel_choices(aseco: "Aseco", login: str, panel_names: di
     ])
 
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool, get_player_id
+        from pyxaseco.plugins.core.localdb import get_pool, get_player_id
 
         pool = await get_pool()
         if not pool:
@@ -263,13 +279,8 @@ async def _persist_all_panel_choices(aseco: "Aseco", login: str, panel_names: di
 
 def _list_templates(aseco: "Aseco", prefix: str, max_count: int) -> list[str]:
     result = []
-    pdir = _panels_dir(aseco)
-    if not pdir.exists():
-        return result
-
     plen = len(prefix)
-    for file in sorted(pdir.glob(f"{prefix}*.xml")):
-        name = file.stem
+    for name in sorted(_load_panel_templates(aseco).keys()):
         if name.lower().startswith(prefix.lower()):
             result.append(name[plen:])
     return result[:max_count]
@@ -308,7 +319,7 @@ async def panels_default(aseco: "Aseco", _param=None):
             _default_panels[key] = ""
             continue
         try:
-            aseco.console(f"[Panels] Load default {key} panel [{{1}}]", f"panels/{panel_name}.xml")
+            aseco.console(f"[Panels] Load default {key} panel [{{1}}]", f"panels/{panel_name}")
             _default_panels[key] = _read_panel_file(aseco, panel_name)
         except Exception as e:
             logger.warning("[Panels] Could not load default %s panel %s: %s", key, panel_name, e)
@@ -325,7 +336,7 @@ async def init_statspanel(aseco: "Aseco", _param=None):
 
     panel_name = "StatsUnited" if getattr(aseco.server, "rights", False) else "StatsNations"
     try:
-        aseco.console("[Panels] Load stats panel [{1}]", f"panels/{panel_name}.xml")
+        aseco.console("[Panels] Load stats panel [{1}]", f"panels/{panel_name}")
         _stats_panel_xml = _read_panel_file(aseco, panel_name)
     except Exception as e:
         logger.warning("[Panels] Could not load stats panel %s: %s", panel_name, e)
@@ -382,7 +393,7 @@ async def update_allstatspanels(aseco: "Aseco", _data=None):
 
 async def _get_online_record_counts(aseco: "Aseco") -> dict[str, int]:
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        from pyxaseco.plugins.core.localdb import get_pool
         pool = await get_pool()
         if not pool:
             return {}
@@ -412,7 +423,7 @@ async def _get_online_record_counts(aseco: "Aseco") -> dict[str, int]:
 
 async def _get_rank_and_avg(login: str) -> tuple[str, str]:
     try:
-        from pyxaseco.plugins.plugin_localdatabase import get_pool, get_player_id
+        from pyxaseco.plugins.core.localdb import get_pool, get_player_id
 
         pool = await get_pool()
         if not pool:
@@ -441,7 +452,7 @@ async def _get_rank_and_avg(login: str) -> tuple[str, str]:
 
 async def _get_donations(aseco: "Aseco", login: str) -> int:
     try:
-        from pyxaseco.plugins.plugin_localdatabase import ldb_get_donations
+        from pyxaseco.plugins.core.localdb import ldb_get_donations
         return await ldb_get_donations(aseco, login)
     except Exception:
         return 0
@@ -561,7 +572,7 @@ async def allvotepanels_on(aseco: "Aseco", starter_login: str, ycolor: str):
     Spectator state read via spectatorstatus % 10.
     """
     try:
-        from pyxaseco.plugins.plugin_rasp_votes import auto_vote_starter, allow_spec_voting
+        from pyxaseco.plugins.feature.rasp_votes import auto_vote_starter, allow_spec_voting
     except Exception:
         auto_vote_starter = True
         allow_spec_voting = False
@@ -672,7 +683,7 @@ def _update_records_cache(aseco: "Aseco"):
         pass
 
     try:
-        from pyxaseco.plugins.plugin_dedimania import dedi_db
+        from pyxaseco.plugins.service.dedimania import dedi_db
         recs = dedi_db.get("Challenge", {}).get("Records", [])
         if recs:
             _records_cache["dedi"] = format_time(int(recs[0].get("Best", 0) or 0))
@@ -685,7 +696,7 @@ def _update_records_cache(aseco: "Aseco"):
 
 def _get_donation_values() -> list[int]:
     try:
-        from pyxaseco.plugins.plugin_donate import donation_values
+        from pyxaseco.plugins.core.donate import donation_values
         return list(donation_values)
     except Exception:
         return [20, 50, 100, 200, 500, 1000, 2000]
@@ -1101,3 +1112,4 @@ async def event_panels(aseco: "Aseco", answer: list):
         if panel_name:
             await _dispatch("donate", panel_name)
         return
+

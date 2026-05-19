@@ -1,5 +1,5 @@
-"""
-plugin_rasp_chat.py — Port of plugins/plugin.rasp_chat.php
+﻿"""
+plugin_rasp_chat.py - Port of plugins/plugin.rasp_chat.php
 
 Private messages, PM log, and social shout-out commands:
 /pm /pma /pmlog /hi /bye /thx /lol /lool /brb /afk /gg /gr /n1 /bgm /official /bootme
@@ -162,7 +162,7 @@ async def chat_pmlog(aseco: 'Aseco', command: dict):
 
 
 # ---------------------------------------------------------------------------
-# Social commands — check mute list, then broadcast
+# Social commands - check mute list, then broadcast
 # ---------------------------------------------------------------------------
 
 def _muted(aseco: 'Aseco', player: 'Player', cmd: str):
@@ -280,7 +280,7 @@ async def chat_bgm(aseco: 'Aseco', command: dict):
 
 async def chat_official(aseco: 'Aseco', command: dict):
     try:
-        from pyxaseco.plugins.plugin_rasp import _rasp_messages
+        from pyxaseco.plugins.feature.rasp import _rasp_messages
         msg = _rasp_messages.get('OFFICIAL', [''])[0]
     except ImportError:
         msg = '{#server}> Official mode active!'
@@ -290,7 +290,7 @@ async def chat_official(aseco: 'Aseco', command: dict):
 async def chat_bootme(aseco: 'Aseco', command: dict):
     p = command['author']
     try:
-        from pyxaseco.plugins.plugin_rasp import _rasp_messages
+        from pyxaseco.plugins.feature.rasp import _rasp_messages
         msg = format_text(_rasp_messages.get('BOOTME', ['{1} says bye!'])[0], p.nickname)
         dialog = _rasp_messages.get('BOOTME_DIALOG', [''])[0]
     except ImportError:
@@ -342,3 +342,4 @@ def _append_pm(player: 'Player', stamp: str, from_nick: str, text: str):
 async def _send(aseco: 'Aseco', login: str, msg: str):
     await aseco.client.query_ignore_result(
         'ChatSendServerMessageToLogin', aseco.format_colors(msg), login)
+

@@ -1,7 +1,7 @@
-"""
-plugin_rasp_nextmap.py — Port of plugins/plugin.rasp_nextmap.php
+﻿"""
+plugin_rasp_nextmap.py - Port of plugins/plugin.rasp_nextmap.php
 
-/nextmap — Shows name of the next challenge.
+/nextmap - Shows name of the next challenge.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ async def chat_nextmap(aseco: 'Aseco', command: dict):
         return
 
     try:
-        from pyxaseco.plugins.plugin_rasp import _rasp_messages
+        from pyxaseco.plugins.feature.rasp import _rasp_messages
         msgs = _rasp_messages
     except ImportError:
         msgs = {}
@@ -80,7 +80,8 @@ async def chat_nextmap(aseco: 'Aseco', command: dict):
 def _get_jukebox() -> list:
     """Get current jukebox queue if jukebox plugin is loaded."""
     try:
-        from pyxaseco.plugins.plugin_rasp_jukebox import get_jukebox
+        from pyxaseco.plugins.feature.rasp_jukebox import get_jukebox
         return get_jukebox()
     except (ImportError, Exception):
         return []
+

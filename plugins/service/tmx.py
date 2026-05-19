@@ -1,5 +1,5 @@
-"""
-plugin_tmxinfo.py — Port of plugins/plugin.tmxinfo.php
+﻿"""
+plugin_tmxinfo.py - Port of plugins/plugin.tmxinfo.php
 
 Fetches TMX track info via HTTP and displays it. Shows TMX world record
 at track start. /tmxinfo and /tmxrecs commands.
@@ -699,8 +699,8 @@ async def _tmx_worldrec(aseco: "Aseco", challenge):
 
     try:
         plugin_panels = (
-            sys.modules.get("pyxaseco_plugins.plugin_panels")
-            or sys.modules.get("pyxaseco.plugins.plugin_panels")
+            sys.modules.get("pyxaseco.plugins.ui.panels")
+            or sys.modules.get("pyxaseco.plugins.ui.panels")
         )
         if plugin_panels is None:
             logger.debug("[TMXInfo] Could not update records panel: plugin_panels not loaded")
@@ -830,3 +830,4 @@ async def chat_tmxrecs(aseco: "Aseco", command: dict):
         [0.9, 0.1, 0.5, 0.3],
         "OK",
     )
+
