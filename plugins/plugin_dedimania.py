@@ -51,7 +51,7 @@ def _auth_struct() -> dict:
         'Login':       dedi_db.get('Login', ''),
         'Password':    dedi_db.get('Password', ''),
         'Tool':        'PYXASECO',
-        'Version':     '1.0',
+        'Version':     '1.1',
         'Nation':      dedi_db.get('Nation', ''),
         'Packmask':    dedi_db.get('Packmask', ''),
         'PlayersGame': True,
