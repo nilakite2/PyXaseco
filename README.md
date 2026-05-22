@@ -25,10 +25,6 @@ What is already in place:
   - Trial Records
   - RPG Records
 
-What is still deferred:
-
-- plugins and config kept under `disabled/`
-
 ## Active Runtime Files
 
 - `config.toml`
