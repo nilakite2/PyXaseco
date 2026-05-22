@@ -7,6 +7,8 @@ from datetime import datetime
 import pathlib
 from typing import TYPE_CHECKING
 
+from pyxaseco.core.legacy_plugin_namespace import MODULE_ALIASES, alias_for_entry
+
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
@@ -15,8 +17,10 @@ logger = logging.getLogger(__name__)
 _backfill_task: asyncio.Task | None = None
 
 
-def _plugin_module(name: str):
-    return importlib.import_module(f'pyxaseco.plugins.{name}')
+def _app_module(name: str):
+    entry = str(name or "").replace(".", "/")
+    legacy_name = alias_for_entry(entry)
+    return importlib.import_module(MODULE_ALIASES.get(legacy_name, legacy_name))
 
 
 def _track_uid(track: dict | None) -> str:
@@ -140,23 +144,28 @@ def _normalise_tmx_upload_date(value) -> str | None:
 async def ensure_schema(pool):
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS `challenges_extra` (
-                  `Id` mediumint(9) NOT NULL AUTO_INCREMENT,
-                  `Challenge_Id` mediumint(9) NOT NULL,
-                  `AuthorTime` int(11) NOT NULL DEFAULT 0,
-                  `GoldTime` int(11) NOT NULL DEFAULT 0,
-                  `AddedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  `TMX_Id` int(11) DEFAULT NULL,
-                  `TMX_UploadDate` datetime DEFAULT NULL,
-                  PRIMARY KEY (`Id`),
-                  UNIQUE KEY `Challenge_Id` (`Challenge_Id`),
-                  KEY `TMX_Id` (`TMX_Id`),
-                  KEY `AddedAt` (`AddedAt`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                """
-            )
+            # Suppress "already exists" notes on MariaDB/MySQL for idempotent DDL.
+            await cur.execute("SET sql_notes = 0")
+            try:
+                await cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS `challenges_extra` (
+                      `Id` mediumint(9) NOT NULL AUTO_INCREMENT,
+                      `Challenge_Id` mediumint(9) NOT NULL,
+                      `AuthorTime` int(11) NOT NULL DEFAULT 0,
+                      `GoldTime` int(11) NOT NULL DEFAULT 0,
+                      `AddedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                      `TMX_Id` int(11) DEFAULT NULL,
+                      `TMX_UploadDate` datetime DEFAULT NULL,
+                      PRIMARY KEY (`Id`),
+                      UNIQUE KEY `Challenge_Id` (`Challenge_Id`),
+                      KEY `TMX_Id` (`TMX_Id`),
+                      KEY `AddedAt` (`AddedAt`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """
+                )
+            finally:
+                await cur.execute("SET sql_notes = 1")
 
             await cur.execute("SHOW COLUMNS FROM `challenges_extra`")
             rows = await cur.fetchall()
@@ -373,7 +382,7 @@ async def _fetch_tmx_meta_for_uid(aseco: 'Aseco', uid: str) -> dict:
     if not uid:
         return {}
     try:
-        mod = _plugin_module('service.tmx')
+        mod = _app_module('service.tmx')
         getter = getattr(mod, 'get_tmx_trackmeta_for_uid', None)
         if callable(getter):
             return await getter(aseco, uid) or {}

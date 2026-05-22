@@ -1,12 +1,12 @@
 [plugin_loader]
 phase = 2
-source_of_truth_now = "plugins.toml"
-planning_manifest = "plugins.toml"
+source_of_truth_now = "apps.toml"
+planning_manifest = "apps.toml"
 legacy_flat_names = false
 category_style_names = true
 package_paths_enabled = true
 
 [notes]
 item_1 = "category names resolve directly into subfolders"
-item_2 = "plugins.toml is the only active plugin loadout source"
+item_2 = "apps.toml is the only active loadout source"
 item_3 = "legacy plugin-name redirects have been removed from the active runtime"

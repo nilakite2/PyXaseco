@@ -1,0 +1,2 @@
+"""Local records app package."""
+

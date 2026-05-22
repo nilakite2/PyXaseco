@@ -3,7 +3,7 @@ TOML-first config loader for PyXaseco.
 
 Active runtime config now comes from TOML files:
   - config.toml
-  - plugins.toml
+  - apps.toml
   - adminops.toml
   - bannedips.toml
 
@@ -319,17 +319,19 @@ def load_bannedips(path: str | Path, settings: Settings) -> bool:
     return True
 
 
-def load_plugins_list(path: str | Path) -> list[str]:
+def load_apps_list(path: str | Path) -> list[str]:
     """
-    Parse plugins.toml and return the active plugin loadout.
+    Parse apps.toml and return the active app loadout.
     """
     data = load_toml_file(path)
     if not data:
-        logger.error('load_plugins_list: could not read %s', path)
+        logger.error('load_apps_list: could not read %s', path)
         return []
 
     root = data.get('loadout', {}) or {}
-    plugins = list(root.get('enabled', []) or [])
-    logger.info('load_plugins_list: %d plugin(s) to load', len(plugins))
-    return plugins
+    apps = list(root.get('enabled', []) or [])
+    logger.info('load_apps_list: %d app entry(s) to load', len(apps))
+    return apps
+
+
 

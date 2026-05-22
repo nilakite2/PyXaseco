@@ -13,6 +13,9 @@ import re
 import html
 from typing import TYPE_CHECKING
 
+from pyxaseco.core.command_queries import command_label, iter_commands, visible_chat_commands_for_player
+from pyxaseco.models import ChatCommand
+
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
     from pyxaseco.models import Player
@@ -245,14 +248,21 @@ def show_help(aseco: 'Aseco', player: 'Player', show_admin: bool = False,
     """
     import asyncio
 
-    cmds = {name: cmd for name, cmd in aseco._chat_commands.items()
-            if cmd.isadmin == show_admin}
+    if show_admin:
+        regs = [cmd for _name, cmd in iter_commands(aseco, is_admin=True)]
+    else:
+        regs = [cmd for _name, cmd in visible_chat_commands_for_player(aseco, player)]
+
+    cmds = {
+        command_label(cmd): ChatCommand(command_label(cmd), cmd.help_text, cmd.is_admin)
+        for cmd in regs
+    }
 
     if not disp_all:
         # Show the available command names in a single compact message.
         kind = 'admin' if show_admin else 'chat'
         head = aseco.format_colors(f'{{#interact}}Currently supported {kind} commands:\n')
-        msg  = head + ', '.join(sorted(cmds.keys()))
+        msg  = head + ', '.join(cmds.keys())
         asyncio.ensure_future(
             aseco.client.query_ignore_result(
                 'ChatSendServerMessageToLogin', msg, player.login
@@ -261,8 +271,7 @@ def show_help(aseco: 'Aseco', player: 'Player', show_admin: bool = False,
         return
 
     head = f'Currently supported {"admin" if show_admin else "chat"} commands:'
-    prefix = '$f00... ' if show_admin else '$f00/'
-    rows = [[f'{prefix}{name}', cmd.help] for name, cmd in sorted(cmds.items())]
+    rows = [[f'$f00{name}', cmd.help] for name, cmd in cmds.items()]
 
     pages_data = [rows[i:i + 15] for i in range(0, max(len(rows), 1), 15)]
     player.msgs = [[1, head, [1.3, width, 1.3 - width],

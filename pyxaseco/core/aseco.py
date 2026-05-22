@@ -5,11 +5,11 @@ Port of the Aseco class in aseco.php.
 
 Responsibilities:
   - Connect to the dedicated server
-  - Load config, plugins, admin lists
+  - Load config, apps, admin lists
   - Run the main async event loop
-  - Dispatch GbxRemote callbacks to registered plugin handlers
+  - Dispatch GbxRemote callbacks to registered app handlers
   - Manage player connect/disconnect, challenge changes, chat commands
-  - Provide helper API used by plugins
+  - Provide helper API used by apps
 
 TMF-only.
 """
@@ -25,11 +25,16 @@ from pathlib import Path
 from typing import Any, Optional
 
 from pyxaseco.core.gbx_client import GbxClient, GbxError
+from pyxaseco.core.app_manager import AppManager
+from pyxaseco.core.app_metadata import AppMetadata
 from pyxaseco.core.event_bus import EventBus
+from pyxaseco.core.app_context import AppContext
+from pyxaseco.core.command_registry import CommandRegistry
 from pyxaseco.core.config import (
-    Settings, load_config, load_adminops, load_bannedips, load_plugins_list
+    Settings, load_config, load_adminops, load_bannedips, load_apps_list
 )
-from pyxaseco.core.plugin_loader import PluginLoader
+from pyxaseco.core.drivers import DatabaseDriver, GbxDriver, StorageDriver
+from pyxaseco.core.service_registry import ServiceRegistry
 from pyxaseco.models import (
     Player, PlayerList, Challenge, Gameinfo, Server, ChatCommand,
     Record, RecordList
@@ -72,9 +77,20 @@ class Aseco:
     def __init__(self, debug: bool = False):
         self.debug = debug
         self.client = GbxClient()
+        self.gbx = GbxDriver(self.client)
         self.events = EventBus()
+        self.services = ServiceRegistry()
+        self.commands = CommandRegistry()
         self.settings = Settings()
         self.server = Server('127.0.0.1', 5000, 'SuperAdmin', 'SuperAdmin')
+        self.context = AppContext(self)
+        self.storage: Optional[StorageDriver] = None
+        self.database = DatabaseDriver(self)
+        self.drivers = {
+            'gbx': self.gbx,
+            'storage': self.storage,
+            'database': self.database,
+        }
 
         # Runtime state
         self.startup_phase: bool = True
@@ -91,20 +107,21 @@ class Aseco:
         # Chat commands: name → ChatCommand
         self._chat_commands: dict[str, ChatCommand] = {}
 
-        # Plugins
-        self._plugins: list[str] = []
+        # Apps
+        self._apps: list[str] = []
+        self._app_metadata: dict[str, AppMetadata] = {}
 
         # Logging
         self._logfile: Optional[Any] = None
         self._chatlogfile: Optional[Any] = None
 
-        # Plugin loader
-        self._plugin_loader: Optional[PluginLoader] = None
+        # App manager
+        self._app_manager: Optional[AppManager] = None
 
         logger.info('PyXaseco %s initialising', PYXASECO_VERSION)
 
     # ------------------------------------------------------------------
-    # Public plugin API
+    # Public app API
     # ------------------------------------------------------------------
 
     def register_event(self, event_type: str, handler):
@@ -115,12 +132,132 @@ class Aseco:
         """Schedule an event fire. Returns a coroutine — must be awaited."""
         return self.events.fire(event_type, self, param)
 
-    def add_chat_command(self, name: str, help_text: str, is_admin: bool = False):
+    def add_chat_command(
+        self,
+        name: str,
+        help_text: str,
+        is_admin: bool = False,
+        *,
+        aliases: list[str] | tuple[str, ...] | None = None,
+        owner: str | None = None,
+        usage: str = "",
+        app: str | None = None,
+        category: str = "chat",
+        parent: str | None = None,
+        display_name: str = "",
+        public: bool = True,
+        hidden: bool = False,
+        permission: str = "",
+        role: str = "",
+        order: int = 0,
+    ):
         """Register a chat command (e.g. '/help')."""
-        cmd = ChatCommand(name, help_text, is_admin)
-        self._chat_commands[name] = cmd
+        self.register_command(
+            name,
+            help_text,
+            is_admin=is_admin,
+            aliases=aliases,
+            owner=owner,
+            usage=usage,
+            app=app,
+            category=category,
+            parent=parent,
+            display_name=display_name,
+            public=public,
+            hidden=hidden,
+            permission=permission,
+            role=role,
+            order=order,
+        )
+
+    def register_command(
+        self,
+        name: str,
+        help_text: str,
+        *,
+        is_admin: bool = False,
+        aliases: list[str] | tuple[str, ...] | None = None,
+        owner: str | None = None,
+        usage: str = "",
+        app: str | None = None,
+        category: str = "chat",
+        parent: str | None = None,
+        display_name: str = "",
+        public: bool = True,
+        hidden: bool = False,
+        permission: str = "",
+        role: str = "",
+        order: int = 0,
+    ):
+        registration = self.commands.register(
+            name,
+            help_text,
+            is_admin=is_admin,
+            owner=owner,
+            aliases=aliases,
+            usage=usage,
+            app=app,
+            category=category,
+            parent=parent,
+            display_name=display_name,
+            public=public,
+            hidden=hidden,
+            permission=permission,
+            role=role,
+            order=order,
+        )
+        self._chat_commands[registration.name] = ChatCommand(registration.name, help_text, is_admin)
+        for alias in registration.aliases:
+            self._chat_commands[alias] = ChatCommand(alias, help_text, is_admin)
         if self.debug:
-            logger.debug('ChatCommand registered: /%s', name)
+            logger.debug('Command registered: /%s aliases=%s owner=%s', registration.name, list(registration.aliases), owner)
+        return registration
+
+    def get_command(self, name: str):
+        return self.commands.get(name)
+
+    def iter_registered_commands(self):
+        return self.commands.commands().items()
+
+    def register_service(self, name: str, service: Any, *, owner: str | None = None, aliases: list[str] | tuple[str, ...] | None = None):
+        return self.services.register(name, service, owner=owner, aliases=aliases)
+
+    def get_service(self, name: str, default: Any = None) -> Any:
+        return self.services.get(name, default)
+
+    def require_service(self, name: str) -> Any:
+        return self.services.require(name)
+
+    def has_service(self, name: str) -> bool:
+        return self.services.has(name)
+
+    def register_app_metadata(self, metadata: AppMetadata):
+        self._app_metadata[metadata.app_id] = metadata
+
+    def get_app_metadata(self, app_id: str) -> AppMetadata | None:
+        return self._app_metadata.get(app_id)
+
+    @property
+    def app_metadata(self) -> dict[str, AppMetadata]:
+        return dict(self._app_metadata)
+
+    @property
+    def active_apps(self) -> list[str]:
+        if self._app_manager is None:
+            return list(self._apps)
+        return self._app_manager.loaded_apps
+
+    @property
+    def loadout_entries(self) -> list[str]:
+        if self._app_manager is None:
+            return []
+        return self._app_manager.loaded_entries
+
+    @property
+    def fulfilled_entries(self) -> list[str]:
+        if self._app_manager is None:
+            return list(self._apps)
+        return self._app_manager.fulfilled_entries
 
     def get_chat_message(self, name: str) -> str:
         """Return a configured chat message by key."""
@@ -313,6 +450,9 @@ class Aseco:
         """
         logger.info('Performing shutdown sequence')
 
+        if self._app_manager is not None:
+            await self._app_manager.shutdown_all(self)
+
         if self._shutdown_stop_server:
             for method_name in ('StopServer', 'QuitServer'):
                 try:
@@ -346,6 +486,8 @@ class Aseco:
         config_path = Path(config_file).resolve()
         # All other config-relative files live in the same directory as config.toml
         self._base_dir = config_path.parent
+        self.storage = StorageDriver(self._base_dir)
+        self.drivers['storage'] = self.storage
 
         # Load config
         self.console_text('[PyXaseco] Loading settings [{1}]', str(config_path))
@@ -376,13 +518,14 @@ class Aseco:
         self.console_text('[PyXaseco] Loading banned IPs [{1}]', str(bannedips_path))
         load_bannedips(bannedips_path, self.settings)
 
-        # Load plugins
-        plugins_toml = self._base_dir / 'plugins.toml'
-        self.console_text('[PyXaseco] Loading plugins list [{1}]', str(plugins_toml))
-        plugin_files = load_plugins_list(plugins_toml)
-        plugins_dir  = self._base_dir / 'plugins'
-        self._plugin_loader = PluginLoader(plugins_dir)
-        self._plugin_loader.load_all(plugin_files, self)
+        # Load apps
+        apps_toml = self._base_dir / 'apps.toml'
+        self.console_text('[PyXaseco] Loading app loadout [{1}]', str(apps_toml))
+        app_entries = load_apps_list(apps_toml)
+        apps_dir = self._base_dir / 'apps'
+        self._app_manager = AppManager(apps_dir)
+        self._app_manager.load_all(app_entries, self)
+        self._apps = self._app_manager.loaded_apps
 
         # Connect to dedicated server
         self.console('[PyXaseco] Connecting to {1}:{2}', self.server.ip, self.server.port)
@@ -409,6 +552,9 @@ class Aseco:
         # Sync with server state
         await self._server_sync()
 
+        if self._app_manager is not None:
+            await self._app_manager.startup_all(self)
+
         # Send visual header to in-game chat
         await self._send_header()
 
@@ -419,15 +565,15 @@ class Aseco:
 
     async def _connect(self):
         """Authenticate with the dedicated server and enable callbacks."""
-        await self.client.connect(
+        await self.gbx.connect(
             self.server.ip, self.server.port,
             timeout=float(self.server.timeout or 10)
         )
         if self.settings.server_password == 'SuperAdmin':
             logger.warning("Insecure password 'SuperAdmin' — change it in dedicated config!")
 
-        await self.client.authenticate(self.server.login, self.server.password)
-        await self.client.query('EnableCallbacks', True)
+        await self.gbx.authenticate(self.server.login, self.server.password)
+        await self.gbx.query('EnableCallbacks', True)
 
         # Wait for server to reach Running state
         await self._wait_server_ready()
@@ -843,7 +989,7 @@ class Aseco:
         cmd_name = parts[0].lower() if parts else ''
         cmd_args = parts[1] if len(parts) > 1 else ''
 
-        cmd = self._chat_commands.get(cmd_name)
+        cmd = self.commands.get(cmd_name)
         if not cmd:
             return False
 

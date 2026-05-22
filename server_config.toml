@@ -12,6 +12,6 @@ dedimania_records = "service/dedimania"
 public_status_heartbeat = "bridge/public_stats"
 
 [notes]
-item_1 = "phase 1 uses category-based plugin names from plugins.toml"
+item_1 = "phase 1 uses category-based app-entry names from apps.toml"
 item_2 = "legacy plugin-name redirects have been removed from the active runtime"
 item_3 = "package/subfolder loading is the only supported MVP loadout"
