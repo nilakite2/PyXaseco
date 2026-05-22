@@ -1,0 +1,17 @@
+[plugin_bestruns]
+x = -55.66
+y = 45.65
+nb_bestruns = 7
+nb_bestruns_with_cp = 7
+nb_max_checkpoints = 9
+
+[bestruns]
+
+[bestruns.config]
+number = "7"
+number_with_cps = "7"
+max_checkpoints = "9"
+
+[bestruns.config.position]
+x = "-55.66"
+y = "45.65"

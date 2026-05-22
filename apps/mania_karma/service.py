@@ -1866,7 +1866,7 @@ async def _mk_onSync(aseco: Aseco, _data=None) -> None:
     _runtime_aseco = aseco
     await _load_config(aseco)
     if not _cfg.api_auth_url:
-        logger.warning('[ManiaKarma] Disabled: urls.api_auth missing in plugin_defaults.toml')
+        logger.warning('[ManiaKarma] Disabled: urls.api_auth missing in app_defaults.toml')
         return
     if not _cfg.nation or _cfg.nation == 'YOUR_SERVER_NATION' or _cfg.nation not in ISO3166_ALPHA3:
         logger.warning('[ManiaKarma] Disabled: nation must be set to a valid ISO-3166 alpha-3 code via MK_NATION')
@@ -1952,7 +1952,7 @@ async def chat_karma(aseco: Aseco, command: dict) -> None:
     if params == 'RELOAD' and _is_master_admin(aseco, author):
         aseco.console('[plugin.mania_karma.py] MasterAdmin %s reloads the configuration.', login)
         await _mk_onSync(aseco)
-        await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', _fmt_message(aseco, '{#admin}Reloading the configuration from "plugin_defaults.toml" now.'), login)
+        await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', _fmt_message(aseco, '{#admin}Reloading the configuration from "app_defaults.toml" now.'), login)
         return
     if params == 'EXPORT' and _is_master_admin(aseco, author):
         await _api_export_votes(aseco, author)

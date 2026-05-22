@@ -1,0 +1,34 @@
+[plugin_bestsecs]
+pos_x = 50.9
+pos_y = -30.0
+announce_sec = true
+announce_own = true
+remove_on_delete = true
+window_rounds = true
+window_ta = true
+window_team = true
+window_cup = true
+window_lap = true
+window_stunts = true
+
+[bestsecs]
+
+[bestsecs.config]
+compare_own_rec_to_self = "1"
+remove_sec_from_db = "1"
+
+[bestsecs.config.position]
+xpos = "50.9"
+ypos = "-30"
+
+[bestsecs.config.display_recs]
+sec_recs = "1"
+own_recs = "1"
+
+[bestsecs.config.window_enabled]
+ta = "1"
+rounds = "1"
+team = "1"
+cup = "1"
+lap = "1"
+stunts = "1"

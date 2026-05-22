@@ -5,7 +5,7 @@ Jfreu's plugin v0.14 - rank limiting, VIP system, badwords filter,
 SpecOnly management, unspec voting, player join/leave messages,
 random info messages, and a comprehensive /jfreu admin command panel.
 
-Config sections (in plugin_defaults.toml):
+Config sections (in apps/jfreu/app_defaults.toml):
   [jfreu_plugin]    main settings (ranklimit, autorank, badwords, etc.)
   [jfreu_messages]  join/leave and random info messages
   [jfreu_vips]      VIP and VIP_Team lists
@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.core.config import load_toml_file
 from pyxaseco.helpers import format_text, format_time_h, strip_colors, display_manialink_multi, display_manialink
 from pyxaseco.app_services import localdb_get_player_id, localdb_get_pool, map_country
+from pyxaseco.plugin_config import get_app_defaults_path
 from pyxaseco.toml_tools import write_toml
 
 if TYPE_CHECKING:
@@ -177,10 +178,10 @@ async def init_jfreu(aseco: 'Aseco', _param):
     _state = JfreuState()
 
     # File paths
-    plugin_defaults = _base_dir / 'plugin_defaults.toml'
-    _state.conf_file = str(plugin_defaults)
-    _state.vips_file = str(plugin_defaults)
-    _state.bans_file = str(plugin_defaults)
+    app_defaults = get_app_defaults_path('jfreu', _base_dir)
+    _state.conf_file = str(app_defaults)
+    _state.vips_file = str(app_defaults)
+    _state.bans_file = str(app_defaults)
 
     # Load config
     _load_config(aseco)
@@ -254,7 +255,7 @@ def _load_config(aseco: 'Aseco'):
 
 
 def _load_messages_from_config(data: dict):
-    """Load join/leave messages and info messages from plugin_defaults.toml."""
+    """Load join/leave messages and info messages from app_defaults.toml."""
     _state.player_join  = '{#server}>> {1}: {#highlite}{2}$z$s{#message} Nation: {#highlite}{3}{#message} Ladder: {#highlite}{4}'
     _state.player_joins = '{#server}>> {1}: {#highlite}{2}$z$s{#message} Nation: {#highlite}{3}{#message} Ladder: {#highlite}{4}{#message} Server: {#highlite}{5}'
     _state.player_left  = '{#server}>> {#highlite}{1}$z$s{#message} has left the game. Played: {#highlite}{2}'

@@ -8,8 +8,8 @@ Original:
   Version 0.36
 
 Port notes:
-- Loads menu config from plugin_defaults.toml
-- Loads menu ML template from plugin_defaults.toml
+- Loads menu config from apps/fufi_menu/app_defaults.toml
+- Loads menu ML template from apps/fufi_menu/app_defaults.toml
 - Sends menu button on connect / new challenge
 - Opens nested menu windows
 - Executes menu actions by simulating a player chat command
@@ -408,14 +408,14 @@ class FufiMenu:
             try:
                 blocks = self.get_xml_template_blocks(template_xml)
             except Exception as e:
-                logger.warning("[FufiMenu] Could not parse template_xml from plugin_defaults.toml: %s", e)
+                logger.warning("[FufiMenu] Could not parse template_xml from app_defaults.toml: %s", e)
                 blocks = {}
             if {"header", "footer", "menubutton", "icon"}.issubset(blocks):
                 self.blocks = blocks
             else:
-                logger.warning("[FufiMenu] template_xml in plugin_defaults.toml is missing required blocks")
+                logger.warning("[FufiMenu] template_xml in app_defaults.toml is missing required blocks")
         if not self.blocks:
-            logger.warning("[FufiMenu] No valid template_xml found in plugin_defaults.toml, menu rendering disabled")
+            logger.warning("[FufiMenu] No valid template_xml found in app_defaults.toml, menu rendering disabled")
 
     def load_styles(self):
         self.styles = {}
@@ -1059,7 +1059,7 @@ async def fufiMenu_startup(aseco: "Aseco", _param=None):
         section, cfg_path = get_plugin_section("fufi_menu_config", getattr(aseco, "_base_dir", None))
         config = section.get("config", section) if isinstance(section, dict) else {}
         if not isinstance(config, dict) or not config:
-            logger.warning("[FufiMenu] No TOML configuration found in plugin_defaults.toml, menu disabled")
+            logger.warning("[FufiMenu] No TOML configuration found in app_defaults.toml, menu disabled")
             return
         logger.info("[FufiMenu] Config loaded from %s", cfg_path)
         _fufi_menu = FufiMenu(config, cfg_path)

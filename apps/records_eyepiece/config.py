@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.models import Gameinfo
 from pyxaseco.core.aseco import PYXASECO_VERSION as CORE_PYXASECO_VERSION
+from pyxaseco.plugin_config import get_app_defaults_path
 
 from .toml_loader import find_and_load
 
@@ -396,11 +397,6 @@ def _effective_mode(aseco: 'Aseco') -> int:
 def _load_config(aseco: 'Aseco') -> None:
     global _state
 
-    # Try multiple locations for plugin_defaults.toml so the Eyepiece section is found
-    # regardless of where the user runs main.py from:
-    #   1. Alongside config.toml (_base_dir) — the documented location
-    #   2. Current working directory — if running from a different folder
-    #   3. Alongside this config.py file (inside the plugin package)
     base_dir = Path(getattr(aseco, '_base_dir', '.')).resolve()
     path = None
     raw = {}
@@ -410,16 +406,11 @@ def _load_config(aseco: 'Aseco') -> None:
         logger.error('[Records-Eyepiece] TOML config discovery failed: %s', exc)
         raw, path = {}, None
     if not raw:
-        toml_candidates = [
-            base_dir / 'plugin_defaults.toml',
-            Path('.').resolve() / 'plugin_defaults.toml',
-            Path(__file__).resolve().parent.parent.parent / 'plugin_defaults.toml',
-        ]
+        expected_path = get_app_defaults_path('records_eyepiece', base_dir)
         logger.error(
-            '[Records-Eyepiece] Could not find or parse plugin_defaults.toml!\n'
-            '  TOML searched:\n%s\n'
-            '  Place plugin_defaults.toml next to config.toml and apps.toml.',
-            '\n'.join(f'    {c}' for c in toml_candidates),
+            '[Records-Eyepiece] Could not find or parse app_defaults.toml!\n'
+            '  Expected file:\n    %s',
+            expected_path,
         )
         _state.loaded = True
         return

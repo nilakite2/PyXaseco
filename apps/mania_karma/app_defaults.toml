@@ -1,0 +1,166 @@
+[mania_karma]
+
+[mania_karma.config]
+number_format = "english"
+show_welcome = "true"
+allow_public_vote = "true"
+show_at_start = "true"
+show_details = "true"
+show_votes = "true"
+show_karma = "true"
+require_finish = "1"
+remind_to_vote = "score"
+score_mx_window = "true"
+messages_in_window = "true"
+show_player_vote_public = "true"
+save_karma_also_local = "true"
+sync_global_karma_local = "true"
+karma_calculation_method = "default"
+uptodate_check = "true"
+uptodate_info = "default"
+wait_timeout = "40"
+connect_timeout = "30"
+keepalive_min_timeout = "100"
+
+[mania_karma.config.widget_styles]
+
+[mania_karma.config.widget_styles.vote_buttons]
+
+[mania_karma.config.widget_styles.vote_buttons.positive]
+bgcolor_default = "DFDF"
+bgcolor_focus = "FFFF"
+text_color = "070F"
+
+[mania_karma.config.widget_styles.vote_buttons.negative]
+bgcolor_default = "FDDF"
+bgcolor_focus = "FFFF"
+text_color = "700F"
+
+[mania_karma.config.widget_styles.vote_buttons.votes]
+bgcolor_disabled = "9CFF"
+bgcolor_vote = "F70F"
+
+[mania_karma.config.widget_styles.race]
+title = "$FFFManiaKarma"
+icon_style = "Icons64x64_1"
+icon_substyle = "ToolLeague1"
+background_style = "Bgs1InRace"
+background_substyle = "NavButton"
+title_style = "BgsPlayerCard"
+title_substyle = "BgRacePlayerName"
+
+[mania_karma.config.widget_styles.score]
+title = "$FFFManiaKarma"
+icon_style = "Icons64x64_1"
+icon_substyle = "ToolLeague1"
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+title_style = "BgsPlayerCard"
+title_substyle = "ProgressBar"
+
+[mania_karma.config.reminder_window]
+display = "score"
+
+[mania_karma.config.reminder_window.race]
+pos_x = "-41"
+pos_y = "-29.35"
+
+[mania_karma.config.reminder_window.score]
+pos_x = "-41"
+pos_y = "-26"
+
+[mania_karma.config.karma_lottery]
+enabled = "false"
+minimum_players = "5"
+coppers_win = "5"
+minimum_server_coppers = "50"
+
+[mania_karma.config.karma_widget]
+
+[mania_karma.config.karma_widget.gamemode]
+
+[mania_karma.config.karma_widget.gamemode.rounds]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "32.86"
+
+[mania_karma.config.karma_widget.gamemode.time_attack]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "32.86"
+
+[mania_karma.config.karma_widget.gamemode.team]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "32.86"
+
+[mania_karma.config.karma_widget.gamemode.laps]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "27.36"
+
+[mania_karma.config.karma_widget.gamemode.stunts]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "17.5"
+
+[mania_karma.config.karma_widget.gamemode.cup]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "32.86"
+
+[mania_karma.config.karma_widget.gamemode.score]
+enabled = "true"
+pos_x = "47.8"
+pos_y = "33.2"
+
+[mania_karma.config.messages]
+welcome = "{#server}*** This Server uses the ManiaKarma world Track vote system at {#highlite}$l[{1}]{2}$l{br}{#server}*** Type {#highlite}/karma help{#server} for more info."
+uptodate_ok = "{#emotic}*** This ManiaKarma plugin version {#highlite}{1}{#emotic} is up to date."
+uptodate_new = "{#emotic}*** New ManiaKarma plugin version {#highlite}{1}{#emotic} available from {#highlite}{2}"
+uptodate_failed = "{#error}*** Could not check plugin version, connection failed."
+karma_message = "{#server}> {#karma}Karma of {#highlite}{1}{#karma} is {#highlite}{2}"
+karma_your_vote = "{#karma}, you think this Track is {#highlite}{1}{#karma}. Command {#highlite}{2}"
+karma_not_voted = "{#karma}, you have {#highlite}not yet voted!"
+karma_details = "{#server}> {#karma}Fantastic: {#highlite}{2}%{#karma} ($n{#highlite}{3}{#karma}$m), Beautiful: {#highlite}{4}%{#karma} ($n{#highlite}{5}{#karma}$m), Good: {#highlite}{6}%{#karma} ($n{#highlite}{7}{#karma}$m), Bad: {#highlite}{8}%{#karma} ($n{#highlite}{9}{#karma}$m), Poor: {#highlite}{10}%{#karma} ($n{#highlite}{11}{#karma}$m), Waste: {#highlite}{12}%{#karma} ($n{#highlite}{13}{#karma}$m)"
+karma_done = "{#server}> {#karma}Vote successful for Track {#highlite}{1}{#karma}!"
+karma_change = "{#server}> {#karma}Vote changed for Track {#highlite}{1}{#karma}!"
+karma_voted = "{#server}> {#karma}You have already voted for this Track"
+karma_remind = "{#server}> {#karma}Remember to vote karma for this Track! Type {#highlite}/karma help{#server} for more info."
+karma_require_finish = "{#server}> {#error}You need to finish this Track at least {#highlite}$I {1}{#error} time{2} before being able to vote!"
+karma_no_public = "{#server}> {#error}Public karma votes disabled, use $i{#highlite}{1}{#error} instead!"
+karma_list_help = "{#server}> {#emotic}Use {#highlite}/list{#emotic} first - Type {#highlite}/list help{#emotic} for more info."
+karma_help = "{#server}This is the World Track vote System, with this system all votes are stored in a central Database and not only at this Server. The Karma of each Track {#server}are from all votes Worldwide.{br}{br}The Track-Authors and the Server-Admins need to know how good the Tracks are, so please vote all Tracks!{br}{br}{#server}You can vote with:{br}  {#highlite}/+++{#server} for fantastic{br}  {#highlite}/++{#server}   for beautiful{br}  {#highlite}/+{#server}     for good{br}  {#highlite}/-{#server}      for bad{br}  {#highlite}/--{#server}     for poor{br}  {#highlite}/---{#server}    for waste{br}{br}{#server}You can also use the {#highlite}Karma-Widget{#server} or the {#highlite}Reminder-Window{#server} at the Scoretable.{br}{br}{#server}Enter {#highlite}/karma{#server} to see the Karma of the current Track.{br}{br}{#server}Enter {#highlite}/karma details{#server} to see the detailed Karma of the current Track."
+karma_reminder_at_score = "How did you like this Track?"
+karma_vote_singular = "vote"
+karma_vote_plural = "votes"
+karma_you_have_voted = "You have voted:"
+karma_fantastic = "fantastic"
+karma_beautiful = "beautiful"
+karma_good = "good"
+karma_undecided = "undecided"
+karma_bad = "bad"
+karma_poor = "poor"
+karma_waste = "waste"
+karma_show_opinion = "{#server}>> {#highlite}[{1}]{#server} thinks this Track is {#highlite}{2}{#server}! What do you think?"
+karma_show_undecided = "{#server}>> {#highlite}[{1}]{#server} is {#highlite}undecided{#server} about this Track. What do you think?"
+lottery_mail_body = "{br}{#karma}Congratulations! You have won at the ManiaKarma lottery on {#highlite}{1}{#karma}!{br}You won {#highlite}{2} Coppers{#karma}!!!{br}{br}$L[tmtp://#addfavourite={3}]Click here to add this server to your favorites!$L"
+lottery_player_won = "{#server}> {1}$Z$S{#karma} won the ManiaKarma lottery and got {#highlite}{2} Coppers{#karma}!!! Congratulations!"
+lottery_low_coppers = "{#server}> {#message}The ManiaKarma lottery has too few Coppers, please donate some Coppers to enable lottery."
+lottery_to_few_players = "{#server}> {#message}The ManiaKarma lottery did not draw a winner, because there are not enough players online or too few voted."
+lottery_total_player_win = "{#server}> {#karma}You have won a total of {#highlite}{1} Coppers{#karma} until now."
+lottery_help = "{br}{br}{#server}Enter {#highlite}/karma lottery{#server} to see your current total win at ManiaKarma lottery (lottery only available for TMU players)."
+
+[mania_karma.config.images]
+widget_open_left = "http://maniacdn.net/undef.de/xaseco1/mania-karma/edge-open-ld-dark.png"
+widget_open_right = "http://maniacdn.net/undef.de/xaseco1/mania-karma/edge-open-rd-dark.png"
+tmx_logo_normal = "http://maniacdn.net/undef.de/xaseco1/mania-karma/logo-tmx-normal.png"
+tmx_logo_focus = "http://maniacdn.net/undef.de/xaseco1/mania-karma/logo-tmx-focus.png"
+cup_gold = "http://maniacdn.net/undef.de/xaseco1/mania-karma/cup_gold.png"
+cup_silver = "http://maniacdn.net/undef.de/xaseco1/mania-karma/cup_silver.png"
+maniakarma_logo = "http://maniacdn.net/undef.de/xaseco1/mania-karma/logo-tm-karma.png"
+progress_indicator = "http://maniacdn.net/undef.de/xaseco1/mania-karma/progress_bar_yellow_2D.bik"
+
+[mania_karma.config.urls]
+website = "www.mania-karma.com"
+api_auth = "http://worldwide.mania-karma.com/api/tmforever-trackmania-v4.php"

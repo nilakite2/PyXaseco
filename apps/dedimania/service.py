@@ -7,7 +7,7 @@ dedimania.WarningsAndTTR.
 
 Config:
   - settings.toml
-  - plugin_defaults.toml
+  - apps/dedimania/app_defaults.toml
   - .env
 """
 

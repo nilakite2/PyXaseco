@@ -9,7 +9,7 @@ RASP ranking engine:
   - Provides: /pb /rank /top10 /top100 /topwins /active
 
 Reads messages.toml for chat messages.
-Reads plugin_defaults.toml for feature flags.
+Reads apps/rasp/app_defaults.toml for feature flags.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from pyxaseco.helpers import (format_text, format_time, format_time_h,
                                strip_colors, display_manialink,
                                display_manialink_multi)
 from pyxaseco.app_services import localdb_get_player_id, localdb_get_pool
+from pyxaseco.plugin_config import get_app_defaults_path, get_plugin_section
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -122,7 +123,11 @@ async def rasp_startup(aseco: 'Aseco', _param):
     global r_ladder_max, r_replay_min, r_skip_max
     global ta_ladder_max, ta_replay_min, ta_skip_max, global_explain
 
-    aseco.console('[RASP] Loading config file [{1}]', str(aseco._base_dir / 'plugin_defaults.toml'))
+    section, cfg_path = get_plugin_section('plugin_rasp', aseco._base_dir)
+    aseco.console(
+        '[RASP] Loading config file [{1}]',
+        str(cfg_path or get_app_defaults_path('rasp', aseco._base_dir)),
+    )
     _rasp_messages = {}
 
     try:
@@ -132,10 +137,9 @@ async def rasp_startup(aseco: 'Aseco', _param):
         logger.warning('[RASP] messages config overlay failed: %s', exc)
 
     try:
-        from pyxaseco.settings_loader import _get_plugin_defaults
-        cfg = _get_plugin_defaults(aseco._base_dir).get('plugin_rasp', {})
+        cfg = section if isinstance(section, dict) else {}
     except Exception as exc:
-        logger.warning('[RASP] plugin defaults overlay failed: %s', exc)
+        logger.warning('[RASP] app defaults overlay failed: %s', exc)
         cfg = {}
 
     def _cfg_bool(key: str, default: bool) -> bool:

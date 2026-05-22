@@ -1,16 +1,17 @@
 """
 records_eyepiece/toml_loader.py
 
-Loads plugin_defaults.toml and converts the plugin_records_eyepiece section to
-the nested-dict format that config.py expects.
+Loads apps/records_eyepiece/app_defaults.toml and converts the
+plugin_records_eyepiece section to the nested-dict format that config.py expects.
 """
 
 from __future__ import annotations
 
 import logging
 import pathlib
-import tomllib
 from typing import Any
+
+from pyxaseco.plugin_config import get_app_defaults_path, get_plugin_section
 
 logger = logging.getLogger(__name__)
 
@@ -35,32 +36,16 @@ def _to_config_shape(data: dict) -> dict:
 
 
 def load_toml(path: pathlib.Path) -> dict:
-    with path.open('rb') as fh:
-        data = tomllib.load(fh)
-    return _to_config_shape(data if isinstance(data, dict) else {})
+    root_dir = path.parents[2] if len(path.parents) >= 3 else path.parent
+    section, _ = get_plugin_section('plugin_records_eyepiece', root_dir)
+    return _to_config_shape(section if isinstance(section, dict) else {})
 
 def find_and_load(base_dir: pathlib.Path) -> tuple[dict, pathlib.Path | None]:
-    import pathlib as _pl
-
-    candidates_toml = [
-        base_dir.resolve() / 'plugin_defaults.toml',
-        _pl.Path('.').resolve() / 'plugin_defaults.toml',
-        _pl.Path(__file__).resolve().parent.parent.parent / 'plugin_defaults.toml',
-    ]
-    for p in candidates_toml:
-        if p.exists():
-            try:
-                with p.open('rb') as fh:
-                    data = tomllib.load(fh)
-                section = data.get('plugin_records_eyepiece', {})
-                raw = _to_config_shape(section if isinstance(section, dict) else {})
-                root = raw.get('RECORDS_EYEPIECE')
-                if not root:
-                    logger.info('[Records-Eyepiece] Ignoring empty TOML config at %s and falling back', p)
-                    continue
-                logger.info('[Records-Eyepiece] Loaded config from %s', p)
-                return raw, p
-            except Exception as e:
-                logger.error('[Records-Eyepiece] Failed to parse %s: %s', p, e)
-
-    return {}, None
+    expected_path = get_app_defaults_path('records_eyepiece', base_dir)
+    section, path = get_plugin_section('plugin_records_eyepiece', base_dir)
+    raw = _to_config_shape(section if isinstance(section, dict) else {})
+    root = raw.get('RECORDS_EYEPIECE')
+    if not root:
+        return {}, path or expected_path
+    logger.info('[Records-Eyepiece] Loaded config from %s', path or expected_path)
+    return raw, path or expected_path

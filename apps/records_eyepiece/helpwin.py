@@ -111,7 +111,7 @@ def _build_help_window(aseco: 'Aseco', page: int = 0) -> str:
     else:
         p.append('<label posn="0 0 0.01" sizen="55 2" textsize="1" textcolor="FFFF" text="/eyeset — MasterAdmin commands:"/>')
         admin_cmds = [
-            ('reload',                   'Reload plugin_defaults.toml Eyepiece config'),
+            ('reload',                   'Reload app_defaults.toml Eyepiece config'),
             ('lfresh <seconds>',         'Set live-refresh interval'),
             ('playermarker true|false',  'Toggle online-player markers in widgets'),
         ]

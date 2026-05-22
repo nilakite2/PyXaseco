@@ -1,0 +1,18 @@
+[discord_webhook]
+
+[discord_webhook.config]
+
+[discord_webhook.config.discord_webhook]
+enabled = "false"
+admin_webhook_url = "https://discord.com/api/webhooks/"
+chat_webhook_url = "https://discord.com/api/webhooks/"
+admin_webhook_name = "PyXaseco Admin"
+chat_webhook_name = "PyXaseco Chat"
+mirror_player_chat = "true"
+mirror_server_chat = "false"
+mirror_admin_commands = "true"
+mirror_joins_leaves = "true"
+mirror_new_challenge = "true"
+mirror_warnings_errors = "true"
+strip_tm_colors = "true"
+request_timeout = "10"

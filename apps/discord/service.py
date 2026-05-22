@@ -237,7 +237,7 @@ def _load_config(aseco: "Aseco") -> DiscordWebhookConfig:
     section, path = get_plugin_section("discord_webhook", getattr(aseco, "_base_dir", None))
     raw = section.get("config", {}).get("discord_webhook", {}) if isinstance(section, dict) else {}
     if path is None:
-        logger.info("[DiscordWebhook] plugin_defaults.toml missing; using defaults")
+        logger.info("[DiscordWebhook] app_defaults.toml missing; using defaults")
         return cfg
     if not isinstance(raw, dict):
         raw = {}
@@ -293,7 +293,7 @@ async def _dw_startup(aseco: "Aseco", _param):
     cfg = _load_config(aseco)
     _state = DiscordWebhookState(aseco, cfg)
     if not cfg.enabled:
-        logger.info("[DiscordWebhook] Disabled in plugin_defaults.toml")
+        logger.info("[DiscordWebhook] Disabled in app_defaults.toml")
         return
 
     await _state.start()

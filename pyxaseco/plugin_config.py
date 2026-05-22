@@ -7,39 +7,113 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_plugin_defaults_cache: dict[pathlib.Path, dict[str, Any]] = {}
+_plugin_defaults_cache: dict[
+    pathlib.Path,
+    tuple[dict[str, Any], dict[str, pathlib.Path], list[pathlib.Path]],
+] = {}
 
 
-def _candidate_paths(base_dir=None) -> list[pathlib.Path]:
-    paths: list[pathlib.Path] = []
+def _runtime_root(base_dir=None) -> pathlib.Path:
     if base_dir:
-        paths.append(pathlib.Path(base_dir).resolve() / "plugin_defaults.toml")
-    paths.append(pathlib.Path("plugin_defaults.toml").resolve())
-    return paths
+        return pathlib.Path(base_dir).resolve()
+    return pathlib.Path(".").resolve()
+
+
+def get_app_defaults_path(app_id: str, base_dir=None) -> pathlib.Path:
+    return _runtime_root(base_dir) / "apps" / str(app_id).strip() / "app_defaults.toml"
+
+
+def _merge_defaults(
+    aggregate: dict[str, Any],
+    sources: dict[str, pathlib.Path],
+    path: pathlib.Path,
+    data: dict[str, Any],
+) -> None:
+    for key, value in data.items():
+        if not isinstance(value, dict):
+            continue
+        if key in aggregate:
+            logger.warning(
+                "[plugin_config] Duplicate defaults section %s in %s overrides %s",
+                key,
+                path,
+                sources[key],
+            )
+        aggregate[key] = value
+        sources[key] = path
+
+
+def load_plugin_defaults_catalog(
+    base_dir=None,
+) -> tuple[dict[str, Any], dict[str, pathlib.Path], list[pathlib.Path]]:
+    root = _runtime_root(base_dir)
+    cached = _plugin_defaults_cache.get(root)
+    if cached is not None:
+        return cached
+
+    aggregate: dict[str, Any] = {}
+    sources: dict[str, pathlib.Path] = {}
+    loaded_paths: list[pathlib.Path] = []
+
+    apps_dir = root / "apps"
+    if apps_dir.is_dir():
+        for path in sorted(apps_dir.glob("*/app_defaults.toml")):
+            try:
+                with path.open("rb") as fh:
+                    data = tomllib.load(fh)
+                if not isinstance(data, dict):
+                    data = {}
+                _merge_defaults(aggregate, sources, path, data)
+                loaded_paths.append(path)
+            except Exception as exc:
+                logger.error("[plugin_config] Failed to parse %s: %s", path, exc)
+
+    if not aggregate:
+        legacy_path = root / "plugin_defaults.toml"
+        if legacy_path.exists():
+            try:
+                with legacy_path.open("rb") as fh:
+                    data = tomllib.load(fh)
+                if not isinstance(data, dict):
+                    data = {}
+                _merge_defaults(aggregate, sources, legacy_path, data)
+                loaded_paths.append(legacy_path)
+            except Exception as exc:
+                logger.error("[plugin_config] Failed to parse %s: %s", legacy_path, exc)
+
+    _plugin_defaults_cache[root] = (aggregate, sources, loaded_paths)
+    return _plugin_defaults_cache[root]
 
 
 def load_plugin_defaults(base_dir=None) -> tuple[dict[str, Any], pathlib.Path | None]:
-    for path in _candidate_paths(base_dir):
-        if not path.exists():
-            continue
-        cached = _plugin_defaults_cache.get(path)
-        if cached is not None:
-            return cached, path
-        try:
-            with path.open("rb") as fh:
-                data = tomllib.load(fh)
-            if not isinstance(data, dict):
-                data = {}
-            _plugin_defaults_cache[path] = data
-            return data, path
-        except Exception as exc:
-            logger.error("[plugin_config] Failed to parse %s: %s", path, exc)
-            return {}, path
-    return {}, None
+    data, _sources, loaded_paths = load_plugin_defaults_catalog(base_dir)
+    if not loaded_paths:
+        return {}, None
+    if len(loaded_paths) == 1:
+        return data, loaded_paths[0]
+    return data, _runtime_root(base_dir) / "apps"
+
+
+def load_app_defaults_file(app_id: str, base_dir=None) -> tuple[dict[str, Any], pathlib.Path]:
+    path = get_app_defaults_path(app_id, base_dir)
+    try:
+        with path.open("rb") as fh:
+            data = tomllib.load(fh)
+        if not isinstance(data, dict):
+            data = {}
+        return data, path
+    except Exception as exc:
+        logger.error("[plugin_config] Failed to parse %s: %s", path, exc)
+        return {}, path
 
 
 def get_plugin_section(section: str, base_dir=None) -> tuple[dict[str, Any], pathlib.Path | None]:
-    data, path = load_plugin_defaults(base_dir)
+    data, sources, loaded_paths = load_plugin_defaults_catalog(base_dir)
+    anchor_path: pathlib.Path | None = None
+    if len(loaded_paths) == 1:
+        anchor_path = loaded_paths[0]
+    elif loaded_paths:
+        anchor_path = _runtime_root(base_dir) / "apps"
     candidates = []
     raw = str(section or "").strip()
     if raw:
@@ -56,8 +130,8 @@ def get_plugin_section(section: str, base_dir=None) -> tuple[dict[str, Any], pat
         seen.add(candidate)
         value = data.get(candidate, {})
         if isinstance(value, dict):
-            return value, path
-    return {}, path
+            return value, sources.get(candidate, anchor_path)
+    return {}, anchor_path
 
 
 def as_bool(value: Any, default: bool = False) -> bool:

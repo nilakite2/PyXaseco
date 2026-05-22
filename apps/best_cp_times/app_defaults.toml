@@ -1,0 +1,25 @@
+[plugin_best_cp_times_v2]
+pos_x = 49.7
+pos_y = -20.0
+width = 15.0
+height = 18.2
+number = 2000
+custom_ui = true
+show_spectators = true
+textsize = 1.0
+textscale = 0.9
+
+[best_cp_times_v2]
+
+[best_cp_times_v2.config]
+width = "15"
+height = "18.2"
+number = "2000"
+custom_ui = "true"
+show_spectators = "true"
+textsize = "1.0"
+textscale = "0.9"
+
+[best_cp_times_v2.config.position]
+x = "49.7"
+y = "-20.0"

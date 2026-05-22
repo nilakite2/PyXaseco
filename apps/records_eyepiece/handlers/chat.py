@@ -260,7 +260,7 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
             await _refresh_visitor_count(aseco)
             await draw_all_race_bars(aseco)
 
-        await _send_chat(aseco, login, '{#server}>> Reload of plugin_defaults.toml Eyepiece config done.')
+        await _send_chat(aseco, login, '{#server}>> Reload of app_defaults.toml Eyepiece config done.')
         return
 
     if p_up.startswith('LFRESH '):
@@ -292,7 +292,7 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
 
     rows = [
         ['$s/eyeset sub-commands:', ''],
-        ['reload', 'Reload plugin_defaults.toml Eyepiece config and redraw all widgets'],
+        ['reload', 'Reload app_defaults.toml Eyepiece config and redraw all widgets'],
         ['lfresh <N>', 'Set live-refresh interval to N seconds'],
         ['playermarker true|false', 'Toggle online-player markers in record widgets'],
     ]

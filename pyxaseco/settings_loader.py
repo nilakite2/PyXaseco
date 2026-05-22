@@ -18,6 +18,8 @@ import pathlib
 import tomllib
 from typing import Any
 
+from pyxaseco.plugin_config import load_plugin_defaults_catalog
+
 logger = logging.getLogger(__name__)
 
 def _load_structured_settings(path: pathlib.Path) -> dict:
@@ -316,24 +318,28 @@ def overlay_mania_karma(cfg: Any, base_dir=None) -> None:
 
 
 def _get_plugin_defaults(base_dir=None) -> dict:
-    """Return parsed plugin_defaults config, loading and caching on first call."""
+    """Return parsed app defaults config, loading and caching on first call."""
     global _pdef_cache
     if _pdef_cache is not None:
         return _pdef_cache
-    candidates = []
-    if base_dir:
-        candidates.append(pathlib.Path(base_dir) / 'plugin_defaults.toml')
-    candidates.append(pathlib.Path('plugin_defaults.toml'))
-    for p in candidates:
-        if p.exists():
-            try:
-                data = _load_structured_settings(p)
-                total = sum(len(v) if isinstance(v, dict) else 1 for v in data.values())
-                logger.info('[settings_loader] Loaded %d plugin defaults from %s', total, p)
-                _pdef_cache = data
-                return _pdef_cache
-            except Exception as exc:
-                logger.error('[settings_loader] Failed to parse %s: %s', p, exc)
+    try:
+        data, _sources, loaded_paths = load_plugin_defaults_catalog(base_dir)
+        if loaded_paths:
+            total = sum(len(v) if isinstance(v, dict) else 1 for v in data.values())
+            if len(loaded_paths) == 1 and loaded_paths[0].name == 'plugin_defaults.toml':
+                logger.info('[settings_loader] Loaded %d plugin defaults from %s', total, loaded_paths[0])
+            else:
+                root = pathlib.Path(base_dir).resolve() if base_dir else pathlib.Path('.').resolve()
+                logger.info(
+                    '[settings_loader] Loaded %d app defaults from %d app_defaults.toml file(s) under %s',
+                    total,
+                    len(loaded_paths),
+                    root / 'apps',
+                )
+            _pdef_cache = data
+            return _pdef_cache
+    except Exception as exc:
+        logger.error('[settings_loader] Failed to load app defaults: %s', exc)
     _pdef_cache = {}
     return _pdef_cache
 

@@ -1,0 +1,19 @@
+[plugin_bestcps]
+pos_x = -48.66
+pos_y = 46.66
+number = 7
+newline = 7
+rows = 1
+orientation = 0
+
+[bestcps]
+
+[bestcps.config]
+number = "7"
+newline = "7"
+rows = "1"
+orientation = "0"
+
+[bestcps.config.position]
+x = "-48.66"
+y = "46.66"
