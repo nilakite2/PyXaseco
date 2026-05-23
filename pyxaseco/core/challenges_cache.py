@@ -6,6 +6,7 @@ import importlib
 from datetime import datetime
 import pathlib
 from typing import TYPE_CHECKING
+import warnings
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -145,23 +146,29 @@ def _normalise_tmx_upload_date(value) -> str | None:
 async def ensure_schema(pool):
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS `challenges_extra` (
-                  `Id` mediumint(9) NOT NULL AUTO_INCREMENT,
-                  `Challenge_Id` mediumint(9) NOT NULL,
-                  `AuthorTime` int(11) NOT NULL DEFAULT 0,
-                  `GoldTime` int(11) NOT NULL DEFAULT 0,
-                  `AddedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  `TMX_Id` int(11) DEFAULT NULL,
-                  `TMX_UploadDate` datetime DEFAULT NULL,
-                  PRIMARY KEY (`Id`),
-                  UNIQUE KEY `Challenge_Id` (`Challenge_Id`),
-                  KEY `TMX_Id` (`TMX_Id`),
-                  KEY `AddedAt` (`AddedAt`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                """
-            )
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r".*Table 'challenges_extra' already exists.*",
+                    category=Warning,
+                )
+                await cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS `challenges_extra` (
+                      `Id` mediumint(9) NOT NULL AUTO_INCREMENT,
+                      `Challenge_Id` mediumint(9) NOT NULL,
+                      `AuthorTime` int(11) NOT NULL DEFAULT 0,
+                      `GoldTime` int(11) NOT NULL DEFAULT 0,
+                      `AddedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                      `TMX_Id` int(11) DEFAULT NULL,
+                      `TMX_UploadDate` datetime DEFAULT NULL,
+                      PRIMARY KEY (`Id`),
+                      UNIQUE KEY `Challenge_Id` (`Challenge_Id`),
+                      KEY `TMX_Id` (`TMX_Id`),
+                      KEY `AddedAt` (`AddedAt`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """
+                )
 
             await cur.execute("SHOW COLUMNS FROM `challenges_extra`")
             rows = await cur.fetchall()

@@ -41,6 +41,7 @@ TRIAL_API_TOKEN = ""
 _enabled: bool = False
 _current_track: dict | None = None
 _current_records: list[dict] = []
+_inactive_uid: str = ""
 _last_status_key: tuple[str, bool, int, int] | None = None
 
 
@@ -254,6 +255,11 @@ def _cache_for_uid(uid: str) -> bool:
     return _clean_text(uid) in _track_all_uids(_current_track)
 
 
+def _inactive_for_uid(uid: str) -> bool:
+    uid_text = _clean_text(uid)
+    return bool(uid_text) and uid_text == _inactive_uid
+
+
 def _track_matches_requested_uid(track: dict | None, uid: str) -> bool:
     uid_text = _clean_text(uid)
     if not uid_text or not isinstance(track, dict):
@@ -262,10 +268,18 @@ def _track_matches_requested_uid(track: dict | None, uid: str) -> bool:
     return uid_text in identifiers
 
 
-def _clear_current_cache() -> None:
-    global _current_track, _current_records
+def _clear_current_cache(*, clear_inactive: bool = False) -> None:
+    global _current_track, _current_records, _inactive_uid
     _current_track = None
     _current_records = []
+    if clear_inactive:
+        _inactive_uid = ""
+
+
+def _mark_inactive_uid(uid: str) -> None:
+    global _inactive_uid
+    _clear_current_cache()
+    _inactive_uid = _clean_text(uid)
 
 
 def _announce_track_status(aseco: "Aseco", uid: str, active: bool, *, points: int = 0, count: int = 0) -> None:
@@ -467,10 +481,12 @@ async def get_current_trial_track(aseco: 'Aseco') -> dict | None:
     challenge = getattr(aseco.server, "challenge", None)
     uid = str(getattr(challenge, "uid", "") or "").strip()
     if not uid:
-        _clear_current_cache()
+        _clear_current_cache(clear_inactive=True)
         return None
     if _cache_for_uid(uid):
         return dict(_current_track)
+    if _inactive_for_uid(uid):
+        return None
     await _tr_sync_current_track(aseco)
     if _cache_for_uid(uid):
         return dict(_current_track)
@@ -481,6 +497,8 @@ async def get_current_trial_records(aseco: 'Aseco', limit: int | None = None) ->
     challenge = getattr(aseco.server, "challenge", None)
     uid = str(getattr(challenge, "uid", "") or "").strip()
     if not uid:
+        return []
+    if _inactive_for_uid(uid):
         return []
     if not _cache_for_uid(uid):
         await _tr_sync_current_track(aseco)
@@ -552,7 +570,7 @@ async def _post_trial_server_heartbeat(aseco: 'Aseco') -> None:
 
 
 async def _tr_sync_current_track(aseco: 'Aseco', _param=None):
-    global _current_track, _current_records
+    global _current_track, _current_records, _inactive_uid
     if _enabled:
         try:
             await _post_trial_server_heartbeat(aseco)
@@ -561,18 +579,29 @@ async def _tr_sync_current_track(aseco: 'Aseco', _param=None):
     challenge = getattr(aseco.server, "challenge", None)
     uid = str(getattr(challenge, "uid", "") or "").strip()
     if not uid:
-        _clear_current_cache()
+        _clear_current_cache(clear_inactive=True)
         try:
             aseco.server.trial_records_active = False
         except Exception:
             pass
         return
 
+    if _cache_for_uid(uid):
+        _inactive_uid = ""
+        return
+    if _inactive_for_uid(uid):
+        try:
+            aseco.server.trial_records_active = False
+        except Exception:
+            pass
+        _announce_track_status(aseco, uid, False)
+        return
+
     try:
         current = await get_trial_track(uid)
     except Exception as exc:
         logger.warning("[TrialRecords] Trial API track lookup failed for %s: %s", uid, exc)
-        _clear_current_cache()
+        _mark_inactive_uid(uid)
         try:
             aseco.server.trial_records_active = False
         except Exception:
@@ -580,7 +609,7 @@ async def _tr_sync_current_track(aseco: 'Aseco', _param=None):
         return
 
     if not isinstance(current, dict) or not current:
-        _clear_current_cache()
+        _mark_inactive_uid(uid)
         try:
             aseco.server.trial_records_active = False
         except Exception:
@@ -589,7 +618,7 @@ async def _tr_sync_current_track(aseco: 'Aseco', _param=None):
         return
 
     if not _track_matches_requested_uid(current, uid):
-        _clear_current_cache()
+        _mark_inactive_uid(uid)
         try:
             aseco.server.trial_records_active = False
         except Exception:
@@ -604,6 +633,7 @@ async def _tr_sync_current_track(aseco: 'Aseco', _param=None):
         return
 
     _current_track = dict(_with_local_uid(current, uid) or current)
+    _inactive_uid = ""
     try:
         raw_rows = await get_trial_records(uid)
     except Exception as exc:

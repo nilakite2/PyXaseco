@@ -11,6 +11,7 @@ import asyncio
 import importlib
 import json
 import pathlib
+import random
 import re
 import tempfile
 import time
@@ -2668,7 +2669,7 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
             ['...', '{#black}newest$g/{#black}oldest', 'Selects the newest/oldest tracks'],
             ['...', '{#black}novote', "Selects tracks you didn't karma vote for"],
             [],
-            ['The jukeboxed track is the first one from the chosen selection'],
+            ['The jukeboxed track is chosen randomly from the filtered selection'],
             ['that is not in the track history.'],
         ]
         display_manialink(
@@ -2715,14 +2716,13 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
         await _reply(aseco, login, '{#server}> {#error}No tracks found, try again!')
         return
 
-    chosen_idx = 0
+    eligible_indices = []
     for idx, track in enumerate(player.tracklist, 1):
         uid = str(track.get('uid', '') or '')
         if uid and uid not in jukebox and uid not in jb_buffer:
-            chosen_idx = idx
-            break
+            eligible_indices.append(idx)
 
-    if not chosen_idx:
+    if not eligible_indices:
         name = selection or 'Selected'
         await _reply(
             aseco,
@@ -2731,6 +2731,7 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
         )
         return
 
+    chosen_idx = random.choice(eligible_indices)
     command = dict(command)
     command['params'] = str(chosen_idx)
     await chat_jukebox(aseco, command)
