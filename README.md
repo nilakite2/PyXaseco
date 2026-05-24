@@ -1,20 +1,12 @@
-# PyXaseco 1.0 Alpha
+# PyXaseco 1.1 Stable
 
 PyXaseco is a Python 3.12 controller for **TrackMania Forever** servers, inspired by XAseco and built around practical day-to-day server administration, records, widgets, RASP-style map flow, and XML-driven configuration.
 
-This repository snapshot is a **validated alpha pack**, not just an early proof of concept. It includes the Python core, the current XML config set, a working default plugin loadout, and optional Discord-side integrations.
-
 ## Status
 
-This is an **alpha release with a validated baseline**.
-
-It is intended for:
-- private and community TMF servers
-- migration from older XAseco-style setups
-- plugin parity testing
-- day-to-day real server use with the included loadout
-
-It is not presented as a perfect one-size-fits-all drop-in for every historical XAseco installation, especially because real server setups vary a lot: some admins run a very minimal loadout, while others enable nearly everything at once.
+Stable and validated release.
+Ready for daily use.
+If any issue is found, please contact me via [Discord](https://discord.gg/CwFNmzKX8G) server.
 
 ## Highlights
 
