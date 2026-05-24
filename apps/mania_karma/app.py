@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.core.base import App, Component
 
 from . import service
+from .service import MANIA_KARMA_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -37,6 +38,7 @@ class ManiaKarmaApp(App):
             description="Karma voting service and scoreboard integration.",
             depends_on=("platform_core",),
             entry_modules=("app/mania_karma",),
+            settings_schema=MANIA_KARMA_SETTINGS_SCHEMA,
         )
         self.mania_karma_surfaces = (
             ManiaKarmaModuleSurface(

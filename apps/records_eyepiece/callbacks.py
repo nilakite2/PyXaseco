@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyxaseco.core.base import Component
+from pyxaseco.core.base import Callback, Component
 
 from .handlers.actions import _on_manialink_answer
 from .handlers.events import (
@@ -46,40 +46,43 @@ class RecordsEyepieceCallbackSurface(Component):
         super().__init__(
             component_id='records_eyepiece.callbacks',
             description='Records Eyepiece HUD orchestration and event redraw surface.',
+            callbacks=(
+                Callback('onSync', _on_sync),
+                Callback('onPlayerConnect', _on_player_connect),
+                Callback('onPlayerConnect2', _on_player_connect2),
+                Callback('onPlayerDisconnect', _on_player_disconnect),
+                Callback('onPlayerInfoChanged', _on_player_info_changed),
+                Callback('onPlayerFinish1', _on_player_finish),
+                Callback('onPlayerRetire', _on_player_retire),
+                Callback('onLocalRecord', _on_local_record),
+                Callback('onRpgRecord', _on_rpg_record),
+                Callback('onTrialRecord', _on_trial_record),
+                Callback('onDediRecsLoaded', _on_dedi_recs_loaded),
+                Callback('onDedimaniaRecord', _on_dedi_record),
+                Callback('onBeginRound', _on_begin_round),
+                Callback('onEndRound', _on_end_round),
+                Callback('onNewChallenge', _on_new_challenge),
+                Callback('onNewChallenge2', _on_new_challenge2),
+                Callback('onRestartChallenge2', _on_restart_challenge),
+                Callback('onEndRace', _on_end_race),
+                Callback('onEndRace1', _on_end_race1),
+                Callback('onEverySecond', _on_every_second),
+                Callback('onCheckpoint', _on_checkpoint),
+                Callback('onJukeboxChanged', _on_jukebox_changed),
+                Callback('onTracklistChanged', _on_tracklist_changed),
+                Callback('onChallengeListModified', _on_tracklist_changed),
+                Callback('onPlayerWins', _on_player_wins),
+                Callback('onStatusChangeTo3', _on_status_to3),
+                Callback('onStatusChangeTo5', _on_status_to5),
+                Callback('onShutdown', _on_shutdown),
+                Callback('onVotingRestartChallenge', _on_voting_restart),
+                Callback('onKarmaChange', _on_karma_change),
+                Callback('onPlayerManialinkPageAnswer', _on_manialink_answer),
+            ),
         )
 
     def register(self, aseco: 'Aseco') -> None:
-        aseco.register_event('onSync',                      _on_sync)
-        aseco.register_event('onPlayerConnect',             _on_player_connect)
-        aseco.register_event('onPlayerConnect2',            _on_player_connect2)
-        aseco.register_event('onPlayerDisconnect',          _on_player_disconnect)
-        aseco.register_event('onPlayerInfoChanged',         _on_player_info_changed)
-        aseco.register_event('onPlayerFinish1',             _on_player_finish)
-        aseco.register_event('onPlayerRetire',              _on_player_retire)
-        aseco.register_event('onLocalRecord',               _on_local_record)
-        aseco.register_event('onRpgRecord',                 _on_rpg_record)
-        aseco.register_event('onTrialRecord',               _on_trial_record)
-        aseco.register_event('onDediRecsLoaded',            _on_dedi_recs_loaded)
-        aseco.register_event('onDedimaniaRecord',           _on_dedi_record)
-        aseco.register_event('onBeginRound',                _on_begin_round)
-        aseco.register_event('onEndRound',                  _on_end_round)
-        aseco.register_event('onNewChallenge',              _on_new_challenge)
-        aseco.register_event('onNewChallenge2',             _on_new_challenge2)
-        aseco.register_event('onRestartChallenge2',         _on_restart_challenge)
-        aseco.register_event('onEndRace',                   _on_end_race)
-        aseco.register_event('onEndRace1',                  _on_end_race1)
-        aseco.register_event('onEverySecond',               _on_every_second)
-        aseco.register_event('onCheckpoint',                _on_checkpoint)
-        aseco.register_event('onJukeboxChanged',            _on_jukebox_changed)
-        aseco.register_event('onTracklistChanged',          _on_tracklist_changed)
-        aseco.register_event('onChallengeListModified',     _on_tracklist_changed)
-        aseco.register_event('onPlayerWins',                _on_player_wins)
-        aseco.register_event('onStatusChangeTo3',           _on_status_to3)
-        aseco.register_event('onStatusChangeTo5',           _on_status_to5)
-        aseco.register_event('onShutdown',                  _on_shutdown)
-        aseco.register_event('onVotingRestartChallenge',    _on_voting_restart)
-        aseco.register_event('onKarmaChange',               _on_karma_change)
-        aseco.register_event('onPlayerManialinkPageAnswer', _on_manialink_answer)
+        super().register(aseco)
 
 
 CALLBACK_SURFACE = RecordsEyepieceCallbackSurface()

@@ -1,12 +1,14 @@
 """
-help_chat.py — Port of plugins/chat.help.php
+help_commands.py - Port of plugins/chat.help.php
 
-/help    → compact list of command names in chat
-/helpall → ManiaLink window with full descriptions
+/help    -> compact list of command names in chat
+/helpall -> ManiaLink window with full descriptions
 """
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
+
 from pyxaseco.helpers import show_help
 
 if TYPE_CHECKING:
@@ -39,7 +41,6 @@ def register(aseco: 'Aseco'):
 
 
 async def chat_help(aseco: 'Aseco', command: dict):
-    """Handle /help — compact command list in chat."""
     player = command['author']
     show_help(aseco, player, show_admin=False, disp_all=False)
 
@@ -50,6 +51,5 @@ async def chat_help(aseco: 'Aseco', command: dict):
 
 
 async def chat_helpall(aseco: 'Aseco', command: dict):
-    """Handle /helpall — full help in a ManiaLink window."""
     player = command['author']
     show_help(aseco, player, show_admin=False, disp_all=True, width=0.3)

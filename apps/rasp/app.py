@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.core.base import App
 
 from . import callbacks, commands, models, views
+from .rasp import RASP_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -52,6 +53,7 @@ class RaspApp(App):
             description="Gameplay flow, jukebox, votes, next-map flow, and rank flow.",
             depends_on=("platform_core", "tmx", "records_local"),
             entry_modules=("app/rasp",),
+            settings_schema=RASP_SETTINGS_SCHEMA,
         )
         self.command_surface = commands.get_component()
         self.callback_surface = callbacks.get_component()

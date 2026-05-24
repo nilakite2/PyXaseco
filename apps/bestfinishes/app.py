@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.core.base import App, Component
 
 from . import feature
+from .feature import BESTFINISHES_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -37,6 +38,7 @@ class BestFinishesApp(App):
             description="Finish-time comparison features.",
             depends_on=("platform_core",),
             entry_modules=("app/bestfinishes",),
+            settings_schema=BESTFINISHES_SETTINGS_SCHEMA,
         )
         self.bestfinishes_surfaces = (
             BestFinishesModuleSurface(

@@ -377,7 +377,7 @@ async def handle_subcommand(
     if sub == 'autotime':
         await admin_chat._delegate_if_exists(
             aseco, login,
-            'plugin_autotime:admin_autotime',
+            'skip/autotime:admin_autotime',
             aseco, admin, logtitle, chattitle, arg.strip(),
             unavailable_msg='{#server}> {#admin}Auto TimeLimit unavailable - enable the Auto Time integration'
         )
@@ -416,7 +416,7 @@ async def handle_subcommand(
     if sub == 'rpoints':
         await admin_chat._delegate_if_exists(
             aseco, login,
-            'plugin_rpoints:admin_rpoints',
+            'skip/rpoints:admin_rpoints',
             aseco, admin, logtitle, chattitle, arg.strip(),
             unavailable_msg='{#server}> {#admin}Custom Rounds points unavailable - enable the Rounds Points integration'
         )

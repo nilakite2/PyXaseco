@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 _ROOT = Path(__file__).resolve().parents[2]
-_DISABLED_ROOT = _ROOT / "apps" / "00disabled"
+_DISABLED_ROOT = _ROOT / "not_required" / "apps" / "00disabled"
 
 
 CONTAINER_PACKAGES = {
@@ -30,18 +30,18 @@ MODULE_ALIASES = {
     "pyxaseco.plugins.bridge.server_admin_bridge": "apps.admin.bridge",
     "pyxaseco.plugins.chat.admin": "apps.admin.chat",
     "pyxaseco.plugins.chat.dedimania": "apps.dedimania.chat",
-    "pyxaseco.plugins.chat.help": "apps.help.chat",
+    "pyxaseco.plugins.chat.help": "apps.help.commands",
     "pyxaseco.plugins.chat.laston": "apps.players.laston",
     "pyxaseco.plugins.chat.lastwin": "apps.platform_core.lastwin",
-    "pyxaseco.plugins.chat.me": "apps.social_chat.chat",
+    "pyxaseco.plugins.chat.me": "apps.social_chat.commands",
     "pyxaseco.plugins.chat.players": "apps.players.players",
     "pyxaseco.plugins.chat.players2": "apps.players.players2",
     "pyxaseco.plugins.chat.records": "apps.records_local.chat_records",
     "pyxaseco.plugins.chat.records2": "apps.records_local.chat_records2",
     "pyxaseco.plugins.chat.recrels": "apps.records_local.chat_recrels",
-    "pyxaseco.plugins.chat.server": "apps.server_info.chat",
-    "pyxaseco.plugins.chat.songmod": "apps.track.chat",
-    "pyxaseco.plugins.chat.stats": "apps.player_stats.chat",
+    "pyxaseco.plugins.chat.server": "apps.server_info.commands",
+    "pyxaseco.plugins.chat.songmod": "apps.track.commands",
+    "pyxaseco.plugins.chat.stats": "apps.player_stats.commands",
     "pyxaseco.plugins.chat.wins": "apps.players.wins",
     "pyxaseco.plugins.core.chatlog": "apps.platform_core.chatlog",
     "pyxaseco.plugins.core.checkpoints": "apps.platform_core.checkpoints",

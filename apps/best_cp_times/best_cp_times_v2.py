@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from html import escape
 from typing import TYPE_CHECKING
 
-from pyxaseco.app_config import as_bool, as_float, as_int, get_app_section
+from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_float,
+                                 as_int, bind_app_settings)
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -60,6 +61,23 @@ class BctState:
 
 _state = BctState()
 
+BEST_CP_TIMES_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id="best_cp_times",
+    section_name="best_cp_times_v2",
+    settings=(
+        AppSetting("config/position/x", 49.7, cast=as_float, description="Widget X position.", category="layout"),
+        AppSetting("config/position/y", -20.0, cast=as_float, description="Widget Y position.", category="layout"),
+        AppSetting("config/width", 15.0, cast=as_float, description="Widget width.", category="layout"),
+        AppSetting("config/height", 18.2, cast=as_float, description="Widget height.", category="layout"),
+        AppSetting("config/textsize", 1.0, cast=as_float, description="Base text size.", category="display"),
+        AppSetting("config/textscale", 0.9, cast=as_float, description="Text scale.", category="display"),
+        AppSetting("config/number", 2000, cast=as_int, description="Maximum checkpoints shown.", category="display"),
+        AppSetting("config/custom_ui", True, cast=as_bool, description="Hide built-in checkpoint list.", category="behavior"),
+        AppSetting("config/show_spectators", True, cast=as_bool, description="Show widget for spectators.", category="behavior"),
+    ),
+    description="Best CP Times widget settings.",
+)
+
 
 def register(aseco: "Aseco"):
     aseco.register_event("onSync", bct_onSync)
@@ -75,23 +93,20 @@ def register(aseco: "Aseco"):
 
 
 def _load_cfg(aseco: "Aseco"):
-    section, path = get_app_section("best_cp_times_v2", getattr(aseco, "_base_dir", None))
-    config = section.get("config", {}) if isinstance(section, dict) else {}
-    if not isinstance(config, dict):
-        config = {}
-    position = config.get("position", {}) if isinstance(config, dict) else {}
+    bound = bind_app_settings(BEST_CP_TIMES_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
+    path = bound.source_path
     if path is None:
         return
 
-    _state.widget.position_x = as_float(position.get("x"), _state.widget.position_x)
-    _state.widget.position_y = as_float(position.get("y"), _state.widget.position_y)
-    _state.widget.textsize = as_float(config.get("textsize"), _state.widget.textsize)
-    _state.widget.textscale = as_float(config.get("textscale"), _state.widget.textscale)
-    _state.show_max_checkpoints = max(1, as_int(config.get("number"), _state.show_max_checkpoints))
-    _state.widget.custom_ui = as_bool(config.get("custom_ui"), _state.widget.custom_ui)
-    _state.widget.show_spectators = as_bool(config.get("show_spectators"), _state.widget.show_spectators)
-    _state.widget.width = max(14.0, as_float(config.get("width"), _state.widget.width))
-    _state.widget.height = max(14.0, as_float(config.get("height"), _state.widget.height))
+    _state.widget.position_x = bound.values["config/position/x"]
+    _state.widget.position_y = bound.values["config/position/y"]
+    _state.widget.textsize = bound.values["config/textsize"]
+    _state.widget.textscale = bound.values["config/textscale"]
+    _state.show_max_checkpoints = max(1, bound.values["config/number"])
+    _state.widget.custom_ui = bound.values["config/custom_ui"]
+    _state.widget.show_spectators = bound.values["config/show_spectators"]
+    _state.widget.width = max(14.0, bound.values["config/width"])
+    _state.widget.height = max(14.0, bound.values["config/height"])
     logger.info("[BestCpTimesV2] Config loaded from %s", path)
 
 

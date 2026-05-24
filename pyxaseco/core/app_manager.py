@@ -1,25 +1,9 @@
-"""
-App manager for PyXaseco v1.3-style runtime alignment.
-
-The runtime uses loadout entries from `apps.toml`, for example:
-
-- `app/admin`
-- `app/rasp`
-- `app/records_eyepiece`
-- `core/localdb`
-- `service/dedimania`
-- `feature/jfreu`
-
-Those entries resolve into top-level `apps.*` modules. The legacy
-`pyxaseco.plugins.*` namespace remains available only as staged migration
-scaffolding for app modules that still import through the old path.
-"""
+"""App manager for the app-native PyXaseco runtime."""
 
 from __future__ import annotations
 
 import importlib
 import logging
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -28,7 +12,6 @@ if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
 from pyxaseco.core.app_metadata import AppMetadata
-from pyxaseco.core.legacy_plugin_namespace import MODULE_ALIASES, alias_for_entry, install_legacy_plugin_finder
 
 logger = logging.getLogger(__name__)
 
@@ -50,44 +33,35 @@ class AppManager:
         self._loaded_entries: list[str] = []
         self._app_metadata: dict[str, AppMetadata] = {}
         self._app_instances: dict[str, Any] = {}
+        self._app_contexts: dict[str, Any] = {}
         self._registered_apps: list[str] = []
         self._started_apps: list[str] = []
-        self._ensure_legacy_namespace()
-
-    def _ensure_legacy_namespace(self) -> None:
-        install_legacy_plugin_finder()
-        legacy_pkg = importlib.import_module("pyxaseco.plugins")
-        parent_pkg = sys.modules.get("pyxaseco")
-        if parent_pkg is not None and getattr(parent_pkg, "plugins", None) is None:
-            setattr(parent_pkg, "plugins", legacy_pkg)
 
     def _resolve_entry(self, entry_name: str) -> AppEntry:
         normalized = (entry_name or "").replace("\\", "/").strip("/")
-        if normalized.startswith("app/"):
-            app_name = normalized.split("/", 1)[1].strip()
-            module_name = f"apps.{app_name}.app"
-            app_package = f"apps.{app_name}"
-            return AppEntry(
-                entry_name=normalized,
-                module_name=module_name,
-                app_package=app_package,
-                app_id=app_name,
-                category="app",
+        if not normalized.startswith("app/"):
+            raise RuntimeError(
+                f"AppManager: loadout entry '{entry_name}' is not app-native. "
+                "Use app/<name> entries in apps.toml."
             )
 
-        legacy_name = alias_for_entry(normalized)
-        module_name = MODULE_ALIASES.get(legacy_name, legacy_name)
-        parts = module_name.split(".")
-        app_package = ".".join(parts[:2]) if len(parts) >= 2 and parts[0] == "apps" else module_name
-        app_id = app_package.rsplit(".", 1)[-1]
-        category = normalized.split("/", 1)[0] if normalized else ""
+        app_name = normalized.split("/", 1)[1].strip()
+        module_name = f"apps.{app_name}.app"
+        app_package = f"apps.{app_name}"
         return AppEntry(
             entry_name=normalized,
             module_name=module_name,
             app_package=app_package,
-            app_id=app_id,
-            category=category,
+            app_id=app_name,
+            category="app",
         )
+
+    def _context_for(self, aseco: "Aseco", metadata: AppMetadata):
+        context = self._app_contexts.get(metadata.app_id)
+        if context is None or context.app_metadata != metadata:
+            context = aseco.context.with_app(metadata)
+            self._app_contexts[metadata.app_id] = context
+        return context
 
     def _load_app_metadata(self, plan: AppEntry, aseco: "Aseco") -> AppMetadata:
         package = importlib.import_module(plan.app_package)
@@ -115,8 +89,9 @@ class AppManager:
             if app_obj is not None:
                 self._app_instances[metadata.app_id] = app_obj
                 try:
-                    app_obj.discover(aseco.context.with_app(metadata))
-                    app_obj.load(aseco.context.with_app(metadata))
+                    context = self._context_for(aseco, metadata)
+                    app_obj.discover(context)
+                    app_obj.load(context)
                 except Exception:
                     logger.debug("AppManager: app lifecycle pre-load hook failed for %s", metadata.app_id, exc_info=True)
 
@@ -199,7 +174,7 @@ class AppManager:
             app_obj = self._app_instances.get(plan.app_id)
             if app_obj is not None:
                 try:
-                    app_obj.register(aseco.context.with_app(self._app_metadata[plan.app_id]))
+                    app_obj.register(self._context_for(aseco, self._app_metadata[plan.app_id]))
                 except Exception:
                     logger.debug("AppManager: app lifecycle register hook failed for %s", plan.app_id, exc_info=True)
         except Exception as exc:
@@ -214,7 +189,7 @@ class AppManager:
             if app_obj is None or metadata is None:
                 continue
             try:
-                await app_obj.startup(aseco.context.with_app(metadata))
+                await app_obj.startup(self._context_for(aseco, metadata))
                 self._started_apps.append(app_id)
             except Exception:
                 logger.error("AppManager: startup() failed for %s", app_id, exc_info=True)
@@ -226,7 +201,7 @@ class AppManager:
             if app_obj is None or metadata is None:
                 continue
             try:
-                await app_obj.shutdown(aseco.context.with_app(metadata))
+                await app_obj.shutdown(self._context_for(aseco, metadata))
             except Exception:
                 logger.error("AppManager: shutdown() failed for %s", app_id, exc_info=True)
         self._started_apps.clear()
@@ -258,3 +233,7 @@ class AppManager:
     @property
     def app_metadata(self) -> dict[str, AppMetadata]:
         return dict(self._app_metadata)
+
+    @property
+    def app_contexts(self) -> dict[str, Any]:
+        return dict(self._app_contexts)

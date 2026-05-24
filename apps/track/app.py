@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import chat
+from . import commands
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -15,7 +15,7 @@ APP_METADATA = {
     "display_name": "Track",
     "description": "Track-side chat info such as song and mod details.",
     "modules": [
-        "apps/track/chat.py",
+        "apps/track/commands.py",
     ],
     "entries": [
         "app/track",
@@ -40,9 +40,9 @@ class TrackApp(App):
         )
         self.track_surfaces = (
             TrackModuleSurface(
-                component_id='track.chat',
+                component_id='track.commands',
                 description='Track-side chat info and song/mod lookup surface.',
-                module=chat,
+                module=commands,
             ),
         )
         self.components = self.track_surfaces

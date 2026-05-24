@@ -11,9 +11,20 @@ import logging
 import pathlib
 from typing import Any
 
-from pyxaseco.app_config import get_app_defaults_path, get_app_section
+from pyxaseco.app_config import get_app_defaults_path, load_app_defaults_file
 
 logger = logging.getLogger(__name__)
+
+
+def _records_eyepiece_section(base_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib.Path | None]:
+    data, path = load_app_defaults_file('records_eyepiece', base_dir)
+    if not isinstance(data, dict):
+        return {}, path
+    for key in ('records_eyepiece', 'plugin_records_eyepiece'):
+        value = data.get(key, {})
+        if isinstance(value, dict):
+            return value, path
+    return {}, path
 
 def _uppercase_keys(obj: Any) -> Any:
     if isinstance(obj, dict):
@@ -37,12 +48,12 @@ def _to_config_shape(data: dict) -> dict:
 
 def load_toml(path: pathlib.Path) -> dict:
     root_dir = path.parents[2] if len(path.parents) >= 3 else path.parent
-    section, _ = get_app_section('records_eyepiece', root_dir)
+    section, _ = _records_eyepiece_section(root_dir)
     return _to_config_shape(section if isinstance(section, dict) else {})
 
 def find_and_load(base_dir: pathlib.Path) -> tuple[dict, pathlib.Path | None]:
     expected_path = get_app_defaults_path('records_eyepiece', base_dir)
-    section, path = get_app_section('records_eyepiece', base_dir)
+    section, path = _records_eyepiece_section(base_dir)
     raw = _to_config_shape(section if isinstance(section, dict) else {})
     root = raw.get('RECORDS_EYEPIECE')
     if not root:

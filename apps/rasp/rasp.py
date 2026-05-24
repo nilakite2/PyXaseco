@@ -21,7 +21,14 @@ from pyxaseco.helpers import (format_text, format_time, format_time_h,
                                strip_colors, display_manialink,
                                display_manialink_multi)
 from pyxaseco.app_services import localdb_get_player_id, localdb_get_pool
-from pyxaseco.app_config import get_app_defaults_path, get_app_section
+from pyxaseco.app_config import (
+    AppSetting,
+    AppSettingsSchema,
+    as_bool,
+    as_float,
+    as_int,
+    bind_app_settings,
+)
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -83,6 +90,74 @@ _rasp: dict = {}
 _challenge_list_cache: list = []
 
 
+def _as_float_list(value, default):
+    if isinstance(value, list):
+        try:
+            parsed = [float(item) for item in value]
+            return parsed if len(parsed) == len(default) else list(default)
+        except Exception:
+            return list(default)
+    return list(default)
+
+
+def _as_int_list(value, default):
+    if isinstance(value, list):
+        try:
+            parsed = [int(item) for item in value]
+            return parsed if len(parsed) == len(default) else list(default)
+        except Exception:
+            return list(default)
+    return list(default)
+
+
+RASP_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id='rasp',
+    description='Typed app defaults for the RASP umbrella app.',
+    settings=(
+        AppSetting('feature_votes', feature_votes, as_bool, 'Enable vote features.', 'votes'),
+        AppSetting('vote_in_window', vote_in_window, as_bool, 'Show vote info in a window.', 'votes'),
+        AppSetting('allow_spec_startvote', allow_spec_startvote, as_bool, 'Allow spectators to start votes.', 'votes'),
+        AppSetting('allow_spec_voting', allow_spec_voting, as_bool, 'Allow spectators to cast votes.', 'votes'),
+        AppSetting('disable_upon_admin', disable_upon_admin, as_bool, 'Disable votes when admins intervene.', 'votes'),
+        AppSetting('disable_while_sb', disable_while_sb, as_bool, 'Disable votes while score board is active.', 'votes'),
+        AppSetting('allow_kickvotes', allow_kickvotes, as_bool, 'Allow kick votes.', 'votes'),
+        AppSetting('allow_admin_kick', allow_admin_kick, as_bool, 'Allow admins to trigger kick votes.', 'votes'),
+        AppSetting('allow_ignorevotes', allow_ignorevotes, as_bool, 'Allow ignore votes.', 'votes'),
+        AppSetting('allow_admin_ignore', allow_admin_ignore, as_bool, 'Allow admins to trigger ignore votes.', 'votes'),
+        AppSetting('ladder_fast_restart', ladder_fast_restart, as_bool, 'Use fast restart for ladder votes.', 'votes'),
+        AppSetting('auto_vote_starter', auto_vote_starter, as_bool, 'Auto-count the starter vote.', 'votes'),
+        AppSetting('max_laddervotes', max_laddervotes, as_int, 'Maximum ladder votes per player.', 'votes'),
+        AppSetting('max_replayvotes', max_replayvotes, as_int, 'Maximum replay votes per player.', 'votes'),
+        AppSetting('max_skipvotes', max_skipvotes, as_int, 'Maximum skip votes per player.', 'votes'),
+        AppSetting('replays_limit', replays_limit, as_int, 'Replay vote track limit.', 'votes'),
+        AppSetting('vote_ratios', vote_ratios, _as_float_list, 'Vote pass ratios.', 'votes'),
+        AppSetting('r_expire_limit', r_expire_limit, _as_int_list, 'Round-mode vote expiry limits.', 'votes'),
+        AppSetting('r_show_reminder', r_show_reminder, as_bool, 'Show round-mode vote reminders.', 'votes'),
+        AppSetting('r_points_limits', r_points_limits, as_bool, 'Use points-based vote limits.', 'votes'),
+        AppSetting('ta_expire_limit', ta_expire_limit, _as_int_list, 'Time-attack vote expiry limits.', 'votes'),
+        AppSetting('ta_show_reminder', ta_show_reminder, as_bool, 'Show time-attack vote reminders.', 'votes'),
+        AppSetting('ta_show_interval', ta_show_interval, as_int, 'Time-attack reminder interval.', 'votes'),
+        AppSetting('ta_time_limits', ta_time_limits, as_bool, 'Use time-based vote limits.', 'votes'),
+        AppSetting('r_ladder_max', r_ladder_max, as_float, 'Round ladder max ratio.', 'votes'),
+        AppSetting('r_replay_min', r_replay_min, as_float, 'Round replay min ratio.', 'votes'),
+        AppSetting('r_skip_max', r_skip_max, as_float, 'Round skip max ratio.', 'votes'),
+        AppSetting('ta_ladder_max', ta_ladder_max, as_float, 'TA ladder max ratio.', 'votes'),
+        AppSetting('ta_replay_min', ta_replay_min, as_float, 'TA replay min ratio.', 'votes'),
+        AppSetting('ta_skip_max', ta_skip_max, as_float, 'TA skip max ratio.', 'votes'),
+        AppSetting('global_explain', global_explain, as_int, 'Global explain mode.', 'votes'),
+        AppSetting('feature_ranks', feature_ranks, as_bool, 'Enable rankings.', 'rankings'),
+        AppSetting('feature_stats', feature_stats, as_bool, 'Enable stats.', 'rankings'),
+        AppSetting('always_show_pb', always_show_pb, as_bool, 'Always show PB info.', 'rankings'),
+        AppSetting('nextrank_show_rp', nextrank_show_rp, as_bool, 'Show ranking points in nextrank.', 'rankings'),
+        AppSetting('prune_records_times', prune_records_times, as_bool, 'Prune record times on startup.', 'rankings'),
+        AppSetting('reset_cache_start', reset_cache_start, as_bool, 'Reset ranking cache on startup.', 'rankings'),
+        AppSetting('minrank', minrank, as_int, 'Minimum rank display threshold.', 'rankings'),
+        AppSetting('maxavg', maxavg, as_int, 'Maximum average count.', 'rankings'),
+        AppSetting('maxrecs', maxrecs, as_int, 'Maximum records to retain.', 'rankings'),
+    ),
+)
+
+
 def register(aseco: 'Aseco'):
     aseco.register_event('onStartup',       rasp_startup)
     aseco.register_event('onSync',          rasp_sync)
@@ -123,10 +198,11 @@ async def rasp_startup(aseco: 'Aseco', _param):
     global r_ladder_max, r_replay_min, r_skip_max
     global ta_ladder_max, ta_replay_min, ta_skip_max, global_explain
 
-    section, cfg_path = get_app_section('rasp', aseco._base_dir)
+    settings = bind_app_settings(RASP_SETTINGS_SCHEMA, aseco._base_dir)
+    cfg_path = settings.source_path
     aseco.console(
         '[RASP] Loading config file [{1}]',
-        str(cfg_path or get_app_defaults_path('rasp', aseco._base_dir)),
+        str(cfg_path or '<defaults>'),
     )
     _rasp_messages = {}
 
@@ -136,88 +212,46 @@ async def rasp_startup(aseco: 'Aseco', _param):
     except Exception as exc:
         logger.warning('[RASP] messages config overlay failed: %s', exc)
 
-    try:
-        cfg = section if isinstance(section, dict) else {}
-    except Exception as exc:
-        logger.warning('[RASP] app defaults overlay failed: %s', exc)
-        cfg = {}
-
-    def _cfg_bool(key: str, default: bool) -> bool:
-        val = cfg.get(key, default)
-        return bool(val) if isinstance(val, bool) else str(val).strip().lower() == 'true'
-
-    def _cfg_int(key: str, default: int) -> int:
-        try:
-            return int(cfg.get(key, default))
-        except (TypeError, ValueError):
-            return default
-
-    def _cfg_float(key: str, default: float) -> float:
-        try:
-            return float(cfg.get(key, default))
-        except (TypeError, ValueError):
-            return default
-
-    def _cfg_float_list(key: str, default: list[float]) -> list[float]:
-        raw = cfg.get(key, default)
-        if isinstance(raw, list):
-            try:
-                vals = [float(x) for x in raw]
-            except (TypeError, ValueError):
-                return list(default)
-            return vals if len(vals) == len(default) else list(default)
-        return list(default)
-
-    def _cfg_int_list(key: str, default: list[int]) -> list[int]:
-        raw = cfg.get(key, default)
-        if isinstance(raw, list):
-            try:
-                vals = [int(x) for x in raw]
-            except (TypeError, ValueError):
-                return list(default)
-            return vals if len(vals) == len(default) else list(default)
-        return list(default)
-
-    feature_votes = _cfg_bool('feature_votes', feature_votes)
-    vote_in_window = _cfg_bool('vote_in_window', vote_in_window)
-    allow_spec_startvote = _cfg_bool('allow_spec_startvote', allow_spec_startvote)
-    allow_spec_voting = _cfg_bool('allow_spec_voting', allow_spec_voting)
-    disable_upon_admin = _cfg_bool('disable_upon_admin', disable_upon_admin)
-    disable_while_sb = _cfg_bool('disable_while_sb', disable_while_sb)
-    allow_kickvotes = _cfg_bool('allow_kickvotes', allow_kickvotes)
-    allow_admin_kick = _cfg_bool('allow_admin_kick', allow_admin_kick)
-    allow_ignorevotes = _cfg_bool('allow_ignorevotes', allow_ignorevotes)
-    allow_admin_ignore = _cfg_bool('allow_admin_ignore', allow_admin_ignore)
-    ladder_fast_restart = _cfg_bool('ladder_fast_restart', ladder_fast_restart)
-    auto_vote_starter = _cfg_bool('auto_vote_starter', auto_vote_starter)
-    max_laddervotes = _cfg_int('max_laddervotes', max_laddervotes)
-    max_replayvotes = _cfg_int('max_replayvotes', max_replayvotes)
-    max_skipvotes = _cfg_int('max_skipvotes', max_skipvotes)
-    replays_limit = _cfg_int('replays_limit', replays_limit)
-    vote_ratios = _cfg_float_list('vote_ratios', vote_ratios)
-    r_expire_limit = _cfg_int_list('r_expire_limit', r_expire_limit)
-    r_show_reminder = _cfg_bool('r_show_reminder', r_show_reminder)
-    r_points_limits = _cfg_bool('r_points_limits', r_points_limits)
-    ta_expire_limit = _cfg_int_list('ta_expire_limit', ta_expire_limit)
-    ta_show_reminder = _cfg_bool('ta_show_reminder', ta_show_reminder)
-    ta_show_interval = _cfg_int('ta_show_interval', ta_show_interval)
-    ta_time_limits = _cfg_bool('ta_time_limits', ta_time_limits)
-    r_ladder_max = _cfg_float('r_ladder_max', r_ladder_max)
-    r_replay_min = _cfg_float('r_replay_min', r_replay_min)
-    r_skip_max = _cfg_float('r_skip_max', r_skip_max)
-    ta_ladder_max = _cfg_float('ta_ladder_max', ta_ladder_max)
-    ta_replay_min = _cfg_float('ta_replay_min', ta_replay_min)
-    ta_skip_max = _cfg_float('ta_skip_max', ta_skip_max)
-    global_explain = _cfg_int('global_explain', global_explain)
-    feature_ranks = _cfg_bool('feature_ranks', feature_ranks)
-    feature_stats = _cfg_bool('feature_stats', feature_stats)
-    always_show_pb = _cfg_bool('always_show_pb', always_show_pb)
-    nextrank_show_rp = _cfg_bool('nextrank_show_rp', nextrank_show_rp)
-    prune_records_times = _cfg_bool('prune_records_times', prune_records_times)
-    reset_cache_start = _cfg_bool('reset_cache_start', reset_cache_start)
-    minrank = _cfg_int('minrank', minrank)
-    maxavg = _cfg_int('maxavg', maxavg)
-    maxrecs = _cfg_int('maxrecs', maxrecs)
+    feature_votes = settings.feature_votes
+    vote_in_window = settings.vote_in_window
+    allow_spec_startvote = settings.allow_spec_startvote
+    allow_spec_voting = settings.allow_spec_voting
+    disable_upon_admin = settings.disable_upon_admin
+    disable_while_sb = settings.disable_while_sb
+    allow_kickvotes = settings.allow_kickvotes
+    allow_admin_kick = settings.allow_admin_kick
+    allow_ignorevotes = settings.allow_ignorevotes
+    allow_admin_ignore = settings.allow_admin_ignore
+    ladder_fast_restart = settings.ladder_fast_restart
+    auto_vote_starter = settings.auto_vote_starter
+    max_laddervotes = settings.max_laddervotes
+    max_replayvotes = settings.max_replayvotes
+    max_skipvotes = settings.max_skipvotes
+    replays_limit = settings.replays_limit
+    vote_ratios = list(settings.vote_ratios)
+    r_expire_limit = list(settings.r_expire_limit)
+    r_show_reminder = settings.r_show_reminder
+    r_points_limits = settings.r_points_limits
+    ta_expire_limit = list(settings.ta_expire_limit)
+    ta_show_reminder = settings.ta_show_reminder
+    ta_show_interval = settings.ta_show_interval
+    ta_time_limits = settings.ta_time_limits
+    r_ladder_max = settings.r_ladder_max
+    r_replay_min = settings.r_replay_min
+    r_skip_max = settings.r_skip_max
+    ta_ladder_max = settings.ta_ladder_max
+    ta_replay_min = settings.ta_replay_min
+    ta_skip_max = settings.ta_skip_max
+    global_explain = settings.global_explain
+    feature_ranks = settings.feature_ranks
+    feature_stats = settings.feature_stats
+    always_show_pb = settings.always_show_pb
+    nextrank_show_rp = settings.nextrank_show_rp
+    prune_records_times = settings.prune_records_times
+    reset_cache_start = settings.reset_cache_start
+    minrank = settings.minrank
+    maxavg = settings.maxavg
+    maxrecs = settings.maxrecs
     aseco.server.records.set_limit(maxrecs)
 
     _rasp = {

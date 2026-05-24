@@ -17,7 +17,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pyxaseco.helpers import clean_tm_text, strip_colors
-from pyxaseco.app_config import as_bool, as_int, as_str, get_app_section
+from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_int,
+                                 as_str, bind_app_settings)
 from pyxaseco.app_services import localdb_get_player_id, localdb_get_pool
 from apps.tmx.service import (
     build_public_tmx_track_url as _build_public_tmx_track_url,
@@ -30,6 +31,10 @@ if TYPE_CHECKING:
     from pyxaseco.models import Player
 
 logger = logging.getLogger(__name__)
+
+
+def _as_dict(value, default=None):
+    return value if isinstance(value, dict) else (default if isinstance(default, dict) else {})
 
 
 def _env(name: str, default: str = "") -> str:
@@ -275,6 +280,38 @@ class KarmaConfig:
 
     def gm_cfg(self, mode: int) -> WidgetGamemodeCfg:
         return self.gamemodes.get(mode, WidgetGamemodeCfg())
+
+
+MANIA_KARMA_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id="mania_karma",
+    description="ManiaKarma settings",
+    settings=(
+        AppSetting("config", {}, _as_dict),
+        AppSetting("config/number_format", "english", as_str),
+        AppSetting("config/show_welcome", True, as_bool),
+        AppSetting("config/allow_public_vote", True, as_bool),
+        AppSetting("config/show_at_start", True, as_bool),
+        AppSetting("config/show_details", True, as_bool),
+        AppSetting("config/show_votes", True, as_bool),
+        AppSetting("config/show_karma", True, as_bool),
+        AppSetting("config/require_finish", 1, as_int),
+        AppSetting("config/remind_to_vote", "score", as_str),
+        AppSetting("config/score_mx_window", True, as_bool),
+        AppSetting("config/messages_in_window", True, as_bool),
+        AppSetting("config/show_player_vote_public", True, as_bool),
+        AppSetting("config/save_karma_also_local", True, as_bool),
+        AppSetting("config/sync_global_karma_local", True, as_bool),
+        AppSetting("config/karma_calculation_method", "default", as_str),
+        AppSetting("config/uptodate_check", True, as_bool),
+        AppSetting("config/uptodate_info", "default", as_str),
+        AppSetting("config/wait_timeout", 40, as_int),
+        AppSetting("config/connect_timeout", 30, as_int),
+        AppSetting("config/keepalive_min_timeout", 300, as_int),
+        AppSetting("config/urls", {}, _as_dict),
+        AppSetting("config/images", {}, _as_dict),
+        AppSetting("config/messages", {}, _as_dict),
+    ),
+)
 
 
 _cfg = KarmaConfig()
@@ -1737,43 +1774,37 @@ async def _handle_player_vote(aseco: Aseco, player: Any, vote: int) -> None:
 async def _load_config(aseco: Aseco) -> None:
     global _cfg
     _cfg = KarmaConfig()
-    section, path = get_app_section('mania_karma', getattr(aseco, '_base_dir', None))
-    root = section.get('config', {}) if isinstance(section, dict) else {}
-    if not isinstance(root, dict):
-        root = {}
-    urls = root.get('urls', {}) if isinstance(root, dict) else {}
-    if not isinstance(urls, dict):
-        urls = {}
+    bound = bind_app_settings(MANIA_KARMA_SETTINGS_SCHEMA, getattr(aseco, '_base_dir', None))
+    root = bound.values["config"] if isinstance(bound.values["config"], dict) else {}
+    urls = bound.values["config/urls"] if isinstance(bound.values["config/urls"], dict) else {}
 
     _cfg.api_auth_url = as_str(urls.get('api_auth'), _cfg.api_auth_url)
     _cfg.website = as_str(urls.get('website'), _cfg.website)
     _cfg.nation = as_str(_env('MK_NATION'), '').upper()
 
-    _cfg.connect_timeout = as_int(root.get('connect_timeout'), _cfg.connect_timeout)
-    _cfg.wait_timeout = as_int(root.get('wait_timeout'), _cfg.wait_timeout)
-    _cfg.keepalive_min_timeout = as_int(root.get('keepalive_min_timeout'), _cfg.keepalive_min_timeout)
-    _cfg.show_welcome = as_bool(root.get('show_welcome'), _cfg.show_welcome)
-    _cfg.show_at_start = as_bool(root.get('show_at_start'), _cfg.show_at_start)
-    _cfg.show_karma = as_bool(root.get('show_karma'), _cfg.show_karma)
-    _cfg.show_votes = as_bool(root.get('show_votes'), _cfg.show_votes)
-    _cfg.show_details = as_bool(root.get('show_details'), _cfg.show_details)
-    _cfg.allow_public_vote = as_bool(root.get('allow_public_vote'), _cfg.allow_public_vote)
-    _cfg.messages_in_window = as_bool(root.get('messages_in_window'), _cfg.messages_in_window)
-    _cfg.show_player_vote_public = as_bool(root.get('show_player_vote_public'), _cfg.show_player_vote_public)
-    _cfg.save_karma_also_local = as_bool(root.get('save_karma_also_local'), _cfg.save_karma_also_local)
-    _cfg.sync_global_karma_local = as_bool(root.get('sync_global_karma_local'), _cfg.sync_global_karma_local)
-    _cfg.score_mx_window = as_bool(root.get('score_mx_window'), _cfg.score_mx_window)
+    _cfg.connect_timeout = bound.values["config/connect_timeout"]
+    _cfg.wait_timeout = bound.values["config/wait_timeout"]
+    _cfg.keepalive_min_timeout = bound.values["config/keepalive_min_timeout"]
+    _cfg.show_welcome = bound.values["config/show_welcome"]
+    _cfg.show_at_start = bound.values["config/show_at_start"]
+    _cfg.show_karma = bound.values["config/show_karma"]
+    _cfg.show_votes = bound.values["config/show_votes"]
+    _cfg.show_details = bound.values["config/show_details"]
+    _cfg.allow_public_vote = bound.values["config/allow_public_vote"]
+    _cfg.messages_in_window = bound.values["config/messages_in_window"]
+    _cfg.show_player_vote_public = bound.values["config/show_player_vote_public"]
+    _cfg.save_karma_also_local = bound.values["config/save_karma_also_local"]
+    _cfg.sync_global_karma_local = bound.values["config/sync_global_karma_local"]
+    _cfg.score_mx_window = bound.values["config/score_mx_window"]
     _cfg.import_done = as_bool(root.get('import_done'), _cfg.import_done)
-    _cfg.require_finish = as_int(root.get('require_finish'), _cfg.require_finish)
-    _cfg.remind_to_vote = as_str(root.get('remind_to_vote'), _cfg.remind_to_vote).upper()
-    _cfg.uptime_check = as_bool(root.get('uptodate_check'), _cfg.uptime_check)
-    _cfg.uptodate_info = as_str(root.get('uptodate_info'), _cfg.uptodate_info).upper()
-    _cfg.karma_calculation_method = as_str(root.get('karma_calculation_method'), _cfg.karma_calculation_method).upper()
-    _cfg.number_format = as_str(root.get('number_format'), _cfg.number_format).lower()
+    _cfg.require_finish = bound.values["config/require_finish"]
+    _cfg.remind_to_vote = str(bound.values["config/remind_to_vote"] or _cfg.remind_to_vote).upper()
+    _cfg.uptime_check = bound.values["config/uptodate_check"]
+    _cfg.uptodate_info = str(bound.values["config/uptodate_info"] or _cfg.uptodate_info).upper()
+    _cfg.karma_calculation_method = str(bound.values["config/karma_calculation_method"] or _cfg.karma_calculation_method).upper()
+    _cfg.number_format = str(bound.values["config/number_format"] or _cfg.number_format).lower()
 
-    images = root.get('images', {}) if isinstance(root, dict) else {}
-    if not isinstance(images, dict):
-        images = {}
+    images = bound.values["config/images"] if isinstance(bound.values["config/images"], dict) else {}
     _cfg.img_open_left = as_str(images.get('widget_open_left'), _cfg.img_open_left)
     _cfg.img_open_right = as_str(images.get('widget_open_right'), _cfg.img_open_right)
     _cfg.img_tmx_logo_normal = as_str(images.get('tmx_logo_normal'), _cfg.img_tmx_logo_normal)
@@ -1783,9 +1814,7 @@ async def _load_config(aseco: Aseco) -> None:
     _cfg.img_maniakarma_logo = as_str(images.get('maniakarma_logo'), _cfg.img_maniakarma_logo)
     _cfg.img_progress_indicator = as_str(images.get('progress_indicator'), _cfg.img_progress_indicator)
 
-    messages = root.get('messages', {}) if isinstance(root, dict) else {}
-    if not isinstance(messages, dict):
-        messages = {}
+    messages = bound.values["config/messages"] if isinstance(bound.values["config/messages"], dict) else {}
     _cfg.msg_welcome = as_str(messages.get('welcome'), _cfg.msg_welcome)
     _cfg.msg_uptodate_ok = as_str(messages.get('uptodate_ok'), _cfg.msg_uptodate_ok)
     _cfg.msg_uptodate_new = as_str(messages.get('uptodate_new'), _cfg.msg_uptodate_new)
@@ -1815,7 +1844,7 @@ async def _load_config(aseco: Aseco) -> None:
     _cfg.msg_waste = as_str(messages.get('karma_waste'), _cfg.msg_waste)
     _cfg.msg_show_opinion = as_str(messages.get('karma_show_opinion'), _cfg.msg_show_opinion)
     _cfg.msg_show_undecided = as_str(messages.get('karma_show_undecided'), _cfg.msg_show_undecided)
-    logger.info('[ManiaKarma] Config loaded from %s', path if path is not None else 'defaults')
+    logger.info('[ManiaKarma] Config loaded from %s', bound.source_path if bound.source_path is not None else 'defaults')
 
     _cfg.bg_pos_default = _x(root, 'widget_styles/vote_buttons/positive/bgcolor_default', _cfg.bg_pos_default)
     _cfg.bg_pos_focus = _x(root, 'widget_styles/vote_buttons/positive/bgcolor_focus', _cfg.bg_pos_focus)

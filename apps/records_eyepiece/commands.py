@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyxaseco.core.base import Component
+from pyxaseco.core.base import Command, Component
 
 from .handlers.chat import (
     _elist_redirect,
@@ -21,20 +21,17 @@ class RecordsEyepieceCommandSurface(Component):
         super().__init__(
             component_id='records_eyepiece.commands',
             description='Records Eyepiece chat commands and HUD user actions.',
+            commands=(
+                Command('togglewidgets', 'Toggle the display of the Records-Eyepiece widgets', chat_togglewidgets),
+                Command('eyepiece', 'Displays help for the Records-Eyepiece widgets', chat_eyepiece),
+                Command('elist', 'Lists tracks currently on the server', _elist_redirect),
+                Command('estat', 'Display one of the MoreRankingLists', chat_estat),
+                Command('eyeset', 'Adjust Records-Eyepiece settings', chat_eyeset, is_admin=True),
+            ),
         )
 
     def register(self, aseco: 'Aseco') -> None:
-        aseco.add_chat_command('togglewidgets', 'Toggle the display of the Records-Eyepiece widgets')
-        aseco.add_chat_command('eyepiece',      'Displays help for the Records-Eyepiece widgets')
-        aseco.add_chat_command('elist',         'Lists tracks currently on the server')
-        aseco.add_chat_command('estat',         'Display one of the MoreRankingLists')
-        aseco.add_chat_command('eyeset',        'Adjust Records-Eyepiece settings', True)
-
-        aseco.register_event('onChat_togglewidgets', chat_togglewidgets)
-        aseco.register_event('onChat_eyepiece',      chat_eyepiece)
-        aseco.register_event('onChat_elist',         _elist_redirect)
-        aseco.register_event('onChat_estat',         chat_estat)
-        aseco.register_event('onChat_eyeset',        chat_eyeset)
+        super().register(aseco)
 
 
 COMMAND_SURFACE = RecordsEyepieceCommandSurface()

@@ -713,7 +713,7 @@ def _get_rpoints(aseco: 'Aseco', mode: int, shown_count: int = 0) -> list[int]:
     system = getattr(getattr(aseco, 'settings', None), 'default_rpoints', '') or ''
     rounds_points = None
     try:
-        rounds_points = getattr(import_runtime_module('feature/rpoints'), 'ROUNDS_POINTS', None)
+        rounds_points = getattr(import_runtime_module('skip/rpoints'), 'ROUNDS_POINTS', None)
     except Exception:
         rounds_points = None
     if rounds_points and system in rounds_points:

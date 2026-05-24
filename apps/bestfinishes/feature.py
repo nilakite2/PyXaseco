@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
-from pyxaseco.app_config import as_float, as_int, get_app_section
+from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_float, as_int, bind_app_settings
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -30,6 +30,17 @@ class BestFinishesState:
 
 
 _state = BestFinishesState()
+
+BESTFINISHES_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id="bestfinishes",
+    settings=(
+        AppSetting("config/x", 35.0, cast=as_float, description="Widget X position.", category="layout"),
+        AppSetting("config/y", 48.0, cast=as_float, description="Widget Y position.", category="layout"),
+        AppSetting("config/scale", 1.0, cast=as_float, description="Widget scale.", category="layout"),
+        AppSetting("config/nb_bestfinishes", 5, cast=as_int, description="Number of finish times to display.", category="display"),
+    ),
+    description="Best finishes widget settings.",
+)
 
 
 def register(aseco: "Aseco"):
@@ -156,16 +167,14 @@ async def OnPlayerFinish_bestfinishes(aseco: "Aseco", payload):
 
 
 def LoadConfig_bestfinishes(aseco: "Aseco"):
-    section, path = get_app_section("bestfinishes", getattr(aseco, "_base_dir", None))
-    config = section.get("config", {}) if isinstance(section, dict) else {}
-    if not isinstance(config, dict):
-        config = {}
+    bound = bind_app_settings(BESTFINISHES_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
+    path = bound.source_path
     if path is None:
         return
-    _state.config.x = as_float(config.get("x"), _state.config.x)
-    _state.config.y = as_float(config.get("y"), _state.config.y)
-    _state.config.scale = as_float(config.get("scale"), _state.config.scale)
-    _state.config.nb_bestfinishes = max(1, as_int(config.get("nb_bestfinishes"), _state.config.nb_bestfinishes))
+    _state.config.x = bound.values["config/x"]
+    _state.config.y = bound.values["config/y"]
+    _state.config.scale = bound.values["config/scale"]
+    _state.config.nb_bestfinishes = max(1, bound.values["config/nb_bestfinishes"])
     logger.info("[BestFinishes] Config loaded from %s", path)
 
 

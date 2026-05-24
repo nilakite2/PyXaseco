@@ -6,7 +6,7 @@ while the implementation still lives in ``rasp_votes.py``.
 
 from __future__ import annotations
 
-from pyxaseco.core.base import Component
+from pyxaseco.core.base import Callback, Command, Component
 
 from . import rasp_votes as _impl
 
@@ -50,10 +50,21 @@ class RaspVotingCommandSurface(Component):
         super().__init__(
             component_id='rasp.voting.commands',
             description='RASP vote state and player/server vote command surface.',
+            commands=(
+                Command('helpvote', 'Displays info about the chat-based votes', _impl.chat_helpvote),
+                Command('votehelp', 'Displays info about the chat-based votes', _impl.chat_helpvote),
+                Command('endround', 'Starts a vote to end current round', _impl.chat_endround),
+                Command('ladder', 'Starts a vote to restart track for ladder', _impl.chat_ladder),
+                Command('replay', 'Starts a vote to replay this track', _impl.chat_replay),
+                Command('skip', 'Starts a vote to skip this track', _impl.chat_skip),
+                Command('ignore', 'Starts a vote to ignore a player', _impl.chat_ignore),
+                Command('kick', 'Starts a vote to kick a player', _impl.chat_kick),
+                Command('cancel', 'Cancels your current vote', _impl.chat_cancel),
+            ),
         )
 
     def register(self, aseco) -> None:
-        register_commands(aseco)
+        super().register(aseco)
 
 
 class RaspVotingCallbackSurface(Component):
@@ -61,10 +72,22 @@ class RaspVotingCallbackSurface(Component):
         super().__init__(
             component_id='rasp.voting.callbacks',
             description='RASP vote lifecycle, expiry, and moderation callback surface.',
+            callbacks=(
+                Callback('onSync', _impl._init_votes),
+                Callback('onSync', _impl._reset_votes),
+                Callback('onEndRace1', _impl._reset_votes),
+                Callback('onNewChallenge', _impl._enable_votes),
+                Callback('onNewChallenge2', _impl._enable_votes),
+                Callback('onPlayerConnect', _impl._explain_votes),
+                Callback('onPlayerDisconnect', _impl._cancel_kick),
+                Callback('onPlayerInfoChanged', _impl._on_player_info_changed),
+                Callback('onEndRound', _impl._r_expire_votes),
+                Callback('onCheckpoint', _impl._ta_expire_votes),
+            ),
         )
 
     def register(self, aseco) -> None:
-        register_callbacks(aseco)
+        super().register(aseco)
 
 
 VOTING_COMMAND_SURFACE = RaspVotingCommandSurface()

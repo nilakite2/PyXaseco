@@ -10,13 +10,39 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 from pyxaseco.helpers import strip_colors
-from pyxaseco.app_config import as_bool, as_int, as_str, get_app_section
+from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_int,
+                                 as_str, bind_app_settings)
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
     from pyxaseco.models import Challenge, Player
 
 logger = logging.getLogger(__name__)
+
+
+DISCORD_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id="discord",
+    section_name="discord_webhook",
+    description="Discord webhook settings",
+    settings=(
+        AppSetting("config/discord_webhook/enabled", False, as_bool),
+        AppSetting("config/discord_webhook/admin_webhook_url", "", as_str),
+        AppSetting("config/discord_webhook/chat_webhook_url", "", as_str),
+        AppSetting("config/discord_webhook/admin_webhook_name", "PyXaseco Admin", as_str),
+        AppSetting("config/discord_webhook/chat_webhook_name", "PyXaseco Chat", as_str),
+        AppSetting("config/discord_webhook/mirror_player_chat", True, as_bool),
+        AppSetting("config/discord_webhook/mirror_server_chat", False, as_bool),
+        AppSetting("config/discord_webhook/mirror_admin_commands", True, as_bool),
+        AppSetting("config/discord_webhook/mirror_joins_leaves", True, as_bool),
+        AppSetting("config/discord_webhook/mirror_new_challenge", True, as_bool),
+        AppSetting("config/discord_webhook/mirror_warnings_errors", True, as_bool),
+        AppSetting("config/discord_webhook/strip_tm_colors", True, as_bool),
+        AppSetting("config/discord_webhook/request_timeout", 10, as_int),
+        AppSetting("config/discord_webhook/chat_throttle_player_threshold", 10, as_int),
+        AppSetting("config/discord_webhook/chat_batch_window_ms", 1200, as_int),
+        AppSetting("config/discord_webhook/chat_batch_max_lines", 8, as_int),
+    ),
+)
 
 
 @dataclass
@@ -234,33 +260,28 @@ def _parse_bool(text: str | None, default: bool) -> bool:
 
 def _load_config(aseco: "Aseco") -> DiscordWebhookConfig:
     cfg = DiscordWebhookConfig()
-    section, path = get_app_section("discord_webhook", getattr(aseco, "_base_dir", None))
-    raw = section.get("config", {}).get("discord_webhook", {}) if isinstance(section, dict) else {}
-    if path is None:
+    bound = bind_app_settings(DISCORD_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
+    if bound.source_path is None:
         logger.info("[DiscordWebhook] app_defaults.toml missing; using defaults")
         return cfg
-    if not isinstance(raw, dict):
-        raw = {}
 
-    cfg.enabled = as_bool(raw.get("enabled"), cfg.enabled)
-    cfg.admin_webhook_url = as_str(raw.get("admin_webhook_url"), cfg.admin_webhook_url)
-    cfg.chat_webhook_url = as_str(raw.get("chat_webhook_url"), cfg.chat_webhook_url)
-    cfg.admin_webhook_name = as_str(raw.get("admin_webhook_name"), cfg.admin_webhook_name)
-    cfg.chat_webhook_name = as_str(raw.get("chat_webhook_name"), cfg.chat_webhook_name)
-    cfg.mirror_player_chat = as_bool(raw.get("mirror_player_chat"), cfg.mirror_player_chat)
-    cfg.mirror_server_chat = as_bool(raw.get("mirror_server_chat"), cfg.mirror_server_chat)
-    cfg.mirror_admin_commands = as_bool(raw.get("mirror_admin_commands"), cfg.mirror_admin_commands)
-    cfg.mirror_joins_leaves = as_bool(raw.get("mirror_joins_leaves"), cfg.mirror_joins_leaves)
-    cfg.mirror_new_challenge = as_bool(raw.get("mirror_new_challenge"), cfg.mirror_new_challenge)
-    cfg.mirror_warnings_errors = as_bool(raw.get("mirror_warnings_errors"), cfg.mirror_warnings_errors)
-    cfg.strip_tm_colors = as_bool(raw.get("strip_tm_colors"), cfg.strip_tm_colors)
-    cfg.request_timeout = as_int(raw.get("request_timeout"), cfg.request_timeout)
-    cfg.chat_throttle_player_threshold = as_int(
-        raw.get("chat_throttle_player_threshold"), cfg.chat_throttle_player_threshold
-    )
-    cfg.chat_batch_window_ms = as_int(raw.get("chat_batch_window_ms"), cfg.chat_batch_window_ms)
-    cfg.chat_batch_max_lines = as_int(raw.get("chat_batch_max_lines"), cfg.chat_batch_max_lines)
-    logger.info("[DiscordWebhook] Config loaded from %s", path)
+    cfg.enabled = bound.values["config/discord_webhook/enabled"]
+    cfg.admin_webhook_url = bound.values["config/discord_webhook/admin_webhook_url"]
+    cfg.chat_webhook_url = bound.values["config/discord_webhook/chat_webhook_url"]
+    cfg.admin_webhook_name = bound.values["config/discord_webhook/admin_webhook_name"]
+    cfg.chat_webhook_name = bound.values["config/discord_webhook/chat_webhook_name"]
+    cfg.mirror_player_chat = bound.values["config/discord_webhook/mirror_player_chat"]
+    cfg.mirror_server_chat = bound.values["config/discord_webhook/mirror_server_chat"]
+    cfg.mirror_admin_commands = bound.values["config/discord_webhook/mirror_admin_commands"]
+    cfg.mirror_joins_leaves = bound.values["config/discord_webhook/mirror_joins_leaves"]
+    cfg.mirror_new_challenge = bound.values["config/discord_webhook/mirror_new_challenge"]
+    cfg.mirror_warnings_errors = bound.values["config/discord_webhook/mirror_warnings_errors"]
+    cfg.strip_tm_colors = bound.values["config/discord_webhook/strip_tm_colors"]
+    cfg.request_timeout = bound.values["config/discord_webhook/request_timeout"]
+    cfg.chat_throttle_player_threshold = bound.values["config/discord_webhook/chat_throttle_player_threshold"]
+    cfg.chat_batch_window_ms = bound.values["config/discord_webhook/chat_batch_window_ms"]
+    cfg.chat_batch_max_lines = bound.values["config/discord_webhook/chat_batch_max_lines"]
+    logger.info("[DiscordWebhook] Config loaded from %s", bound.source_path)
     return cfg
 
 

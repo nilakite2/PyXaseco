@@ -1,5 +1,5 @@
 """
-player_stats_chat.py - Port of plugins/chat.stats.php
+player_stats_commands.py - Port of plugins/chat.stats.php
 
 /stats [login]    - Player statistics window
 /statsall         - Redirects to /stats
@@ -7,11 +7,13 @@ player_stats_chat.py - Port of plugins/chat.stats.php
 """
 
 from __future__ import annotations
+
 import re
 import time
 from typing import TYPE_CHECKING
-from pyxaseco.helpers import (format_text, format_time_h, strip_colors,
-                               display_manialink)
+
+from pyxaseco.helpers import (display_manialink, format_text, format_time_h,
+                              strip_colors)
 from pyxaseco.app_services import (
     localdb_get_cps,
     localdb_get_donations,
@@ -27,9 +29,6 @@ if TYPE_CHECKING:
 
 
 def _tz_str() -> str:
-    """Return timezone as short abbreviation (CEST/CET) or UTC+HH:MM fallback.
-    Matches track._tz_abbrev() - avoids long OS names like
-    'Central Europe Daylight Time' that strftime('%Z') produces on Windows."""
     import datetime as _dt
     now = _dt.datetime.now().astimezone()
     abbr = now.strftime('%Z') or ''
@@ -75,7 +74,7 @@ def register(aseco: 'Aseco'):
         display_name='settings',
         order=212,
     )
-    aseco.register_event('onChat_stats',    chat_stats)
+    aseco.register_event('onChat_stats', chat_stats)
     aseco.register_event('onChat_statsall', chat_statsall)
     aseco.register_event('onChat_settings', chat_settings)
 
@@ -84,28 +83,24 @@ async def chat_stats(aseco: 'Aseco', command: dict):
     player: Player = command['author']
     target = player
 
-    # Resolve login OR numeric player-list index
     if command['params'].strip():
         param = command['params'].strip()
-        # Try online player first (supports numeric index)
         t = aseco.server.players.get_player(param)
         if t:
             target = t
-        # else: leave target as player (offline lookup not available here)
 
-    # - Ladder stats from XMLRPC ---------------------
     try:
-        info     = await aseco.client.query('GetDetailedPlayerInfo', target.login)
+        info = await aseco.client.query('GetDetailedPlayerInfo', target.login)
         rankings = info.get('LadderStats', {}).get('PlayerRankings', [{}])
-        rank     = rankings[0].get('Ranking', 0)   if rankings else 0
-        score    = rankings[0].get('Score', 0.0)    if rankings else 0.0
-        lastm    = info.get('LadderStats', {}).get('LastMatchScore', 0.0)
-        wins     = info.get('LadderStats', {}).get('NbrMatchWins', 0)
-        draws    = info.get('LadderStats', {}).get('NbrMatchDraws', 0)
-        losses   = info.get('LadderStats', {}).get('NbrMatchLosses', 0)
-        zone     = info.get('Path', 'World|?')[6:]    # strip 'World|'
-        inscr    = info.get('HoursSinceZoneInscription', 0)
-        inscrdays  = inscr // 24
+        rank = rankings[0].get('Ranking', 0) if rankings else 0
+        score = rankings[0].get('Score', 0.0) if rankings else 0.0
+        lastm = info.get('LadderStats', {}).get('LastMatchScore', 0.0)
+        wins = info.get('LadderStats', {}).get('NbrMatchWins', 0)
+        draws = info.get('LadderStats', {}).get('NbrMatchDraws', 0)
+        losses = info.get('LadderStats', {}).get('NbrMatchLosses', 0)
+        zone = info.get('Path', 'World|?')[6:]
+        inscr = info.get('LadderStats', {}).get('HoursSinceZoneInscription', 0)
+        inscrdays = inscr // 24
         inscrhours = inscr % 24
     except Exception:
         rank = score = lastm = wins = draws = losses = 0
@@ -113,10 +108,9 @@ async def chat_stats(aseco: 'Aseco', command: dict):
         inscrdays = inscrhours = 0
 
     def fmt_num(n: int) -> str:
-        formatted = format(n, ',').replace(',', '\u2009')  # thin space
+        formatted = format(n, ',').replace(',', '\u2009')
         return formatted.replace('\u2009', '$n $m')
 
-    # - Last online from DB ------------------------
     last_online = 'unknown'
     try:
         pool = await localdb_get_pool(aseco)
@@ -131,10 +125,9 @@ async def chat_stats(aseco: 'Aseco', command: dict):
     except Exception:
         pass
 
-    # - Ranked records count -----------------------
-    records   = 0
-    maxrecs   = 0
-    rank_str  = 'N/A'
+    records = 0
+    maxrecs = 0
+    rank_str = 'N/A'
     try:
         from apps.rasp.rankings import maxrecs as _mr
         maxrecs = _mr
@@ -144,11 +137,10 @@ async def chat_stats(aseco: 'Aseco', command: dict):
     try:
         from apps.records_local.chat_records2 import get_recs
         rec_list = await get_recs(aseco, target.id)
-        records  = sum(1 for v in rec_list.values() if v <= maxrecs)
+        records = sum(1 for v in rec_list.values() if v <= maxrecs)
     except Exception:
         pass
 
-    # - Server rank ----------------------------
     try:
         from apps.rasp.rankings import getRank
         rank_str = getRank(target.login)
@@ -168,12 +160,11 @@ async def chat_stats(aseco: 'Aseco', command: dict):
                                 'SELECT COUNT(*) FROM rs_rank WHERE avg < %s', (my_avg,))
                             better = (await cur.fetchone())[0]
                             await cur.execute('SELECT COUNT(*) FROM rs_rank')
-                            total  = (await cur.fetchone())[0]
+                            total = (await cur.fetchone())[0]
                             rank_str = f'{better+1}/{total} Avg: {my_avg/10000:4.1f}'
         except Exception:
             pass
 
-    # - Donations (TMUF servers) ---------------------
     donations = None
     if aseco.server.rights:
         try:
@@ -181,10 +172,8 @@ async def chat_stats(aseco: 'Aseco', command: dict):
         except Exception:
             pass
 
-    # - Races won (max of session wins and DB wins) ------------
     races_won = max(target.get_wins(), target.wins)
 
-    # - Feature_ranks flag ------------------------
     feature_ranks = True
     try:
         from apps.rasp.rankings import feature_ranks as _fr
@@ -192,16 +181,13 @@ async def chat_stats(aseco: 'Aseco', command: dict):
     except ImportError:
         pass
 
-    # - Build stats rows -------------------------
     clickable = aseco.settings.clickable_lists
-
     header = f'Stats for: {target.nickname}$z / {{#login}}{target.login}'
-    stats  = [
+    stats = [
         ['Server Date', '{#black}' + time.strftime('%b %d, %Y')],
         ['Server Time', '{#black}' + time.strftime('%H:%M:%S') + ' ' + _tz_str()],
     ]
 
-    # Time Played - clickable action -5 (/active)
     tp_val = '{#black}' + format_time_h(target.get_time_played() * 1000, False)
     if clickable:
         tp_val = [tp_val, -5]
@@ -210,43 +196,40 @@ async def chat_stats(aseco: 'Aseco', command: dict):
     stats.append(['Last Online', '{#black}' + last_online])
 
     if feature_ranks:
-        # Server Rank - clickable action -6 (/top100)
         sr_val = '{#black}' + rank_str
         if clickable:
             sr_val = [sr_val, -6]
         stats.append(['Server Rank', sr_val])
 
-    # Records - clickable action 5 (/toprecs)
     rec_val = '{#black}' + str(records)
     if clickable:
         rec_val = [rec_val, 5]
     stats.append(['Records', rec_val])
 
-    # Races Won - clickable action 6 (/topwins)
     rw_val = '{#black}' + str(races_won)
     if clickable:
         rw_val = [rw_val, 6]
     stats.append(['Races Won', rw_val])
 
     stats += [
-        ['Ladder Rank',  '{#black}' + fmt_num(int(rank))],
+        ['Ladder Rank', '{#black}' + fmt_num(int(rank))],
         ['Ladder Score', '{#black}' + str(round(score, 1))],
-        ['Last Match',   '{#black}' + str(round(lastm, 1))],
-        ['Wins',         '{#black}' + fmt_num(int(wins))],
-        ['Draws',        '{#black}' + fmt_num(int(draws)) +
-                         (f'   $gW/L: {{#black}}{round(wins/losses, 3)}' if losses else '')],
-        ['Losses',       '{#black}' + fmt_num(int(losses))],
-        ['Zone',         '{#black}' + zone],
-        ['Inscribed',    '{#black}' + f'{inscrdays} day{"s" if inscrdays != 1 else " "} '
-                         + f'{inscrhours} hours'],
-        ['Rights',       '{#black}' + ('United' if target.rights else 'Nations')],
+        ['Last Match', '{#black}' + str(round(lastm, 1))],
+        ['Wins', '{#black}' + fmt_num(int(wins))],
+        ['Draws', '{#black}' + fmt_num(int(draws)) +
+         (f'   $gW/L: {{#black}}{round(wins/losses, 3)}' if losses else '')],
+        ['Losses', '{#black}' + fmt_num(int(losses))],
+        ['Zone', '{#black}' + zone],
+        ['Inscribed', '{#black}' + f'{inscrdays} day{"s" if inscrdays != 1 else " "} ' +
+         f'{inscrhours} hours'],
+        ['Rights', '{#black}' + ('United' if target.rights else 'Nations')],
     ]
 
     if aseco.server.rights and donations is not None:
         stats.append(['Donations', '{#black}' + (str(donations) if target.rights else 'N/A')])
 
     stats += [
-        ['Clan',   '{#black}' + (target.teamname + '$z' if target.teamname else '<none>')],
+        ['Clan', '{#black}' + (target.teamname + '$z' if target.teamname else '<none>')],
         ['Client', '{#black}' + target.client],
     ]
 
@@ -274,30 +257,27 @@ async def chat_settings(aseco: 'Aseco', command: dict):
         if t:
             target = t
 
-    header       = f'Settings for: {target.nickname}$z / {{#login}}{target.login}'
+    header = f'Settings for: {target.nickname}$z / {{#login}}{target.login}'
     settings_rows = []
-
-    cps    = None
-    style  = None
+    cps = None
+    style = None
     panels = None
 
     try:
         cps = await localdb_get_cps(aseco, target.login)
     except Exception:
         pass
-
     try:
         style = await localdb_get_style(aseco, target.login)
     except Exception:
         pass
-
     try:
         panels = await localdb_get_panels(aseco, target.login)
     except Exception:
         pass
 
     if cps:
-        settings_rows.append(['Local CPS',     '{#black}' + str(cps.get('cps', -1))])
+        settings_rows.append(['Local CPS', '{#black}' + str(cps.get('cps', -1))])
         settings_rows.append(['Dedimania CPS', '{#black}' + str(cps.get('dedicps', -1))])
         if style or panels:
             settings_rows.append([])
@@ -309,10 +289,10 @@ async def chat_settings(aseco: 'Aseco', command: dict):
 
     if panels:
         if aseco.is_any_admin(target):
-            settings_rows.append(['Admin Panel',   '{#black}' + panels.get('admin', '')[5:]])
-        settings_rows.append(['Donate Panel',  '{#black}' + panels.get('donate', '')[6:]])
+            settings_rows.append(['Admin Panel', '{#black}' + panels.get('admin', '')[5:]])
+        settings_rows.append(['Donate Panel', '{#black}' + panels.get('donate', '')[6:]])
         settings_rows.append(['Records Panel', '{#black}' + panels.get('records', '')[7:]])
-        settings_rows.append(['Vote Panel',    '{#black}' + panels.get('vote', '')[4:]])
+        settings_rows.append(['Vote Panel', '{#black}' + panels.get('vote', '')[4:]])
 
     if settings_rows:
         display_manialink(aseco, player.login, header,
@@ -323,4 +303,3 @@ async def chat_settings(aseco: 'Aseco', command: dict):
             'ChatSendServerMessageToLogin',
             aseco.format_colors('{#server}> {#error}No personal settings available'),
             player.login)
-

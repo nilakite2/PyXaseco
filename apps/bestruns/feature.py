@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pyxaseco.models import Gameinfo
-from pyxaseco.app_config import as_float, as_int, get_app_section
+from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_float, as_int, bind_app_settings
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -35,6 +35,19 @@ class BestRunsState:
 
 
 _state = BestRunsState()
+
+BESTRUNS_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id="bestruns",
+    settings=(
+        AppSetting("config/position/x", -52.0, cast=as_float, description="Widget X position.", category="layout"),
+        AppSetting("config/position/y", 48.0, cast=as_float, description="Widget Y position.", category="layout"),
+        AppSetting("config/scale", 1.0, cast=as_float, description="Widget scale.", category="layout"),
+        AppSetting("config/nb_bestruns", 7, cast=as_int, aliases=("config/number",), description="Number of runs to display.", category="display"),
+        AppSetting("config/nb_bestruns_with_cp", 2, cast=as_int, aliases=("config/number_with_cps",), description="Runs with checkpoint details.", category="display"),
+        AppSetting("config/nb_max_checkpoints", 9, cast=as_int, aliases=("config/max_checkpoints",), description="Maximum checkpoints shown.", category="display"),
+    ),
+    description="Best runs widget settings.",
+)
 
 
 def register(aseco: "Aseco"):
@@ -184,29 +197,16 @@ async def OnPlayerFinish_bestruns(aseco: "Aseco", payload):
 
 
 def LoadConfig_bestruns(aseco: "Aseco"):
-    section, path = get_app_section("bestruns", getattr(aseco, "_base_dir", None))
-    config = section.get("config", {}) if isinstance(section, dict) else {}
-    if not isinstance(config, dict):
-        config = {}
-    position = config.get("position", {}) if isinstance(config, dict) else {}
+    bound = bind_app_settings(BESTRUNS_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
+    path = bound.source_path
     if path is None:
         return
-    _state.config.x = as_float(config.get("x", position.get("x")), _state.config.x)
-    _state.config.y = as_float(config.get("y", position.get("y")), _state.config.y)
-    _state.config.scale = as_float(config.get("scale"), _state.config.scale)
-    _state.config.nb_bestruns = max(
-        1, as_int(config.get("nb_bestruns", config.get("number")), _state.config.nb_bestruns)
-    )
-    _state.config.nb_bestruns_with_cp = max(
-        1,
-        as_int(
-            config.get("nb_bestruns_with_cp", config.get("number_with_cps")),
-            _state.config.nb_bestruns_with_cp,
-        ),
-    )
-    _state.config.nb_max_checkpoints = max(
-        1, as_int(config.get("nb_max_checkpoints", config.get("max_checkpoints")), _state.config.nb_max_checkpoints)
-    )
+    _state.config.x = bound.values["config/position/x"]
+    _state.config.y = bound.values["config/position/y"]
+    _state.config.scale = bound.values["config/scale"]
+    _state.config.nb_bestruns = max(1, bound.values["config/nb_bestruns"])
+    _state.config.nb_bestruns_with_cp = max(1, bound.values["config/nb_bestruns_with_cp"])
+    _state.config.nb_max_checkpoints = max(1, bound.values["config/nb_max_checkpoints"])
     logger.info("[BestRuns] Config loaded from %s", path)
 
 

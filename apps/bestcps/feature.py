@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pyxaseco.models import Gameinfo
-from pyxaseco.app_config import as_float, as_int, get_app_section
+from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_float, as_int, bind_app_settings
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -45,6 +45,21 @@ class BestCpsConfig:
 _tab_cp_time: dict[int, CpTime] = {}
 _hidden_for: set[str] = set()
 _config = BestCpsConfig()
+
+BESTCPS_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id="bestcps",
+    settings=(
+        AppSetting("config/position/x", -58.0, cast=as_float, description="Widget X position.", category="layout"),
+        AppSetting("config/position/y", 44.8, cast=as_float, description="Widget Y position.", category="layout"),
+        AppSetting("config/number", 30, cast=as_int, description="Number of entries to display.", category="display"),
+        AppSetting("config/newline", 10, cast=as_int, description="Entries per line.", category="display"),
+        AppSetting("config/rows", 0, cast=as_int, description="Number of rows to show.", category="display"),
+        AppSetting("config/orientation", 0, cast=as_int, description="Widget orientation mode.", category="display"),
+        AppSetting("config/position/x_counter", 0.0, cast=as_float, description="Counter X position.", category="layout"),
+        AppSetting("config/position/y_counter", -35.0, cast=as_float, description="Counter Y position.", category="layout"),
+    ),
+    description="Best checkpoint widget settings.",
+)
 
 
 def register(aseco: 'Aseco'):
@@ -78,22 +93,19 @@ def _parse_float(text: str, default: float) -> float:
 
 def _load_config(aseco: 'Aseco'):
     global _config
-    section, path = get_app_section('bestcps', getattr(aseco, '_base_dir', None))
-    config = section.get('config', {}) if isinstance(section, dict) else {}
-    if not isinstance(config, dict):
-        config = {}
-    position = config.get('position', {}) if isinstance(config, dict) else {}
+    bound = bind_app_settings(BESTCPS_SETTINGS_SCHEMA, getattr(aseco, '_base_dir', None))
+    path = bound.source_path
     if path is None:
         return
     _config = BestCpsConfig(
-        pos_x=as_float(position.get('x'), -58.0),
-        pos_y=as_float(position.get('y'), 44.8),
-        number=max(1, as_int(config.get('number'), 30)),
-        newline=max(1, as_int(config.get('newline'), 10)),
-        rows=max(0, as_int(config.get('rows'), 0)),
-        orientation=as_int(config.get('orientation'), 0),
-        pos_x_counter=as_float(position.get('x_counter'), 0.0),
-        pos_y_counter=as_float(position.get('y_counter'), -35.0),
+        pos_x=bound.values["config/position/x"],
+        pos_y=bound.values["config/position/y"],
+        number=max(1, bound.values["config/number"]),
+        newline=max(1, bound.values["config/newline"]),
+        rows=max(0, bound.values["config/rows"]),
+        orientation=bound.values["config/orientation"],
+        pos_x_counter=bound.values["config/position/x_counter"],
+        pos_y_counter=bound.values["config/position/y_counter"],
     )
     logger.info(
         '[BestCps] Config loaded from %s (x=%s, y=%s, number=%s, newline=%s, rows=%s, orientation=%s)',

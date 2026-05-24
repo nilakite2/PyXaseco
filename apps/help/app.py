@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import chat
+from . import commands
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -15,7 +15,7 @@ APP_METADATA = {
     "display_name": "Help",
     "description": "Shared help and command discovery surfaces.",
     "modules": [
-        "apps/help/chat.py",
+        "apps/help/commands.py",
     ],
     "entries": [
         "app/help",
@@ -36,9 +36,9 @@ class HelpApp(App):
         )
         self.help_surfaces = (
             HelpModuleSurface(
-                component_id='help.chat',
+                component_id='help.commands',
                 description='Shared help and command discovery chat surface.',
-                module=chat,
+                module=commands,
             ),
         )
         self.components = self.help_surfaces

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pyxaseco.core.base import Component
+from pyxaseco.core.base import Command, Component
 
 from . import rasp_chat as _impl
 
@@ -39,6 +39,24 @@ class RaspSocialSurface(Component):
         super().__init__(
             component_id='rasp.social',
             description='RASP private-message and social chat command surface.',
+            commands=(
+                Command('pm', 'Sends a private message to login or Player_ID', _impl.chat_pm),
+                Command('pma', 'Sends a private message to player & admins', _impl.chat_pma),
+                Command('pmlog', 'Displays log of your recent private messages', _impl.chat_pmlog),
+                Command('hi', 'Sends a Hi message to everyone', _impl.chat_hi),
+                Command('bye', 'Sends a Bye message to everyone', _impl.chat_bye),
+                Command('thx', 'Sends a Thanks message to everyone', _impl.chat_thx),
+                Command('lol', 'Sends a Lol message to everyone', _impl.chat_lol),
+                Command('lool', 'Sends a Lool message to everyone', _impl.chat_lool),
+                Command('brb', 'Sends a Be Right Back message to everyone', _impl.chat_brb),
+                Command('afk', 'Sends an Away From Keyboard message to everyone', _impl.chat_afk),
+                Command('gg', 'Sends a Good Game message to everyone', _impl.chat_gg),
+                Command('gr', 'Sends a Good Race message to everyone', _impl.chat_gr),
+                Command('n1', 'Sends a Nice One message to everyone', _impl.chat_n1),
+                Command('bgm', 'Sends a Bad Game message to everyone', _impl.chat_bgm),
+                Command('official', 'Shows a helpful message ;-)', _impl.chat_official),
+                Command('bootme', 'Boot yourself from the server', _impl.chat_bootme),
+            ),
         )
 
     def register(self, aseco) -> None:

@@ -1,8 +1,8 @@
 """
-Track info chat surface for current song and mod details.
+Track info command surface for current song and mod details.
 
-/song — Shows current track's song filename
-/mod  — Shows current track's mod name/filename
+/song -> Shows current track's song filename
+/mod  -> Shows current track's mod name/filename
 """
 
 from __future__ import annotations
@@ -43,11 +43,10 @@ def register(aseco: 'Aseco'):
         order=321,
     )
     aseco.register_event('onChat_song', chat_song)
-    aseco.register_event('onChat_mod',  chat_mod)
+    aseco.register_event('onChat_mod', chat_mod)
 
 
 def _gbx_value(gbx: Any, *names: str):
-    """Return the first present non-empty GBX attribute from multiple aliases."""
     if gbx is None:
         return None
     for name in names:
@@ -85,14 +84,10 @@ def _challenge_abs_path(aseco: 'Aseco') -> pathlib.Path | None:
 
 
 def _parse_songmod_from_gbx(path: pathlib.Path) -> dict[str, str]:
-    """
-    Parse song/mod dependency info directly from the GBX header text.
-    """
     with open(path, 'rb') as f:
-        data = f.read(262144)  # 256 KiB is plenty for the XML header
+        data = f.read(262144)
 
     text = data.decode('utf-8', errors='ignore')
-
     dep_re = re.compile(
         r'<dep\b[^>]*\bfile="([^"]+)"[^>]*\burl="([^"]*)"',
         re.IGNORECASE
@@ -107,7 +102,6 @@ def _parse_songmod_from_gbx(path: pathlib.Path) -> dict[str, str]:
     for file_attr, url_attr in dep_re.findall(text):
         file_attr = html.unescape(file_attr or '').strip()
         url_attr = html.unescape(url_attr or '').strip()
-        # Normalise to forward slashes so this works on both Linux and Windows servers
         norm = file_attr.replace('\\', '/').lower()
 
         if not song_file and norm.startswith('challengemusics/'):
@@ -131,10 +125,6 @@ def _parse_songmod_from_gbx(path: pathlib.Path) -> dict[str, str]:
 
 
 async def _get_songmod(aseco: 'Aseco') -> dict[str, str]:
-    """
-    Prefer challenge.gbx runtime fields when present, but fall back to parsing the
-    GBX file directly.
-    """
     challenge = aseco.server.challenge
     gbx = getattr(challenge, 'gbx', None)
 
@@ -158,7 +148,7 @@ async def _get_songmod(aseco: 'Aseco') -> dict[str, str]:
         try:
             return await __import__('asyncio').to_thread(_parse_songmod_from_gbx, path)
         except Exception as e:
-            logger.debug('[SongMod] GBX parse failed for %s: %s', path, e)
+            logger.debug('[Track] GBX parse failed for %s: %s', path, e)
 
     return {
         'song_file': '',

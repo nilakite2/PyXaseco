@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 import pathlib
 import tomllib
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,39 @@ def _runtime_root(base_dir=None) -> pathlib.Path:
     if base_dir:
         return pathlib.Path(base_dir).resolve()
     return pathlib.Path(".").resolve()
+
+
+def _section_candidates(section: str) -> tuple[str, ...]:
+    raw = str(section or "").strip()
+    if not raw:
+        return ()
+
+    candidates: list[str] = [raw]
+    if raw.startswith("plugin_"):
+        trimmed = raw[len("plugin_"):]
+        if trimmed:
+            candidates.append(trimmed)
+    else:
+        candidates.append(f"plugin_{raw}")
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in candidates:
+        if item and item not in seen:
+            ordered.append(item)
+            seen.add(item)
+    return tuple(ordered)
+
+
+def _lookup_path(node: Any, path: str) -> Any:
+    current = node
+    for part in [p for p in str(path or "").split("/") if p]:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(part)
+        if current is None:
+            return None
+    return current
 
 
 def get_app_defaults_path(app_id: str, base_dir=None) -> pathlib.Path:
@@ -114,20 +148,8 @@ def get_app_section(section: str, base_dir=None) -> tuple[dict[str, Any], pathli
         anchor_path = loaded_paths[0]
     elif loaded_paths:
         anchor_path = _runtime_root(base_dir) / "apps"
-    candidates = []
-    raw = str(section or "").strip()
-    if raw:
-        candidates.append(raw)
-        if raw.startswith("plugin_"):
-            candidates.append(raw[len("plugin_"):])
-        else:
-            candidates.append(f"plugin_{raw}")
 
-    seen: set[str] = set()
-    for candidate in candidates:
-        if not candidate or candidate in seen:
-            continue
-        seen.add(candidate)
+    for candidate in _section_candidates(section):
         value = data.get(candidate, {})
         if isinstance(value, dict):
             return value, sources.get(candidate, anchor_path)
@@ -173,3 +195,87 @@ def as_str(value: Any, default: str = "") -> str:
         return default
     text = str(value)
     return text if text != "" else default
+
+
+@dataclass(slots=True, frozen=True)
+class AppSetting:
+    key: str
+    default: Any = None
+    cast: Callable[[Any, Any], Any] | Callable[[Any], Any] | None = None
+    description: str = ""
+    category: str = "general"
+    aliases: tuple[str, ...] = field(default_factory=tuple)
+
+    def read(self, section: dict[str, Any]) -> Any:
+        for candidate in (self.key, *self.aliases):
+            raw = _lookup_path(section, candidate)
+            if raw is not None:
+                break
+        else:
+            raw = self.default
+
+        if self.cast is None:
+            return raw
+
+        try:
+            return self.cast(raw, self.default)
+        except TypeError:
+            return self.cast(raw)
+        except Exception:
+            return self.default
+
+
+@dataclass(slots=True, frozen=True)
+class AppSettingsSchema:
+    app_id: str
+    settings: tuple[AppSetting, ...]
+    section_name: str = ""
+    description: str = ""
+
+    def resolve_section_name(self) -> str:
+        return self.section_name or self.app_id
+
+
+@dataclass(slots=True)
+class BoundAppSettings:
+    schema: AppSettingsSchema
+    section: dict[str, Any]
+    source_path: pathlib.Path | None
+    values: dict[str, Any]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.values.get(key, default)
+
+    def as_dict(self) -> dict[str, Any]:
+        return dict(self.values)
+
+    def describe(self) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for setting in self.schema.settings:
+            out.append(
+                {
+                    "key": setting.key,
+                    "value": self.values.get(setting.key),
+                    "default": setting.default,
+                    "category": setting.category,
+                    "description": setting.description,
+                }
+            )
+        return out
+
+    def __getattr__(self, item: str) -> Any:
+        try:
+            return self.values[item]
+        except KeyError as exc:
+            raise AttributeError(item) from exc
+
+
+def bind_app_settings(schema: AppSettingsSchema, base_dir=None) -> BoundAppSettings:
+    section, path = get_app_section(schema.resolve_section_name(), base_dir)
+    values = {setting.key: setting.read(section) for setting in schema.settings}
+    return BoundAppSettings(
+        schema=schema,
+        section=section if isinstance(section, dict) else {},
+        source_path=path,
+        values=values,
+    )

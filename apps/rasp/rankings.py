@@ -6,7 +6,7 @@ and callbacks while the implementation still lives in ``rasp.py``.
 
 from __future__ import annotations
 
-from pyxaseco.core.base import Component
+from pyxaseco.core.base import Callback, Command, Component
 
 from . import rasp as _impl
 
@@ -53,10 +53,18 @@ class RaspRankingCommandSurface(Component):
         super().__init__(
             component_id='rasp.rankings.commands',
             description='RASP ranking commands and leaderboard chat surface.',
+            commands=(
+                Command('pb', 'Shows your personal best on current track', _impl.chat_pb),
+                Command('rank', 'Shows your current server rank', _impl.chat_rank),
+                Command('top10', 'Displays top 10 best ranked players', _impl.chat_top10),
+                Command('top100', 'Displays top 100 best ranked players', _impl.chat_top100),
+                Command('topwins', 'Displays top 100 victorious players', _impl.chat_topwins),
+                Command('active', 'Displays top 100 most active players', _impl.chat_active),
+            ),
         )
 
     def register(self, aseco) -> None:
-        register_commands(aseco)
+        super().register(aseco)
 
 
 class RaspRankingCallbackSurface(Component):
@@ -64,10 +72,18 @@ class RaspRankingCallbackSurface(Component):
         super().__init__(
             component_id='rasp.rankings.callbacks',
             description='RASP ranking lifecycle, finish, and leaderboard callback surface.',
+            callbacks=(
+                Callback('onStartup', _impl.rasp_startup),
+                Callback('onSync', _impl.rasp_sync),
+                Callback('onNewChallenge2', _impl.rasp_new_challenge),
+                Callback('onEndRace', _impl.rasp_end_race),
+                Callback('onPlayerFinish', _impl.rasp_player_finish),
+                Callback('onPlayerConnect', _impl.rasp_player_connect),
+            ),
         )
 
     def register(self, aseco) -> None:
-        register_callbacks(aseco)
+        super().register(aseco)
 
 
 RANKING_COMMAND_SURFACE = RaspRankingCommandSurface()

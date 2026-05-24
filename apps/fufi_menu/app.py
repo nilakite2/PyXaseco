@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.core.base import App
 
 from . import ui
+from .ui import FUFI_MENU_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -39,6 +40,7 @@ class FufiMenuApp(App):
             description="FuFi menu shell and menu navigation.",
             depends_on=("platform_ui", "admin", "rasp"),
             entry_modules=("app/fufi_menu",),
+            settings_schema=FUFI_MENU_SETTINGS_SCHEMA,
         )
 
 

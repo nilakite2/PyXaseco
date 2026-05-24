@@ -17,7 +17,8 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pyxaseco.app_config import as_bool, as_float, as_int, get_app_section
+from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_float,
+                                 as_int, bind_app_settings)
 from pyxaseco.app_services import localdb_get_pool
 
 if TYPE_CHECKING:
@@ -55,6 +56,25 @@ _cfg_pos_x: float = 50.9
 _cfg_pos_y: float = -30.0
 _cfg_window_enabled: dict[int, bool] = {}
 _runtime_aseco: Aseco | None = None
+
+BESTSECS_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id="bestsecs",
+    settings=(
+        AppSetting("config/compare_own_rec_to_self", True, cast=as_bool, description="Compare own sector record against self.", category="behavior"),
+        AppSetting("config/remove_sec_from_db", True, cast=as_bool, description="Remove deleted sectors from database.", category="behavior"),
+        AppSetting("config/position/xpos", 50.9, cast=as_float, description="Widget X position.", category="layout"),
+        AppSetting("config/position/ypos", -30.0, cast=as_float, description="Widget Y position.", category="layout"),
+        AppSetting("config/display_recs/sec_recs", True, cast=as_bool, description="Announce sector records.", category="display"),
+        AppSetting("config/display_recs/own_recs", True, cast=as_bool, description="Announce own records.", category="display"),
+        AppSetting("config/window_enabled/rounds", True, cast=as_bool, description="Enable in rounds.", category="gamemode"),
+        AppSetting("config/window_enabled/ta", True, cast=as_bool, description="Enable in time attack.", category="gamemode"),
+        AppSetting("config/window_enabled/team", True, cast=as_bool, description="Enable in team mode.", category="gamemode"),
+        AppSetting("config/window_enabled/lap", True, cast=as_bool, description="Enable in laps.", category="gamemode"),
+        AppSetting("config/window_enabled/stunts", True, cast=as_bool, description="Enable in stunts.", category="gamemode"),
+        AppSetting("config/window_enabled/cup", True, cast=as_bool, description="Enable in cup.", category="gamemode"),
+    ),
+    description="Best sector widget settings.",
+)
 
 
 def register(aseco: "Aseco"):
@@ -134,31 +154,26 @@ def _load_config(aseco: "Aseco") -> None:
     global _cfg_announce_sec, _cfg_announce_own, _cfg_compare_own_to_self
     global _cfg_remove_on_delete, _cfg_pos_x, _cfg_pos_y, _cfg_window_enabled
 
-    section, path = get_app_section("bestsecs", getattr(aseco, "_base_dir", None))
-    config = section.get("config", {}) if isinstance(section, dict) else {}
-    if not isinstance(config, dict):
-        config = {}
-    position = config.get("position", {}) if isinstance(config, dict) else {}
-    display_recs = config.get("display_recs", {}) if isinstance(config, dict) else {}
-    window_enabled = config.get("window_enabled", {}) if isinstance(config, dict) else {}
+    bound = bind_app_settings(BESTSECS_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
+    path = bound.source_path
     if path is None:
         return
-    _cfg_pos_x = as_float(position.get("xpos"), _cfg_pos_x)
-    _cfg_pos_y = as_float(position.get("ypos"), _cfg_pos_y)
-    _cfg_announce_sec = as_bool(display_recs.get("sec_recs"), _cfg_announce_sec)
-    _cfg_announce_own = as_bool(display_recs.get("own_recs"), _cfg_announce_own)
-    _cfg_compare_own_to_self = as_bool(config.get("compare_own_rec_to_self"), _cfg_compare_own_to_self)
-    _cfg_remove_on_delete = as_bool(config.get("remove_sec_from_db"), _cfg_remove_on_delete)
+    _cfg_pos_x = bound.values["config/position/xpos"]
+    _cfg_pos_y = bound.values["config/position/ypos"]
+    _cfg_announce_sec = bound.values["config/display_recs/sec_recs"]
+    _cfg_announce_own = bound.values["config/display_recs/own_recs"]
+    _cfg_compare_own_to_self = bound.values["config/compare_own_rec_to_self"]
+    _cfg_remove_on_delete = bound.values["config/remove_sec_from_db"]
 
     from pyxaseco.models import Gameinfo
 
     _cfg_window_enabled = {
-        Gameinfo.RNDS: as_bool(window_enabled.get("rounds"), True),
-        Gameinfo.TA: as_bool(window_enabled.get("ta"), True),
-        Gameinfo.TEAM: as_bool(window_enabled.get("team"), True),
-        Gameinfo.LAPS: as_bool(window_enabled.get("lap"), True),
-        Gameinfo.STNT: as_bool(window_enabled.get("stunts"), True),
-        Gameinfo.CUP: as_bool(window_enabled.get("cup"), True),
+        Gameinfo.RNDS: bound.values["config/window_enabled/rounds"],
+        Gameinfo.TA: bound.values["config/window_enabled/ta"],
+        Gameinfo.TEAM: bound.values["config/window_enabled/team"],
+        Gameinfo.LAPS: bound.values["config/window_enabled/lap"],
+        Gameinfo.STNT: bound.values["config/window_enabled/stunts"],
+        Gameinfo.CUP: bound.values["config/window_enabled/cup"],
     }
     logger.info("[BestSecs] Config loaded from %s", path)
 

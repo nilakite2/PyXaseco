@@ -19,6 +19,7 @@ import time
 import xmlrpc.client
 from typing import TYPE_CHECKING
 
+from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_int, bind_app_settings
 from pyxaseco.core.config import _load_dotenv, _env
 
 if TYPE_CHECKING:
@@ -41,6 +42,16 @@ dedi_db: dict   = {}
 _connected      = False
 _bad_time: float = 0.0
 _last_sent: float = 0.0
+
+
+DEDI_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id='dedimania',
+    description='Typed Dedimania app defaults.',
+    settings=(
+        AppSetting('dedi_timeout', DEDI_TIMEOUT, as_int, 'Dedimania timeout threshold in seconds.', 'network'),
+        AppSetting('dedi_refresh', DEDI_REFRESH, as_int, 'Dedimania refresh interval in seconds.', 'network'),
+    ),
+)
 
 
 def register(aseco: 'Aseco'):
@@ -169,9 +180,9 @@ async def _dedi_init(aseco: 'Aseco', _data):
             logger.warning('[Dedimania] settings config overlay failed: %s', exc)
 
         try:
-            from pyxaseco.settings_loader import _pdef
-            DEDI_TIMEOUT = int(_pdef('dedimania', 'dedi_timeout', base) or DEDI_TIMEOUT)
-            DEDI_REFRESH = int(_pdef('dedimania', 'dedi_refresh', base) or DEDI_REFRESH)
+            typed_settings = bind_app_settings(DEDI_SETTINGS_SCHEMA, base)
+            DEDI_TIMEOUT = typed_settings.dedi_timeout
+            DEDI_REFRESH = typed_settings.dedi_refresh
         except Exception as exc:
             logger.warning('[Dedimania] app defaults overlay failed: %s', exc)
 

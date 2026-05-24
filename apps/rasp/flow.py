@@ -6,7 +6,7 @@ app-level entry while their implementations remain in dedicated modules.
 
 from __future__ import annotations
 
-from pyxaseco.core.base import Component
+from pyxaseco.core.base import Command, Component
 
 from . import rasp_nextmap as _nextmap_impl
 from . import rasp_nextrank as _nextrank_impl
@@ -34,10 +34,14 @@ class RaspFlowCommandSurface(Component):
         super().__init__(
             component_id='rasp.flow.commands',
             description='RASP next-map and next-rank gameplay flow command surface.',
+            commands=(
+                Command('nextmap', 'Shows name of the next challenge', _nextmap_impl.chat_nextmap),
+                Command('nextrank', 'Shows the next better ranked player', _nextrank_impl.chat_nextrank),
+            ),
         )
 
     def register(self, aseco) -> None:
-        register_commands(aseco)
+        super().register(aseco)
 
 
 FLOW_COMMAND_SURFACE = RaspFlowCommandSurface()

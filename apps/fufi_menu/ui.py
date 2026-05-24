@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pyxaseco.app_config import get_app_section
+from pyxaseco.app_config import AppSetting, AppSettingsSchema, bind_app_settings
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -33,6 +33,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _fufi_menu: "FufiMenu | None" = None
+
+
+def _as_dict(value, default=None):
+    return value if isinstance(value, dict) else (default if isinstance(default, dict) else {})
+
+
+FUFI_MENU_SETTINGS_SCHEMA = AppSettingsSchema(
+    app_id="fufi_menu",
+    section_name="fufi_menu_config",
+    description="FuFi menu configuration",
+    settings=(
+        AppSetting("config", {}, _as_dict),
+    ),
+)
 
 
 def _resolve_indicator_func(name: str):
@@ -1056,13 +1070,13 @@ async def fufiMenu_handleClick(aseco: "Aseco", command: list):
 async def fufiMenu_startup(aseco: "Aseco", _param=None):
     global _fufi_menu
     if not _fufi_menu:
-        section, cfg_path = get_app_section("fufi_menu_config", getattr(aseco, "_base_dir", None))
-        config = section.get("config", section) if isinstance(section, dict) else {}
+        bound = bind_app_settings(FUFI_MENU_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
+        config = bound.values["config"] if isinstance(bound.values["config"], dict) else {}
         if not isinstance(config, dict) or not config:
             logger.warning("[FufiMenu] No TOML configuration found in app_defaults.toml, menu disabled")
             return
-        logger.info("[FufiMenu] Config loaded from %s", cfg_path)
-        _fufi_menu = FufiMenu(config, cfg_path)
+        logger.info("[FufiMenu] Config loaded from %s", bound.source_path)
+        _fufi_menu = FufiMenu(config, bound.source_path)
         _fufi_menu.aseco = aseco
         _fufi_menu.init()
     elif not _fufi_menu.aseco:

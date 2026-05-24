@@ -7,8 +7,6 @@ from datetime import datetime
 import pathlib
 from typing import TYPE_CHECKING
 
-from pyxaseco.core.legacy_plugin_namespace import MODULE_ALIASES, alias_for_entry
-
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
@@ -18,9 +16,10 @@ _backfill_task: asyncio.Task | None = None
 
 
 def _app_module(name: str):
-    entry = str(name or "").replace(".", "/")
-    legacy_name = alias_for_entry(entry)
-    return importlib.import_module(MODULE_ALIASES.get(legacy_name, legacy_name))
+    ref = str(name or "").replace("\\", "/").strip("/")
+    if ref in {"service.tmx", "service/tmx"}:
+        return importlib.import_module("apps.tmx.service")
+    raise ImportError(f"Unsupported app module reference: {name}")
 
 
 def _track_uid(track: dict | None) -> str:

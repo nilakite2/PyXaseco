@@ -10,6 +10,7 @@ Tier: MasterAdmin > Admin > Operator (with per-command ability checks).
 
 from __future__ import annotations
 import asyncio
+import importlib
 import logging
 import pathlib
 import urllib.request
@@ -24,7 +25,6 @@ from pyxaseco.core.command_queries import (
     visible_admin_commands_for_player,
     visible_chat_commands_for_player,
 )
-from pyxaseco.core.runtime_imports import import_runtime_callable
 from pyxaseco.app_services import localdb_get_pool
 from pyxaseco.toml_tools import write_toml
 
@@ -816,6 +816,31 @@ async def _admin_display_names(aseco: 'Aseco', logins: list[str]) -> list[str]:
     return names
 
 
+async def _delegate_if_exists(
+    aseco: 'Aseco',
+    login: str,
+    func_path: str,
+    *args,
+    unavailable_msg: str | None = None,
+) -> bool:
+    try:
+        if ":" in func_path:
+            module_name, attr_name = func_path.rsplit(":", 1)
+        else:
+            module_name, attr_name = func_path.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+        func = getattr(module, attr_name)
+    except Exception:
+        if unavailable_msg:
+            await _reply(aseco, login, unavailable_msg)
+        return False
+
+    result = func(*args)
+    if asyncio.iscoroutine(result):
+        await result
+    return True
+
+
 async def _find_track_uid_by_filename(aseco: 'Aseco', fname: str) -> str:
     try:
         tracks = await aseco.client.query('GetChallengeList', 5000, 0) or []
@@ -922,25 +947,6 @@ def _get_bool_on_off(value: str) -> bool | None:
         return False
     return None
 
-
-async def _delegate_if_exists(
-    aseco: 'Aseco',
-    login: str,
-    func_path: str,
-    *args,
-    unavailable_msg: str | None = None,
-) -> bool:
-    try:
-        func = import_runtime_callable(func_path)
-    except (ImportError, AttributeError):
-        if unavailable_msg:
-            await _reply(aseco, login, unavailable_msg)
-        return False
-
-    result = func(*args)
-    if asyncio.iscoroutine(result):
-        await result
-    return True
 
 def _playerlist_get_login(admin, idx1: int) -> str | None:
     items = getattr(admin, 'playerlist', None) or []

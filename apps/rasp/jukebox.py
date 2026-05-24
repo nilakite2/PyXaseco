@@ -7,7 +7,7 @@ still lives in ``rasp_jukebox.py``.
 
 from __future__ import annotations
 
-from pyxaseco.core.base import Component
+from pyxaseco.core.base import Callback, Command, Component
 
 from . import rasp_jukebox as _impl
 
@@ -48,6 +48,17 @@ class RaspJukeboxCommandSurface(Component):
         super().__init__(
             component_id='rasp.jukebox.commands',
             description='RASP jukebox, TMX add, history, xlist, and autojuke command surface.',
+            commands=(
+                Command('list', 'Lists tracks currently on the server (see: /list help)', _impl.chat_list),
+                Command('jukebox', 'Sets track to be played next (see: /jukebox help)', _impl.chat_jukebox),
+                Command('jb', 'Alias for /jukebox', _impl.chat_jukebox),
+                Command('autojuke', 'Jukeboxes track from /list (see: /autojuke help)', _impl.chat_autojuke),
+                Command('aj', 'Alias for /autojuke', _impl.chat_autojuke),
+                Command('add', 'Adds a track directly from TMX (<ID> {sec})', _impl.chat_add),
+                Command('y', 'Votes Yes for a TMX track or chat-based vote', _impl.chat_y),
+                Command('history', 'Shows the 10 most recently played tracks', _impl.chat_history),
+                Command('xlist', 'Lists tracks on TMX (see: /xlist help)', _impl.chat_xlist),
+            ),
         )
 
     def register(self, aseco) -> None:
@@ -59,10 +70,17 @@ class RaspJukeboxCallbackSurface(Component):
         super().__init__(
             component_id='rasp.jukebox.callbacks',
             description='RASP jukebox lifecycle and manialink callback surface.',
+            callbacks=(
+                Callback('onSync', _impl._init_jbhistory),
+                Callback('onEndRace', _impl._rasp_endrace),
+                Callback('onNewChallenge2', _impl._rasp_newtrack),
+                Callback('onPlayerManialinkPageAnswer', _impl._event_jukebox),
+            ),
         )
 
     def register(self, aseco) -> None:
-        register_callbacks(aseco)
+        _impl._runtime_aseco = aseco
+        super().register(aseco)
 
 
 JUKEBOX_COMMAND_SURFACE = RaspJukeboxCommandSurface()

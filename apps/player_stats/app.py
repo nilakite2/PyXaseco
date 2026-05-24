@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import chat
+from . import commands
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -15,7 +15,7 @@ APP_METADATA = {
     "display_name": "Player Stats",
     "description": "Player statistics and ranking summaries.",
     "modules": [
-        "apps/player_stats/chat.py",
+        "apps/player_stats/commands.py",
     ],
     "entries": [
         "app/player_stats",
@@ -40,9 +40,9 @@ class PlayerStatsApp(App):
         )
         self.stats_surfaces = (
             PlayerStatsModuleSurface(
-                component_id='player_stats.chat',
+                component_id='player_stats.commands',
                 description='Player statistics and settings chat surface.',
-                module=chat,
+                module=commands,
             ),
         )
         self.components = self.stats_surfaces

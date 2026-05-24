@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.core.base import App, Component
 
 from . import bridge, service
+from .service import DISCORD_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -39,6 +40,7 @@ class DiscordApp(App):
             description="Discord integrations.",
             depends_on=("platform_core",),
             entry_modules=("app/discord",),
+            settings_schema=DISCORD_SETTINGS_SCHEMA,
         )
         self.discord_surfaces = (
             DiscordModuleSurface(

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.core.base import App, Component
 
 from . import best_cp_times_v2
+from .best_cp_times_v2 import BEST_CP_TIMES_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -37,6 +38,7 @@ class BestCpTimesApp(App):
             description="Checkpoint time analytics and leaderboard features.",
             depends_on=("platform_core",),
             entry_modules=("app/best_cp_times",),
+            settings_schema=BEST_CP_TIMES_SETTINGS_SCHEMA,
         )
         self.best_cp_times_surfaces = (
             BestCpTimesModuleSurface(

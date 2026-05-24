@@ -29,7 +29,7 @@ def _load_structured_settings(path: pathlib.Path) -> dict:
 
 
 _cache: dict | None = None
-_pdef_cache: dict | None = None
+_app_defaults_cache: dict | None = None
 
 
 def _get_data(base_dir=None) -> dict:
@@ -319,9 +319,9 @@ def overlay_mania_karma(cfg: Any, base_dir=None) -> None:
 
 def _get_app_defaults(base_dir=None) -> dict:
     """Return parsed app defaults config, loading and caching on first call."""
-    global _pdef_cache
-    if _pdef_cache is not None:
-        return _pdef_cache
+    global _app_defaults_cache
+    if _app_defaults_cache is not None:
+        return _app_defaults_cache
     try:
         data, _sources, loaded_paths = load_app_defaults_catalog(base_dir)
         if loaded_paths:
@@ -336,12 +336,12 @@ def _get_app_defaults(base_dir=None) -> dict:
                     len(loaded_paths),
                     root / 'apps',
                 )
-            _pdef_cache = data
-            return _pdef_cache
+            _app_defaults_cache = data
+            return _app_defaults_cache
     except Exception as exc:
         logger.error('[settings_loader] Failed to load app defaults: %s', exc)
-    _pdef_cache = {}
-    return _pdef_cache
+    _app_defaults_cache = {}
+    return _app_defaults_cache
 
 
 def _adef(section: str, key: str, base_dir=None):

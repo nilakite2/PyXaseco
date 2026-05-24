@@ -1,11 +1,13 @@
 """
-social_chat.py — Port of plugins/chat.me.php
+social_commands.py - Port of plugins/chat.me.php
 
-/me <text> — Broadcast an emote-style message starting with the player's nickname.
+/me <text> -> Broadcast an emote-style message starting with the player's nickname.
 """
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
+
 from pyxaseco.helpers import format_text
 
 if TYPE_CHECKING:
@@ -17,7 +19,7 @@ def register(aseco: 'Aseco'):
         'me',
         'Can be used to express emotions',
         owner='chat/me',
-        app='chat',
+        app='social_chat',
         category='chat-social',
         usage='/me <text>',
         display_name='me',
@@ -29,7 +31,6 @@ def register(aseco: 'Aseco'):
 async def chat_me(aseco: 'Aseco', command: dict):
     player = command['author']
 
-    # Check global mute list
     if player.login in aseco.server.mutelist:
         msg = format_text(aseco.get_chat_message('MUTED'), '/me')
         await aseco.client.query_ignore_result(

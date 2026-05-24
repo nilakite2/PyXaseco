@@ -238,6 +238,14 @@ class Aseco:
     def get_app_metadata(self, app_id: str) -> AppMetadata | None:
         return self._app_metadata.get(app_id)
 
+    def get_app_context(self, app_id: str):
+        if self._app_manager is None:
+            metadata = self._app_metadata.get(app_id)
+            if metadata is None:
+                return None
+            return self.context.with_app(metadata)
+        return self._app_manager.app_contexts.get(app_id)
+
     @property
     def app_metadata(self) -> dict[str, AppMetadata]:
         return dict(self._app_metadata)
