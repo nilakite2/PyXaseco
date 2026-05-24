@@ -1,10 +1,10 @@
 ﻿"""
-plugin_rasp_votes.py - Port of plugins/plugin.rasp_votes.php
+RASP voting backend - ported from the original XAseco voting runtime.
 
 Chat-based voting system: /endround /ladder /replay /skip /kick /ignore /cancel
-Works with plugin_rasp_jukebox which provides /y and the actual vote-pass logic.
+Works with the RASP jukebox backend, which provides /y and the actual vote-pass logic.
 
-Config read from rasp.settings via plugin_rasp globals.
+Config is read from shared RASP runtime settings.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Shared vote state (imported by plugin_rasp_jukebox)
+# Shared vote state (used by the jukebox backend)
 chatvote: dict = {}     # {login, nick, votes, type, desc, target?}
 tmxadd: dict = {}       # {login, nick, name, votes, uid, filename, environment, source, section}
 plrvotes: list = []     # logins who already voted this round
@@ -70,8 +70,8 @@ disabled_scoreboard: bool = False
 
 
 def _rasp_module():
-    from apps.rasp import rasp as rasp_app
-    return rasp_app
+    from apps.rasp import rankings as rankings_app
+    return rankings_app
 
 
 

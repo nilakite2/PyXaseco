@@ -1,5 +1,5 @@
 """
-chat_help.py — Port of plugins/chat.help.php
+help_chat.py — Port of plugins/chat.help.php
 
 /help    → compact list of command names in chat
 /helpall → ManiaLink window with full descriptions

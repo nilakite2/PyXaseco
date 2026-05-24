@@ -1,5 +1,5 @@
 ﻿"""
-plugin_tmxinfo.py - Port of plugins/plugin.tmxinfo.php
+TMX service backend for metadata lookup, world record display, and TMX chat flows.
 
 Fetches TMX track info via HTTP and displays it. Shows TMX world record
 at track start. /tmxinfo and /tmxrecs commands.
@@ -710,15 +710,15 @@ async def _tmx_worldrec(aseco: "Aseco", challenge):
         tmx_value = "  ---" if mode == Gameinfo.STNT else "---.--"
 
     try:
-        plugin_panels = (
+        panel_service = (
             sys.modules.get("apps.platform_ui.panels")
             or sys.modules.get("apps.platform_ui.panels")
         )
-        if plugin_panels is None:
-            logger.debug("[TMXInfo] Could not update records panel: plugin_panels not loaded")
+        if panel_service is None:
+            logger.debug("[TMXInfo] Could not update records panel: panel service not loaded")
         else:
-            plugin_panels.set_records_panel("tmx", tmx_value)
-            await plugin_panels.update_allrecpanels(aseco)
+            panel_service.set_records_panel("tmx", tmx_value)
+            await panel_service.update_allrecpanels(aseco)
     except Exception as e:
         logger.debug("[TMXInfo] Could not update records panel: %s", e)
 

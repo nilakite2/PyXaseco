@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-plugin_mania_karma.py — PyXaseco port of plugins/plugin.mania_karma.php
+mania_karma.py — PyXaseco port of plugins/plugin.mania_karma.php
 """
 
 import asyncio
@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pyxaseco.helpers import clean_tm_text, strip_colors
-from pyxaseco.plugin_config import as_bool, as_int, as_str, get_plugin_section
+from pyxaseco.app_config import as_bool, as_int, as_str, get_app_section
 from pyxaseco.app_services import localdb_get_player_id, localdb_get_pool
 from apps.tmx.service import (
     build_public_tmx_track_url as _build_public_tmx_track_url,
@@ -1737,7 +1737,7 @@ async def _handle_player_vote(aseco: Aseco, player: Any, vote: int) -> None:
 async def _load_config(aseco: Aseco) -> None:
     global _cfg
     _cfg = KarmaConfig()
-    section, path = get_plugin_section('mania_karma', getattr(aseco, '_base_dir', None))
+    section, path = get_app_section('mania_karma', getattr(aseco, '_base_dir', None))
     root = section.get('config', {}) if isinstance(section, dict) else {}
     if not isinstance(root, dict):
         root = {}

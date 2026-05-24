@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 from pyxaseco.helpers import strip_colors
-from pyxaseco.plugin_config import as_bool, as_int, as_str, get_plugin_section
+from pyxaseco.app_config import as_bool, as_int, as_str, get_app_section
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -234,7 +234,7 @@ def _parse_bool(text: str | None, default: bool) -> bool:
 
 def _load_config(aseco: "Aseco") -> DiscordWebhookConfig:
     cfg = DiscordWebhookConfig()
-    section, path = get_plugin_section("discord_webhook", getattr(aseco, "_base_dir", None))
+    section, path = get_app_section("discord_webhook", getattr(aseco, "_base_dir", None))
     raw = section.get("config", {}).get("discord_webhook", {}) if isinstance(section, dict) else {}
     if path is None:
         logger.info("[DiscordWebhook] app_defaults.toml missing; using defaults")

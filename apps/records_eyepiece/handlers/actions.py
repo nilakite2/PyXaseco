@@ -54,7 +54,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
 
     # Delayed imports to avoid circular dependencies between split modules.
     from .chat import chat_togglewidgets
-    from ..tracklist_view import (
+    from ..tracklist import (
         _send_tracklist_window,
         _close_tracklist_window,
         _build_tracklist_window,
@@ -63,13 +63,12 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         _send_trackauthorlist_window,
         _build_trackauthorlist_window,
     )
-    from ..widgets.challenge import _open_challenge_window
-    from ..widgets.records_local import _build_local_records_window
-    from ..widgets.records_dedi import _build_dedi_records_window
-    from ..widgets.live import _build_live_rankings_window
+    from ..challenge_widget import _open_challenge_window
+    from ..record_views import _build_local_records_window, _build_dedi_records_window
+    from ..hud_views import _build_live_rankings_window
     from ..helpwin import _build_help_window
     from ..toplists import _build_generic_toplist_window, _build_top_nations_window, _build_toplist_window
-    from ..toplists_view import draw_all_score_columns, hide_all_score_columns
+    from ..toplists import draw_all_score_columns, hide_all_score_columns
     from ..widgets.common import _send, _send_chat
 
     # -- TracklistWindow: close ----------------------------------------------
@@ -161,19 +160,19 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
 
     # 91803 = Clock widget clicked -> open worldmap timezone picker
     if action == 91803:
-        from ..widgets.clock_tz import open_clock_window
+        from ..hud_views import open_clock_window
         await open_clock_window(aseco, login)
         return
 
     # 918300-918319 = Select a timezone region group
     if 918300 <= action <= 918319:
-        from ..widgets.clock_tz import open_clock_group
+        from ..hud_views import open_clock_group
         await open_clock_group(aseco, login, action - 918300)
         return
 
     # 918350-918799 = Select a specific timezone
     if 918350 <= action <= 918799:
-        from ..widgets.clock_tz import select_timezone
+        from ..hud_views import select_timezone
         await select_timezone(aseco, login, action - 918350)
         return
 
@@ -186,8 +185,8 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
 
     # -- /estat pagination: dedi/trial/rpg records -------------------------
     if -918300 <= action <= -918200:
-        from ..widgets.records_rpg import _is_rpg_track_active, _build_rpg_records_window
-        from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
+        from ..record_views import _is_rpg_track_active, _build_rpg_records_window
+        from ..record_views import _is_trial_track_active, _build_trial_records_window
         page = abs(action) - 918200
         if await _is_rpg_track_active(aseco):
             xml = await _build_rpg_records_window(aseco, page)
@@ -200,8 +199,8 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         return
 
     if 918200 <= action < 918300:
-        from ..widgets.records_rpg import _is_rpg_track_active, _build_rpg_records_window
-        from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
+        from ..record_views import _is_rpg_track_active, _build_rpg_records_window
+        from ..record_views import _is_trial_track_active, _build_trial_records_window
         page = action - 918200
         if await _is_rpg_track_active(aseco):
             xml = await _build_rpg_records_window(aseco, page)
@@ -222,9 +221,9 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
 
     # 91804 = Show Dedimania/Trial/RPG RecordsWindow
     if action == 91804:
-        from ..widgets.records_rpg import _is_rpg_track_active, _get_rpg_records, _build_rpg_records_window
-        from ..widgets.records_dedi import _get_dedi_records
-        from ..widgets.trial_records import _is_trial_track_active, _get_trial_records, _build_trial_records_window
+        from ..record_views import _is_rpg_track_active, _get_rpg_records, _build_rpg_records_window
+        from ..record_views import _get_dedi_records
+        from ..record_views import _is_trial_track_active, _get_trial_records, _build_trial_records_window
         if await _is_rpg_track_active(aseco):
             recs = await _get_rpg_records(aseco)
             xml = await _build_rpg_records_window(aseco, 0, records=recs) if recs else ""
@@ -258,7 +257,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
 
     # 91829 = Show TrialRecordsWindow
     if action == 91829:
-        from ..widgets.trial_records import _get_trial_records, _build_trial_records_window
+        from ..record_views import _get_trial_records, _build_trial_records_window
         recs = await _get_trial_records(aseco)
         xml = await _build_trial_records_window(aseco, 0, records=recs) if recs else ''
         if xml:

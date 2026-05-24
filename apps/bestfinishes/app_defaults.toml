@@ -1,9 +1,3 @@
-[plugin_bestfinishes]
-x = 35.0
-y = 48.0
-scale = 1.0
-nb_bestfinishes = 5
-
 [bestfinishes]
 
 [bestfinishes.config]

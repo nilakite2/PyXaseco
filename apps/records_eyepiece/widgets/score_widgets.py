@@ -23,7 +23,7 @@ from pyxaseco.core.runtime_imports import import_runtime_module
 from pyxaseco.models import Gameinfo
 
 from ..config import _state, _effective_mode
-from ..utils import _handle_special_chars, _safe_ml_text
+from ..internal.utils import _handle_special_chars, _safe_ml_text
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -709,7 +709,7 @@ def _get_rpoints(aseco: 'Aseco', mode: int, shown_count: int = 0) -> list[int]:
     if cached:
         return list(cached)
 
-    # Fallback: read from settings / plugin_rpoints named systems.
+    # Fallback: read from settings / legacy rounds-points integrations.
     system = getattr(getattr(aseco, 'settings', None), 'default_rpoints', '') or ''
     rounds_points = None
     try:

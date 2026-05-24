@@ -1,5 +1,5 @@
 """
-plugin_uptodate.py — Port of plugins/plugin.uptodate.php
+uptodate.py — Port of plugins/plugin.uptodate.php
 
 Checks PyXaseco version at startup and on MasterAdmin connect.
 Provides /admin uptodate command (wired up by chat_admin).

@@ -1,5 +1,5 @@
 """
-chat_songmod.py — Port of plugins/chat.songmod.php
+Track info chat surface for current song and mod details.
 
 /song — Shows current track's song filename
 /mod  — Shows current track's mod name/filename

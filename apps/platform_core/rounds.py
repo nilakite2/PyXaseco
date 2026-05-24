@@ -1,5 +1,5 @@
 """
-plugin_rounds.py — Port of plugins/plugin.rounds.php
+rounds.py — Port of plugins/plugin.rounds.php
 
 Reports finishes in each individual round (Rounds/Team/Cup modes).
 """

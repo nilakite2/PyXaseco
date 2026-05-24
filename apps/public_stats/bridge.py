@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 """
-plugin_public_stats.py
+public_stats_bridge.py
 
 Lightweight public stats bridge for remote PyXaseco servers.
 
 Design goals:
 - no direct database access
 - no .env dependency
-- small API-only snapshot/event plugin
+- small API-only snapshot/event app
 - safe for remote servers outside the main VPS
 
 It reports:
 - server heartbeat / current snapshot
 - current map
 - player/spectator counts
-- controller + plugin version
+- controller + app version
 - last 5 local-record events
 """
 
@@ -292,9 +292,9 @@ async def public_stats_startup(aseco: "Aseco", _param=None):
         return
     logger.info("[PublicStats] Using API '%s'", _api_base())
     try:
-        versions = getattr(aseco, "plugin_versions", None)
+        versions = getattr(aseco, "app_versions", None)
         if isinstance(versions, list):
-            versions.append({"name": "plugin_public_stats", "version": PLUGIN_VERSION})
+            versions.append({"name": "app/public_stats", "version": PLUGIN_VERSION})
     except Exception:
         pass
 

@@ -13,7 +13,7 @@ from ..config import (
     validate_phase1_dependencies,
     apply_phase1_defaults,
 )
-from ..state import _init_player, _clear_per_challenge_state, _loop_time
+from ..internal.state import _init_player, _clear_per_challenge_state, _loop_time
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -37,8 +37,7 @@ _BAR_WIDGET_IDS = (
 # ---------------------------------------------------------------------------
 
 async def _on_sync(aseco: 'Aseco', _data):
-    from ..widgets.live import _fetch_live
-    from ..widgets.checkpoint import _refresh_cp_targets_all
+    from ..hud_views import _fetch_live, _refresh_cp_targets_all
 
     setattr(_state, 'aseco', aseco)
     validate_phase1_runtime(aseco)
@@ -67,11 +66,11 @@ async def _on_sync(aseco: 'Aseco', _data):
 
     aseco.console('[Records-Eyepiece] Phase 1 startup complete')
 
-    from ..widgets.bar_widgets import (
+    from ..hud_views import (
         _refresh_server_limits, _refresh_visitor_count,
         draw_all_race_bars, hide_all_score_bars,
     )
-    from ..widgets.clock_tz import init_clock_tz
+    from ..hud_views import init_clock_tz
     await init_clock_tz(aseco)
     await _refresh_server_limits(aseco)
     await _refresh_visitor_count(aseco)
@@ -81,18 +80,18 @@ async def _on_sync(aseco: 'Aseco', _data):
 
 
 async def _on_player_connect(aseco: 'Aseco', player: 'Player'):
-    from ..widgets.checkpoint import _refresh_cp_target_for_player
+    from ..hud_views import _refresh_cp_target_for_player
 
     _init_player(player.login)
     _refresh_cp_target_for_player(aseco, player.login)
 
 
 async def _on_player_connect2(aseco: 'Aseco', player: 'Player'):
-    from ..widgets.bar_widgets import (
+    from ..hud_views import (
         _draw_clock_player, _refresh_server_limits, _refresh_visitor_count,
         _draw_playerspectator_all, draw_all_race_bars, draw_all_score_bars,
     )
-    from ..widgets.clock_tz import load_player_tz
+    from ..hud_views import load_player_tz
     await load_player_tz(aseco, player)
     await _apply_custom_ui(aseco, player.login)
     await _redraw_player(aseco, player.login)
@@ -136,16 +135,15 @@ async def _on_player_disconnect(aseco: 'Aseco', player: 'Player'):
     _state.player_timezone.pop(login, None)
     await _draw_local_all(aseco)
     await _draw_dedi_all(aseco)
-    from ..widgets.bar_widgets import _refresh_server_limits, _draw_playerspectator_all
+    from ..hud_views import _refresh_server_limits, _draw_playerspectator_all
     await _refresh_server_limits(aseco)
     if not _state.challenge_show_next:
         await _draw_playerspectator_all(aseco)
 
 
 async def _on_player_info_changed(aseco: 'Aseco', player: 'Player'):
-    from ..widgets.bar_widgets import _draw_playerspectator_all
-    from ..widgets.checkpoint import _is_player_currently_spectating
-    from ..score_view import draw_round_score
+    from ..hud_views import _draw_playerspectator_all, _is_player_currently_spectating
+    from ..widgets.score_widgets import draw_round_score
 
     if player and player.login and _is_player_currently_spectating(player):
         _state.player_cp_idx[player.login] = 0
@@ -195,7 +193,7 @@ async def _on_player_retire(aseco: 'Aseco', player: 'Player'):
 
 async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
     from ..widgets.common import _hide
-    from ..widgets.live import _fetch_live
+    from ..hud_views import _fetch_live
 
     login = finish.player.login if finish and finish.player else ''
     score = finish.score if finish else 0
@@ -250,7 +248,7 @@ async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
         if pb is None or score < pb:
             _state.round_score_pb[login] = score
         # Broadcast updated widget
-        from ..score_view import draw_round_score
+        from ..widgets.score_widgets import draw_round_score
         await draw_round_score(aseco)
 
     # ── Phase 4: TopAverageTimes accumulation ─────────────────────────────
@@ -268,7 +266,7 @@ async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
 
 
 async def _on_local_record(aseco: 'Aseco', _rec):
-    from ..widgets.checkpoint import _refresh_cp_targets_all
+    from ..hud_views import _refresh_cp_targets_all
 
     _state.player_local_digest.clear()
     _refresh_cp_targets_all(aseco)
@@ -279,7 +277,7 @@ async def _on_local_record(aseco: 'Aseco', _rec):
 
 
 async def _on_rpg_record(aseco: 'Aseco', _rec):
-    from ..widgets.checkpoint import _refresh_cp_targets_all
+    from ..hud_views import _refresh_cp_targets_all
 
     _state.player_dedi_digest.clear()
     _refresh_cp_targets_all(aseco)
@@ -290,7 +288,7 @@ async def _on_rpg_record(aseco: 'Aseco', _rec):
 
 
 async def _on_trial_record(aseco: 'Aseco', _rec):
-    from ..widgets.checkpoint import _refresh_cp_targets_all
+    from ..hud_views import _refresh_cp_targets_all
 
     _state.player_dedi_digest.clear()
     _refresh_cp_targets_all(aseco)
@@ -301,7 +299,7 @@ async def _on_trial_record(aseco: 'Aseco', _rec):
 
 
 async def _on_dedi_recs_loaded(aseco: 'Aseco', valid):
-    from ..widgets.checkpoint import _refresh_cp_targets_all
+    from ..hud_views import _refresh_cp_targets_all
 
     _state.player_dedi_digest.clear()
     _refresh_cp_targets_all(aseco)
@@ -312,7 +310,7 @@ async def _on_dedi_recs_loaded(aseco: 'Aseco', valid):
 
 
 async def _on_dedi_record(aseco: 'Aseco', _rec):
-    from ..widgets.checkpoint import _refresh_cp_targets_all
+    from ..hud_views import _refresh_cp_targets_all
 
     _state.player_dedi_digest.clear()
     _refresh_cp_targets_all(aseco)
@@ -324,8 +322,8 @@ async def _on_dedi_record(aseco: 'Aseco', _rec):
 
 async def _on_begin_round(aseco: 'Aseco', _p=None):
     from ..widgets.common import _hide
-    from ..widgets.checkpoint import _refresh_cp_targets_all
-    from ..score_view import hide_round_score
+    from ..hud_views import _refresh_cp_targets_all
+    from ..widgets.score_widgets import hide_round_score
 
     # Refresh last_real_mode — round start always has the real game mode
     _effective_mode(aseco)
@@ -355,7 +353,7 @@ async def _on_begin_round(aseco: 'Aseco', _p=None):
 
 
 async def _on_end_round(aseco: 'Aseco', _p=None):
-    from ..widgets.live import _fetch_live
+    from ..hud_views import _fetch_live
 
     # Lock in real mode before score screen (mode 7) is reported
     _effective_mode(aseco)
@@ -403,14 +401,14 @@ async def _on_new_challenge(aseco: 'Aseco', challenge: 'Challenge'):
 
 
 async def _on_new_challenge2(aseco: 'Aseco', _challenge):
-    from ..widgets.live import _fetch_live
-    from ..widgets.checkpoint import _refresh_cp_targets_all
-    from ..widgets.bar_widgets import (
+    from ..hud_views import _fetch_live
+    from ..hud_views import _refresh_cp_targets_all
+    from ..hud_views import (
         draw_all_race_bars, hide_all_score_bars,
         _refresh_visitor_count, _refresh_server_limits,
     )
-    from ..score_view import hide_all_score_lists, hide_round_score
-    from ..toplists_view import hide_all_score_columns
+    from ..widgets.score_widgets import hide_all_score_lists, hide_round_score
+    from ..toplists import hide_all_score_columns
 
     _effective_mode(aseco)
     _state.challenge_show_next = False
@@ -438,7 +436,7 @@ async def _on_new_challenge2(aseco: 'Aseco', _challenge):
 
 
 async def _on_restart_challenge(aseco: 'Aseco', _p=None):
-    from ..widgets.live import _fetch_live
+    from ..hud_views import _fetch_live
 
     _clear_per_challenge_state()
     for _player in aseco.server.players.all():
@@ -453,8 +451,8 @@ async def _on_restart_challenge(aseco: 'Aseco', _p=None):
 
 async def _on_end_race(aseco: 'Aseco', _p=None):
     from ..widgets.common import _hide
-    from ..widgets.live import _fetch_live
-    from ..widgets.challenge import _get_next_track_info
+    from ..hud_views import _fetch_live
+    from ..challenge_widget import _get_next_track_info
 
     _state.challenge_show_next = True
 
@@ -485,9 +483,9 @@ async def _on_end_race(aseco: 'Aseco', _p=None):
     await _draw_challenge_all(aseco)
     await _draw_live_all(aseco)
 
-    from ..widgets.bar_widgets import draw_all_score_bars, hide_all_race_bars
-    from ..score_view import draw_all_score_lists
-    from ..toplists_view import draw_all_score_columns
+    from ..hud_views import draw_all_score_bars, hide_all_race_bars
+    from ..widgets.score_widgets import draw_all_score_lists
+    from ..toplists import draw_all_score_columns
     await hide_all_race_bars(aseco)
     await draw_all_score_bars(aseco)
     await draw_all_score_lists(aseco)
@@ -509,9 +507,9 @@ async def _on_end_race1(aseco: 'Aseco', _p=None):
     _state.player_live_digest.clear()
     await _redraw_all(aseco)
 
-    from ..widgets.bar_widgets import draw_all_race_bars, hide_all_score_bars
-    from ..score_view import hide_all_score_lists, hide_round_score
-    from ..toplists_view import hide_all_score_columns
+    from ..hud_views import draw_all_race_bars, hide_all_score_bars
+    from ..widgets.score_widgets import hide_all_score_lists, hide_round_score
+    from ..toplists import hide_all_score_columns
     await hide_all_score_bars(aseco)
     await hide_all_score_lists(aseco)
     await hide_all_score_columns(aseco)
@@ -520,7 +518,7 @@ async def _on_end_race1(aseco: 'Aseco', _p=None):
 
 
 async def _on_jukebox_changed(aseco: 'Aseco', _data=None):
-    from ..widgets.challenge import _get_next_track_info
+    from ..challenge_widget import _get_next_track_info
 
     _state.last_challenge = {}
     _state.player_local_digest.clear()
@@ -540,7 +538,7 @@ async def _on_tracklist_changed(aseco: 'Aseco', _data=None):
     _state.player_dedi_digest.clear()
     _state.player_live_digest.clear()
     await _redraw_all(aseco)
-    from ..widgets.bar_widgets import _draw_trackcount_all, _hide_trackcount
+    from ..hud_views import _draw_trackcount_all, _hide_trackcount
     if _state.challenge_show_next:
         await _hide_trackcount(aseco)
     else:
@@ -562,8 +560,8 @@ async def _on_status_to5(aseco: 'Aseco', _data=None):
     _state.player_dedi_digest.clear()
     _state.player_live_digest.clear()
 
-    from ..score_view import draw_all_score_lists
-    from ..toplists_view import draw_all_score_columns
+    from ..widgets.score_widgets import draw_all_score_lists
+    from ..toplists import draw_all_score_columns
 
     if getattr(aseco.server.gameinfo, 'mode', -1) == Gameinfo.SCOR or _state.challenge_show_next:
         _state.challenge_show_next = True
@@ -589,8 +587,8 @@ async def _on_karma_change(aseco: 'Aseco', _data=None):
 
 
 async def _on_every_second(aseco: 'Aseco', _p=None):
-    from ..widgets.live import _fetch_live
-    from ..widgets.bar_widgets import (
+    from ..hud_views import _fetch_live
+    from ..hud_views import (
         _draw_clock_all, _draw_playerspectator_all, _draw_currentranking_all,
         _refresh_visitor_count, _draw_visitors_all,
     )
@@ -614,8 +612,8 @@ async def _on_every_second(aseco: 'Aseco', _p=None):
 
 async def _on_checkpoint(aseco: 'Aseco', params: list):
     from ..widgets.common import _hide
-    from ..widgets.checkpoint import _format_cp_delta, _resolve_display_login
-    from ..widgets.live import _fetch_live
+    from ..hud_views import _format_cp_delta, _resolve_display_login
+    from ..hud_views import _fetch_live
 
     if len(params) < 5:
         return
@@ -791,39 +789,39 @@ async def _draw_cp_all(aseco: 'Aseco'):
 # ---------------------------------------------------------------------------
 
 async def _draw_challenge_player(aseco: 'Aseco', login: str):
-    from ..widgets.challenge import _draw_challenge_player as impl
+    from ..challenge_widget import _draw_challenge_player as impl
     await impl(aseco, login)
 
 
 async def _draw_cp_player(aseco: 'Aseco', login: str):
-    from ..widgets.checkpoint import _draw_cp_player as impl
+    from ..hud_views import _draw_cp_player as impl
     await impl(aseco, login)
 
 
 async def _draw_cpdelta_player(aseco: 'Aseco', login: str):
-    from ..widgets.checkpoint import _draw_cpdelta_player as impl
+    from ..hud_views import _draw_cpdelta_player as impl
     await impl(aseco, login)
 
 
 async def _draw_local_player(aseco: 'Aseco', login: str):
-    from ..widgets.records_local import _draw_local_player as impl
+    from ..record_views import _draw_local_player as impl
     await impl(aseco, login)
 
 
 async def _draw_dedi_player(aseco: 'Aseco', login: str):
-    from ..widgets.records_rpg import _is_rpg_track_active
-    from ..widgets.trial_records import _is_trial_track_active
+    from ..record_views import _is_rpg_track_active
+    from ..record_views import _is_trial_track_active
     if await _is_rpg_track_active(aseco):
-        from ..widgets.records_rpg import _draw_rpg_player as impl
+        from ..record_views import _draw_rpg_player as impl
     elif await _is_trial_track_active(aseco):
-        from ..widgets.trial_records import _draw_trial_player as impl
+        from ..record_views import _draw_trial_player as impl
     else:
-        from ..widgets.records_dedi import _draw_dedi_player as impl
+        from ..record_views import _draw_dedi_player as impl
     await impl(aseco, login)
 
 
 async def _draw_live_player(aseco: 'Aseco', login: str):
-    from ..widgets.live import _draw_live_player as impl
+    from ..hud_views import _draw_live_player as impl
     await impl(aseco, login)
 
 
@@ -834,7 +832,7 @@ def _is_score_state(aseco: 'Aseco') -> bool:
 
 
 async def _refresh_score_state_records(aseco: 'Aseco', kind: str = 'dedi') -> None:
-    from ..score_view import (
+    from ..widgets.score_widgets import (
         build_dedi_records_for_score,
         build_local_records_for_score,
     )

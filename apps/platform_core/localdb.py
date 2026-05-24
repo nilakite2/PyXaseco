@@ -1,5 +1,5 @@
 """
-plugin_localdatabase.py — Port of plugins/plugin.localdatabase.php
+localdb.py — Port of plugins/plugin.localdatabase.php
 
 Manages the MySQL local database:
   - players, challenges, records, players_extra tables
@@ -541,7 +541,7 @@ async def ldb_player_finish(aseco: 'Aseco', params: list):
             new_rec.challenge = challenge
             new_rec.new       = True
 
-            # Try to attach checkpoint data from plugin_checkpoints now,
+            # Try to attach checkpoint data from checkpoints now,
             # so both in-memory records and DB rows get real CP times.
             try:
                 from apps.platform_core.checkpoints import checkpoints

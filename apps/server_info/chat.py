@@ -1,5 +1,5 @@
-﻿"""
-chat_server.py - Port of plugins/chat.server.php
+"""
+server_info_chat.py - Port of plugins/chat.server.php
 
 /server   - Server info window
 /xaseco   - PyXaseco info window

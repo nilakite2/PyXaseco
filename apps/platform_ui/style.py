@@ -1,7 +1,7 @@
 ﻿"""
-plugin_style.py - Port of plugins/plugin.style.php
+Shared platform UI style catalog and runtime style selection.
 
-Loads ManiaLink window style templates from styles/styles.toml.
+Loads ManiaLink window style templates from the platform_ui app catalog.
 /style help | list | default | off | <name>
 """
 
@@ -27,7 +27,7 @@ def register(aseco: 'Aseco'):
 
 
 def _styles_file(aseco: 'Aseco') -> Path:
-    return aseco._base_dir / 'styles' / 'styles.toml'
+    return Path(__file__).resolve().with_name('styles.toml')
 
 
 def _load_styles_config(aseco: 'Aseco') -> dict[str, dict]:
@@ -72,9 +72,9 @@ def _load_server_style(aseco: 'Aseco', style_name: str):
     data = _get_style_data(aseco, style_name)
     if data and 'STYLES' in data:
         aseco.style = data['STYLES']
-        aseco.console('Load default style [{1}]', f'styles/{style_name}.toml')
+        aseco.console('Load default style [{1}]', f'apps/platform_ui/styles.toml::{style_name}')
     else:
-        aseco.console('[PyXaseco] WARNING: Could not parse style file: {1}', f'styles/{style_name}.toml')
+        aseco.console('[PyXaseco] WARNING: Could not parse style file: {1}', f'apps/platform_ui/styles.toml::{style_name}')
 
 
 async def init_player_style(aseco: 'Aseco', player: 'Player'):
@@ -92,7 +92,7 @@ def _load_player_style(aseco: 'Aseco', player: 'Player', style_name: str):
     if data and 'STYLES' in data:
         player.style = data['STYLES']
     else:
-        aseco.console('[PyXaseco] WARNING: Could not parse player style: {1}', f'styles/{style_name}.toml')
+        aseco.console('[PyXaseco] WARNING: Could not parse player style: {1}', f'apps/platform_ui/styles.toml::{style_name}')
 
 
 async def chat_style(aseco: 'Aseco', command: dict):

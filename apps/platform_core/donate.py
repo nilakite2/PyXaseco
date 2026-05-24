@@ -1,5 +1,5 @@
 """
-plugin_donate.py — Port of plugins/plugin.donate.php
+donate.py — Port of plugins/plugin.donate.php
 
 /donate <amount>  — Donates coppers to the server
 /topdons          — Displays top 100 highest donators

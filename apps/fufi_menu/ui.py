@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-plugin_fufi_menu.py — Port of Fufi Menu Plugin for XAseco
+fufi_menu.py — Port of Fufi Menu for XAseco
 
 Original:
   Fufi Menu Plugin for XASECO by oorf-fuckfish
@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pyxaseco.plugin_config import get_plugin_section
+from pyxaseco.app_config import get_app_section
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -201,7 +201,7 @@ class FufiMenu:
         self.entries: list[FufiMenuEntry] = []
         self.entries_list: list[FufiMenuEntry] = []
 
-        self.plugin_list = ""
+        self.app_list = ""
         self.aseco: Aseco | None = None
         self.gameinfo: dict[str, Any] = {}
         self.gameinfonext: dict[str, Any] = {}
@@ -210,12 +210,12 @@ class FufiMenu:
         self.challenge_download_allowed: int | None = None
 
     def init(self):
-        self._load_plugin_list()
+        self._load_app_list()
         self.load_settings()
         self.load_styles()
         self.load_entries()
 
-    def _load_plugin_list(self):
+    def _load_app_list(self):
         plugins_toml = Path("apps.toml")
         if plugins_toml.exists():
             try:
@@ -318,7 +318,7 @@ class FufiMenu:
                         vals.append(name.replace("/", "_"))
                         vals.append(name.replace("/", ".") + ".php")
                         vals.extend(aliases.get(name, []))
-                self.plugin_list = "|".join(dict.fromkeys(vals)) + ("|" if vals else "")
+                self.app_list = "|".join(dict.fromkeys(vals)) + ("|" if vals else "")
                 return
             except Exception as e:
                 logger.warning("[FufiMenu] Could not parse apps.toml: %s", e)
@@ -355,33 +355,33 @@ class FufiMenu:
 
         return default
 
-    def get_plugin_state(self, plugin_name: str, default=None):
+    def get_app_state(self, app_name: str, default=None):
         """
-        Best-effort plugin/module state lookup.
+        Best-effort app/module state lookup.
         """
         if not self.aseco:
-            return globals().get(plugin_name, default)
+            return globals().get(app_name, default)
 
         try:
             plugins = getattr(self.aseco.server, "plugins", None)
-            if isinstance(plugins, dict) and plugin_name in plugins:
-                return plugins[plugin_name]
+            if isinstance(plugins, dict) and app_name in plugins:
+                return plugins[app_name]
         except Exception:
             pass
 
         try:
-            if hasattr(self.aseco.server, plugin_name):
-                return getattr(self.aseco.server, plugin_name)
+            if hasattr(self.aseco.server, app_name):
+                return getattr(self.aseco.server, app_name)
         except Exception:
             pass
 
         try:
-            if hasattr(self.aseco, plugin_name):
-                return getattr(self.aseco, plugin_name)
+            if hasattr(self.aseco, app_name):
+                return getattr(self.aseco, app_name)
         except Exception:
             pass
 
-        return globals().get(plugin_name, default)
+        return globals().get(app_name, default)
 
     def get_unique_id(self) -> str:
         uid = str(self.unique_id)
@@ -611,7 +611,7 @@ class FufiMenu:
         result = True
 
         for dep in [d.strip() for d in dependencies.split(",") if d.strip()]:
-            result = result and (f"{dep}|" in self.plugin_list or dep in self.plugin_list)
+            result = result and (f"{dep}|" in self.app_list or dep in self.app_list)
 
         if globalvariable:
             try:
@@ -1056,7 +1056,7 @@ async def fufiMenu_handleClick(aseco: "Aseco", command: list):
 async def fufiMenu_startup(aseco: "Aseco", _param=None):
     global _fufi_menu
     if not _fufi_menu:
-        section, cfg_path = get_plugin_section("fufi_menu_config", getattr(aseco, "_base_dir", None))
+        section, cfg_path = get_app_section("fufi_menu_config", getattr(aseco, "_base_dir", None))
         config = section.get("config", section) if isinstance(section, dict) else {}
         if not isinstance(config, dict) or not config:
             logger.warning("[FufiMenu] No TOML configuration found in app_defaults.toml, menu disabled")

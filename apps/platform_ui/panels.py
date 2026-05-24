@@ -1,8 +1,8 @@
 ﻿"""
-plugin_panels.py - port of plugins/plugin.panels.php
+Shared platform UI panel catalog and panel preference runtime.
 
 Covers:
-- loading default panel templates from /panels
+- loading default panel templates from the platform_ui app catalog
 - loading player-selected panel templates from DB
 - /donpanel, /recpanel, /votepanel
 - /admin panel ...
@@ -90,6 +90,10 @@ _records_cache = {
 _last_records_snapshot = ("", "", "")
 _EMPTY_RECORD_VALUE = "---.--"
 
+
+def _panel_catalog_label(panel_name: str) -> str:
+    return f"apps/platform_ui/panels.toml::{panel_name}"
+
 def register(aseco: "Aseco"):
     aseco.register_event("onStartup", panels_default)
     aseco.register_event("onSync", init_statspanel)
@@ -117,16 +121,12 @@ def register(aseco: "Aseco"):
     aseco.register_event("onChat_votepanel", chat_votepanel)
 
 
-def _base_dir(aseco: "Aseco") -> Path:
-    return Path(getattr(aseco, "_base_dir", "."))
-
-
-def _panels_dir(aseco: "Aseco") -> Path:
-    return _base_dir(aseco) / "panels"
+def _app_dir() -> Path:
+    return Path(__file__).resolve().parent
 
 
 def _panels_file(aseco: "Aseco") -> Path:
-    return _panels_dir(aseco) / "panels.toml"
+    return _app_dir() / "panels.toml"
 
 
 def _load_panel_templates(aseco: "Aseco") -> dict[str, str]:
@@ -224,7 +224,7 @@ def _parse_panels_db_value(raw) -> dict[str, str]:
 
 async def _get_player_panel_names_from_db(aseco: "Aseco", login: str) -> dict[str, str]:
     """
-    Reads players_extra.panels through plugin_localdatabase and normalizes it.
+    Reads players_extra.panels through the local database service and normalizes it.
     """
     try:
         raw = await localdb_get_panels(aseco, login)
@@ -323,7 +323,7 @@ async def panels_default(aseco: "Aseco", _param=None):
             _default_panels[key] = ""
             continue
         try:
-            aseco.console(f"[Panels] Load default {key} panel [{{1}}]", f"panels/{panel_name}")
+            aseco.console(f"[Panels] Load default {key} panel [{{1}}]", _panel_catalog_label(panel_name))
             _default_panels[key] = _read_panel_file(aseco, panel_name)
         except Exception as e:
             logger.warning("[Panels] Could not load default %s panel %s: %s", key, panel_name, e)
@@ -340,7 +340,7 @@ async def init_statspanel(aseco: "Aseco", _param=None):
 
     panel_name = "StatsUnited" if getattr(aseco.server, "rights", False) else "StatsNations"
     try:
-        aseco.console("[Panels] Load stats panel [{1}]", f"panels/{panel_name}")
+        aseco.console("[Panels] Load stats panel [{1}]", _panel_catalog_label(panel_name))
         _stats_panel_xml = _read_panel_file(aseco, panel_name)
     except Exception as e:
         logger.warning("[Panels] Could not load stats panel %s: %s", panel_name, e)

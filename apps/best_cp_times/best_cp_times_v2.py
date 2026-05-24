@@ -1,5 +1,5 @@
 """
-plugin_best_cp_times_v2.py - based on Trakman scroll style LiveCpsRanking
+best_cp_times_v2.py - based on Trakman scroll style LiveCpsRanking
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from html import escape
 from typing import TYPE_CHECKING
 
-from pyxaseco.plugin_config import as_bool, as_float, as_int, get_plugin_section
+from pyxaseco.app_config import as_bool, as_float, as_int, get_app_section
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -75,7 +75,7 @@ def register(aseco: "Aseco"):
 
 
 def _load_cfg(aseco: "Aseco"):
-    section, path = get_plugin_section("best_cp_times_v2", getattr(aseco, "_base_dir", None))
+    section, path = get_app_section("best_cp_times_v2", getattr(aseco, "_base_dir", None))
     config = section.get("config", {}) if isinstance(section, dict) else {}
     if not isinstance(config, dict):
         config = {}
@@ -97,7 +97,7 @@ def _load_cfg(aseco: "Aseco"):
 
 def _resolve_eyepiece_state():
     module_names = (
-        "apps.records_eyepiece.state",
+        "apps.records_eyepiece.internal.state",
         "apps.records_eyepiece.app",
         "apps.records_eyepiece.plugin",
     )
@@ -204,15 +204,15 @@ async def bct_onSync(aseco: "Aseco", _param=None):
     tmf_aliases = {"tmf", "tmforever", "tm forever", "trackmania forever", "tmnforever"}
     if game_norm and game_norm not in tmf_aliases:
         raise RuntimeError(
-            f"[plugin_best_checkpoint_times.py] This plugin supports only TMF/TmForever, cannot start with {game!r}."
+            f"[BestCpTimesV2] This app supports only TMF/TmForever, cannot start with {game!r}."
         )
 
     try:
-        versions = getattr(aseco, "plugin_versions", None)
+        versions = getattr(aseco, "app_versions", None)
         if isinstance(versions, list):
             versions.append(
                 {
-                    "plugin": "plugin_best_checkpoint_times.py",
+                    "app": "best_cp_times_v2.py",
                     "author": "undef.de",
                     "version": _state.version,
                 }

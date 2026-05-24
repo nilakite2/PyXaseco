@@ -1,5 +1,5 @@
 """
-plugin_checkpoints.py — Port of plugins/plugin.checkpoints.php
+checkpoints.py — Port of plugins/plugin.checkpoints.php
 
 Tracks checkpoint times per player for comparison against local records.
 Provides CP-panel display and /cptms /sectms commands.
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Public state (accessed by plugin_dedimania and plugin_localdatabase)
+# Public state (accessed by Dedimania and localdb)
 # ---------------------------------------------------------------------------
 
 @dataclass

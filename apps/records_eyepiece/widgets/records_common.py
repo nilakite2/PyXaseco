@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.helpers import format_time
 
 from ..config import WidgetCfg, StyleCfg, _state
-from ..utils import _handle_special_chars, _safe_ml_text
+from ..internal.utils import _handle_special_chars, _safe_ml_text
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco

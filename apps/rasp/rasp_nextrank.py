@@ -1,5 +1,5 @@
 ﻿"""
-plugin_rasp_nextrank.py - Port of plugins/plugin.rasp_nextrank.php
+RASP nextrank backend - ported from the original XAseco nextrank runtime.
 
 /nextrank - Shows the next better ranked player.
 """

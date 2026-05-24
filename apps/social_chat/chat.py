@@ -1,5 +1,5 @@
 """
-chat_me.py — Port of plugins/chat.me.php
+social_chat.py — Port of plugins/chat.me.php
 
 /me <text> — Broadcast an emote-style message starting with the player's nickname.
 """

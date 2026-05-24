@@ -1,5 +1,5 @@
 """
-plugin_cpll.py — Port of plugins/plugin.cpll.php (by ZiZa)
+cpll.py — Port of plugins/plugin.cpll.php (by ZiZa)
 
 CP Live List: tracks which checkpoint each player is at and their time.
 /cp    — show current standings for all players
@@ -22,7 +22,7 @@ _cpll_trackcps: int = 0     # total CPs on current track
 
 
 def get_cpll_array() -> dict:
-    """Public accessor used by plugin_ztrack."""
+    """Public accessor used by ztrack."""
     return _cpll_array
 
 

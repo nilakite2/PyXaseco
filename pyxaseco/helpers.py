@@ -312,7 +312,7 @@ async def _event_manialink(aseco: 'Aseco', answer: list):
     Action routing:
       action  0          -> close main window
       action -4..-2, 1-4 -> page navigation for multi-page windows
-      action -6..36      -> passed through; plugin_panels.py handles the rest
+      action -6..36      -> passed through; the panel runtime handles the rest
       action outside -6..36 -> ignored (left to other handlers)
     """
     if len(answer) < 3:
@@ -336,7 +336,7 @@ async def _event_manialink(aseco: 'Aseco', answer: list):
     # Actions -4..-2 and 1-4 = multi-page navigation
     # Action 1 = "current page" (display_manialink_multi triggers this)
     if action not in (-4, -3, -2, 1, 2, 3, 4):
-        # Actions -6..-5 and 5..36 handled by plugin_panels and other plugins
+        # Actions -6..-5 and 5..36 handled by the panel runtime and other apps
         return
 
     player = aseco.server.players.get_player(login)

@@ -1,5 +1,5 @@
 """
-chat_wins.py — Port of plugins/chat.wins.php
+wins_chat.py — Port of plugins/chat.wins.php
 
 /wins — Shows the current player's win count.
 """

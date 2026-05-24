@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
-from ..utils import _digest_entries, _handle_special_chars, _safe_ml_text
+from ..internal.utils import _digest_entries, _handle_special_chars, _safe_ml_text
 
 from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 
 from ..config import WidgetCfg, _state, _effective_mode
-from ..ui import append_window_start, append_window_end, append_four_player_columns
+from ..hud import append_window_start, append_window_end, append_four_player_columns
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco

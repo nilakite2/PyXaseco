@@ -1,5 +1,5 @@
-﻿"""
-chat_players2.py - Port of plugins/chat.players2.php
+"""
+players_detail_chat.py - Port of plugins/chat.players2.php
 
 /ranks     - Displays list of online ranks/nicks
 /clans     - Displays list of online clans/nicks

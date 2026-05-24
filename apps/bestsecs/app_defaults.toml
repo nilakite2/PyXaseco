@@ -1,16 +1,3 @@
-[plugin_bestsecs]
-pos_x = 50.9
-pos_y = -30.0
-announce_sec = true
-announce_own = true
-remove_on_delete = true
-window_rounds = true
-window_ta = true
-window_team = true
-window_cup = true
-window_lap = true
-window_stunts = true
-
 [bestsecs]
 
 [bestsecs.config]

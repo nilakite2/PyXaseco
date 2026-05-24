@@ -7,7 +7,7 @@ from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 from pyxaseco.app_services import get_tmx_service
 
-from .config import _state
+from ..config import _state
 
 logger = logging.getLogger(__name__)
 

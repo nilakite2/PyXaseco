@@ -15,6 +15,10 @@ APP_METADATA = {
     "display_name": "Admin",
     "description": "Admin commands, moderation, map control, and server management.",
     "modules": [
+        "apps/admin/server.py",
+        "apps/admin/map.py",
+        "apps/admin/player.py",
+        "apps/admin/lists.py",
         "apps/admin/commands.py",
         "apps/admin/callbacks.py",
     ],
@@ -43,9 +47,10 @@ class AdminApp(App):
             depends_on=("platform_core", "tmx", "rasp", "records_local"),
             entry_modules=("app/admin",),
         )
+        self.domain_components = commands.get_domain_components()
         self.command_surface = commands.get_component()
         self.callback_surface = callbacks.get_component()
-        self.components = (
+        self.components = self.domain_components + (
             self.command_surface,
             self.callback_surface,
         )

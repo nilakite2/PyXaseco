@@ -1,5 +1,5 @@
-﻿"""
-chat_records2.py - Port of plugins/chat.records2.php
+"""
+records_toplist_chat.py - Port of plugins/chat.records2.php
 
 Provides:
   show_trackrecs() - universal ranking message (called by aseco core + /newrecs /liverecs)

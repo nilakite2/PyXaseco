@@ -1,5 +1,5 @@
 ﻿"""
-plugin_rasp_jukebox.py - Port of plugins/plugin.rasp_jukebox.php
+RASP jukebox backend - ported from the original XAseco jukebox runtime.
 
 Jukebox system: track queuing, /y voting for TMX adds and chat votes,
 /list /jukebox /autojuke /add /history /xlist commands.
@@ -10,6 +10,7 @@ import logging
 import asyncio
 import json
 import pathlib
+import random
 import re
 import sys
 import tempfile
@@ -61,24 +62,24 @@ def _tmx_service(aseco=None):
 
 
 def _rasp_module():
-    from apps.rasp import rasp as rasp_app
-    return rasp_app
+    from apps.rasp import rankings as rankings_app
+    return rankings_app
 
 
 def _rasp_votes_module():
-    from apps.rasp import rasp_votes as rasp_votes_app
-    return rasp_votes_app
+    from apps.rasp import voting as voting_app
+    return voting_app
 
 
 def get_jukebox() -> dict:
-    """Public accessor used by plugin_rasp_nextmap."""
+    """Public accessor used by the nextmap backend."""
     return jukebox
 
 
 def register(aseco: 'Aseco'):
     global _runtime_aseco
     _runtime_aseco = aseco
-    _apply_plugin_defaults(aseco)
+    _apply_app_defaults(aseco)
     aseco.register_event('onSync',          _init_jbhistory)
     aseco.register_event('onEndRace',       _rasp_endrace)
     aseco.register_event('onNewChallenge2', _rasp_newtrack)
@@ -105,11 +106,11 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onChat_xlist',    chat_xlist)
 
 
-def _apply_plugin_defaults(aseco: 'Aseco'):
+def _apply_app_defaults(aseco: 'Aseco'):
     try:
-        from pyxaseco.settings_loader import overlay_plugin_defaults
-        overlay_plugin_defaults(
-            'plugin_rasp_jukebox',
+        from pyxaseco.settings_loader import overlay_app_defaults
+        overlay_app_defaults(
+            'rasp_jukebox',
             sys.modules[__name__],
             attr_map={
                 'tmx_download_dir': 'TMX_DOWNLOAD_DIR',
@@ -2691,7 +2692,7 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
             ['...', '{#black}newest$g/{#black}oldest', 'Selects the newest/oldest tracks'],
             ['...', '{#black}novote', "Selects tracks you didn't karma vote for"],
             [],
-            ['The jukeboxed track is the first one from the chosen selection'],
+            ['The jukeboxed track is chosen randomly from the filtered selection'],
             ['that is not in the track history.'],
         ]
         display_manialink(
@@ -2738,14 +2739,13 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
         await _reply(aseco, login, '{#server}> {#error}No tracks found, try again!')
         return
 
-    chosen_idx = 0
+    eligible_indices = []
     for idx, track in enumerate(player.tracklist, 1):
         uid = str(track.get('uid', '') or '')
         if uid and uid not in jukebox and uid not in jb_buffer:
-            chosen_idx = idx
-            break
+            eligible_indices.append(idx)
 
-    if not chosen_idx:
+    if not eligible_indices:
         name = selection or 'Selected'
         await _reply(
             aseco,
@@ -2754,6 +2754,7 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
         )
         return
 
+    chosen_idx = random.choice(eligible_indices)
     command = dict(command)
     command['params'] = str(chosen_idx)
     await chat_jukebox(aseco, command)
@@ -3155,7 +3156,10 @@ async def _event_jukebox(aseco: 'Aseco', answer: list):
         if idx < len(tracklist):
             track = tracklist[idx]
             try:
-                from apps.tmx.service import chat_tmxinfo
+                service = _tmx_service(aseco)
+                chat_tmxinfo = getattr(service, 'chat_tmxinfo', None) if service is not None else None
+                if not callable(chat_tmxinfo):
+                    raise RuntimeError('TMX info command surface is unavailable')
                 aseco.console('player {1} clicked command "/tmxinfo {2} {3}"',
                               login, track.get('id', ''), track.get('section', ''))
                 await chat_tmxinfo(

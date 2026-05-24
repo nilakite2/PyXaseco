@@ -1,5 +1,5 @@
 ﻿"""
-plugin_rasp_nextmap.py - Port of plugins/plugin.rasp_nextmap.php
+RASP nextmap backend - ported from the original XAseco nextmap runtime.
 
 /nextmap - Shows name of the next challenge.
 """
@@ -8,6 +8,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import format_text, strip_colors
 from pyxaseco.models import _strip_newlines
+
+from .jukebox import get_jukebox
+from .rankings import get_messages
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -28,13 +31,12 @@ async def chat_nextmap(aseco: 'Aseco', command: dict):
         return
 
     try:
-        from apps.rasp.rankings import _rasp_messages
-        msgs = _rasp_messages
-    except ImportError:
+        msgs = get_messages()
+    except Exception:
         msgs = {}
 
     # Check jukebox first
-    jukebox = _get_jukebox()
+    jukebox = get_jukebox()
     next_name = ''
     next_env  = ''
 
@@ -75,13 +77,4 @@ async def chat_nextmap(aseco: 'Aseco', command: dict):
 
     await aseco.client.query_ignore_result(
         'ChatSendServerMessageToLogin', aseco.format_colors(message), login)
-
-
-def _get_jukebox() -> list:
-    """Get current jukebox queue if jukebox plugin is loaded."""
-    try:
-        from apps.rasp.jukebox import get_jukebox
-        return get_jukebox()
-    except (ImportError, Exception):
-        return []
 

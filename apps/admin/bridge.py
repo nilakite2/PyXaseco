@@ -1,5 +1,5 @@
 """
-plugin_server_admin_bridge.py — Port of plugins/plugin.server_admin_bridge.php
+server_admin_bridge.py — Port of plugins/plugin.server_admin_bridge.php
 
 Registers the dedicated server's own login as a MasterAdmin at startup.
 This lets /admin commands sent via the server console be authorised.

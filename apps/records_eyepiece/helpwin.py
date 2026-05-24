@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from pyxaseco.core.base import Component
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -122,3 +123,28 @@ def _build_help_window(aseco: 'Aseco', page: int = 0) -> str:
 
     append_window_end(p)
     return ''.join(p)
+
+
+class RecordsEyepieceHelpWindowSurface(Component):
+    def __init__(self):
+        super().__init__(
+            component_id='records_eyepiece.helpwin',
+            description='Help window surface for Records Eyepiece commands and HUD guidance.',
+        )
+
+
+HELP_WINDOW_SURFACE = RecordsEyepieceHelpWindowSurface()
+
+
+def get_component() -> RecordsEyepieceHelpWindowSurface:
+    return HELP_WINDOW_SURFACE
+
+
+__all__ = [
+    'ML_WINDOW',
+    'ML_SUBWIN',
+    '_build_help_window',
+    'RecordsEyepieceHelpWindowSurface',
+    'HELP_WINDOW_SURFACE',
+    'get_component',
+]

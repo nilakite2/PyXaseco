@@ -1,5 +1,5 @@
-﻿"""
-plugin_dedimania.py - Port of plugins/plugin.dedimania.php
+"""
+dedimania_service.py - Port of plugins/plugin.dedimania.php
 
 Protocol: Every HTTP POST is a system.multicall that starts with
 dedimania.Authenticate, followed by actual API call(s), then
@@ -170,10 +170,10 @@ async def _dedi_init(aseco: 'Aseco', _data):
 
         try:
             from pyxaseco.settings_loader import _pdef
-            DEDI_TIMEOUT = int(_pdef('plugin_dedimania', 'dedi_timeout', base) or DEDI_TIMEOUT)
-            DEDI_REFRESH = int(_pdef('plugin_dedimania', 'dedi_refresh', base) or DEDI_REFRESH)
+            DEDI_TIMEOUT = int(_pdef('dedimania', 'dedi_timeout', base) or DEDI_TIMEOUT)
+            DEDI_REFRESH = int(_pdef('dedimania', 'dedi_refresh', base) or DEDI_REFRESH)
         except Exception as exc:
-            logger.warning('[Dedimania] plugin defaults overlay failed: %s', exc)
+            logger.warning('[Dedimania] app defaults overlay failed: %s', exc)
 
         if not dedi_db['Login'] or dedi_db['Login'] in ('', 'YOUR_SERVER_LOGIN'):
             aseco.console('[Dedimania] Not configured - skipping.')

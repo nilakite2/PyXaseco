@@ -1,4 +1,4 @@
-[plugin_rasp]
+[rasp]
 feature_ranks = true
 feature_stats = true
 always_show_pb = false
@@ -40,9 +40,9 @@ ta_replay_min = 0.5
 ta_skip_max = 0.8
 global_explain = 1
 
-[plugin_rasp_chat]
+[rasp_chat]
 pm_buf_len = 30
 line_len = 70
 
-[plugin_rasp_jukebox]
+[rasp_jukebox]
 tmx_download_dir = "TMX"

@@ -1,9 +1,9 @@
 """
-plugin_trial_records.py
+trial_records.py
 
 Trial Records API client for PyXaseco.
 
-This plugin is intentionally self-contained:
+This app is intentionally self-contained:
 - no direct Trial MySQL access
 - no .env dependency
 - all Trial read/write operations go through the public HTTP API
@@ -352,7 +352,7 @@ async def _tr_load_settings(aseco: 'Aseco', _param=None):
     if _enabled:
         aseco.console("[TrialRecords] Using Trial API '{1}'", _trial_api_base())
     else:
-        aseco.console("[TrialRecords] Disabled - configure TRIAL_API_BASE in plugin_trial_records.py")
+        aseco.console("[TrialRecords] Disabled - configure TRIAL_API_BASE for app/trial_records")
 
 
 async def _tr_connect(aseco: 'Aseco', _param=None):

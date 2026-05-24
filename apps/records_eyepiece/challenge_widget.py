@@ -12,7 +12,7 @@ from pyxaseco.models import Gameinfo
 from pyxaseco.app_services import localdb_get_pool
 
 from .config import _state, _effective_mode
-from .helpers import (
+from .internal.helpers import (
     _clip,
     _enrich_track_with_challenge_info,
     _enrich_track_with_tmx,
@@ -20,7 +20,7 @@ from .helpers import (
     _no_screenshot_image,
 )
 from .hud import append_window_start, append_window_end
-from .utils import _safe_ml_text
+from .internal.utils import _safe_ml_text
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco

@@ -1,5 +1,5 @@
 """
-plugin_tmxvideo.py - Port of plugins/chat.tmxvideo.php
+tmxvideo.py - Port of plugins/chat.tmxvideo.php
 
 Commands:
   /gps [help|latest|oldest|list]
@@ -52,7 +52,7 @@ def register(aseco: "Aseco"):
 
 
 def _msg_console(aseco: "Aseco", text: str):
-    aseco.console(f"[plugin_tmxvideo] {text}")
+    aseco.console(f"[TMXVideo] {text}")
 
 
 async def _msg_player(aseco: "Aseco", login: str, text: str):
@@ -337,9 +337,9 @@ async def _show_videos_window(aseco: "Aseco", player):
 async def tmxvideo_startup(aseco: "Aseco", _param=None):
     _msg_console(aseco, "Plugin TMX Video initialized.")
     try:
-        versions = getattr(aseco, "plugin_versions", None)
+        versions = getattr(aseco, "app_versions", None)
         if isinstance(versions, list):
-            versions.append({"name": "plugin_tmxvideo", "version": PLUGIN_VERSION})
+            versions.append({"name": "app/tmxvideo", "version": PLUGIN_VERSION})
     except Exception:
         pass
 

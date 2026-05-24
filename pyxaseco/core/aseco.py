@@ -117,6 +117,7 @@ class Aseco:
 
         # App manager
         self._app_manager: Optional[AppManager] = None
+        self.app_versions: list[dict[str, Any]] = []
 
         logger.info('PyXaseco %s initialising', PYXASECO_VERSION)
 

@@ -1,5 +1,5 @@
 """
-plugin_records_rpg.py
+records_rpg.py
 
 RPG Records API client + replay uploader for PyXaseco.
 
@@ -607,7 +607,7 @@ async def _rpg_load_settings(aseco: "Aseco", _param=None):
     if _enabled:
         aseco.console("[RPGRecords] Using RPG API '{1}'", _api_base())
     else:
-        aseco.console("[RPGRecords] Disabled - configure RPG_API_BASE in plugin_records_rpg.py")
+        aseco.console("[RPGRecords] Disabled - configure RPG_API_BASE for app/records_rpg")
 
 
 async def _rpg_sync_current_track(aseco: "Aseco", _param=None):

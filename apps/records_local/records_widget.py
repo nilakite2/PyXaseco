@@ -12,7 +12,7 @@ from apps.records_eyepiece.hud import (
     append_window_end,
     append_four_player_columns,
 )
-from apps.records_eyepiece.utils import _handle_special_chars
+from apps.records_eyepiece.internal.utils import _handle_special_chars
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -175,7 +175,7 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
 
 
 async def _build_local_records_window(aseco: 'Aseco', page: int) -> str:
-    from apps.records_eyepiece.utils import _safe_ml_text
+    from apps.records_eyepiece.internal.utils import _safe_ml_text
 
     records = list(aseco.server.records)
     if not records:

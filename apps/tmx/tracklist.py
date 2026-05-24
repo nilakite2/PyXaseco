@@ -8,7 +8,7 @@ from pyxaseco.models import Gameinfo
 from pyxaseco.app_services import localdb_get_pool
 
 from apps.records_eyepiece.config import _state
-from apps.records_eyepiece.helpers import _enrich_track_with_tmx
+from apps.records_eyepiece.internal.helpers import _enrich_track_with_tmx
 from apps.records_eyepiece.hud import append_window_start, append_window_end
 
 if TYPE_CHECKING:

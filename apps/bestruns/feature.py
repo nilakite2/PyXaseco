@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pyxaseco.models import Gameinfo
-from pyxaseco.plugin_config import as_float, as_int, get_plugin_section
+from pyxaseco.app_config import as_float, as_int, get_app_section
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -184,7 +184,7 @@ async def OnPlayerFinish_bestruns(aseco: "Aseco", payload):
 
 
 def LoadConfig_bestruns(aseco: "Aseco"):
-    section, path = get_plugin_section("bestruns", getattr(aseco, "_base_dir", None))
+    section, path = get_app_section("bestruns", getattr(aseco, "_base_dir", None))
     config = section.get("config", {}) if isinstance(section, dict) else {}
     if not isinstance(config, dict):
         config = {}

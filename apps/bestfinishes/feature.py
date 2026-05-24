@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
-from pyxaseco.plugin_config import as_float, as_int, get_plugin_section
+from pyxaseco.app_config import as_float, as_int, get_app_section
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -156,7 +156,7 @@ async def OnPlayerFinish_bestfinishes(aseco: "Aseco", payload):
 
 
 def LoadConfig_bestfinishes(aseco: "Aseco"):
-    section, path = get_plugin_section("bestfinishes", getattr(aseco, "_base_dir", None))
+    section, path = get_app_section("bestfinishes", getattr(aseco, "_base_dir", None))
     config = section.get("config", {}) if isinstance(section, dict) else {}
     if not isinstance(config, dict):
         config = {}

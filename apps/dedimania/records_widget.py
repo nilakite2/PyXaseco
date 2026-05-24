@@ -7,22 +7,13 @@ from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 from pyxaseco.app_services import get_dedi_db
 
-try:
-    from apps.records_eyepiece.config import _state, _effective_mode
-    from apps.records_eyepiece.hud import (
-        append_window_start,
-        append_window_end,
-        append_four_player_columns,
-    )
-    from apps.records_eyepiece.utils import _handle_special_chars
-except ModuleNotFoundError:
-    from plugins.ui.records_eyepiece.config import _state, _effective_mode
-    from plugins.ui.records_eyepiece.ui import (
-        append_window_start,
-        append_window_end,
-        append_four_player_columns,
-    )
-    from plugins.ui.records_eyepiece.utils import _handle_special_chars
+from apps.records_eyepiece.config import _state, _effective_mode
+from apps.records_eyepiece.hud import (
+    append_window_start,
+    append_window_end,
+    append_four_player_columns,
+)
+from apps.records_eyepiece.internal.utils import _handle_special_chars
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -215,12 +206,8 @@ def _get_dedi_records(aseco: 'Aseco' | None = None) -> list:
 
 
 async def _draw_dedi_player(aseco: 'Aseco', login: str):
-    try:
-        from apps.records_eyepiece.widgets.common import _hide, _send
-        from apps.records_eyepiece.widgets.records_common import _build_record_widget
-    except ModuleNotFoundError:
-        from plugins.ui.records_eyepiece.widgets.common import _hide, _send
-        from plugins.ui.records_eyepiece.widgets.records_common import _build_record_widget
+    from apps.records_eyepiece.widgets.common import _hide, _send
+    from apps.records_eyepiece.widgets.records_common import _build_record_widget
 
     if not _state.player_visible.get(login, True):
         await _hide(aseco, login, ML_DEDI)
@@ -274,10 +261,7 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
 
 
 def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | None = None) -> str:
-    try:
-        from apps.records_eyepiece.utils import _safe_ml_text
-    except ModuleNotFoundError:
-        from plugins.ui.records_eyepiece.utils import _safe_ml_text
+    from apps.records_eyepiece.internal.utils import _safe_ml_text
 
     raw_records = records if records is not None else _get_dedi_records(aseco)
     if not raw_records:

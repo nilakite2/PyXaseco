@@ -1,5 +1,5 @@
-﻿"""
-chat_laston.py - Port of plugins/chat.laston.php
+"""
+laston_chat.py - Port of plugins/chat.laston.php
 
 /laston [login] - Shows when a player was last online.
 """

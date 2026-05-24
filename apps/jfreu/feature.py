@@ -1,5 +1,5 @@
-﻿"""
-jfreu_plugin.py - Port of plugins/jfreu.plugin.php + jfreu.chat.php
+"""
+jfreu.py - Port of plugins/jfreu.plugin.php + jfreu.chat.php
 
 Jfreu's plugin v0.14 - rank limiting, VIP system, badwords filter,
 SpecOnly management, unspec voting, player join/leave messages,
@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.core.config import load_toml_file
 from pyxaseco.helpers import format_text, format_time_h, strip_colors, display_manialink_multi, display_manialink
 from pyxaseco.app_services import localdb_get_player_id, localdb_get_pool, map_country
-from pyxaseco.plugin_config import get_app_defaults_path
+from pyxaseco.app_config import get_app_defaults_path
 from pyxaseco.toml_tools import write_toml
 
 if TYPE_CHECKING:
@@ -281,18 +281,18 @@ def _load_messages_from_config(data: dict):
         _state.nbmessages = len(_state.messages)
 
 
-def _load_plugin_defaults_state() -> dict:
+def _load_app_defaults_state() -> dict:
     data = load_toml_file(pathlib.Path(_state.conf_file))
     return data if isinstance(data, dict) else {}
 
 
-def _save_plugin_defaults_state(data: dict) -> None:
+def _save_app_defaults_state(data: dict) -> None:
     write_toml(pathlib.Path(_state.conf_file), data)
 
 
 def _read_lists_toml(aseco: 'Aseco'):
     try:
-        data = _load_plugin_defaults_state()
+        data = _load_app_defaults_state()
         vip = data.get('jfreu_vips', {})
         vip_list = vip.get('vip_list', []) if isinstance(vip, dict) else []
         vip_team_list = vip.get('vip_team_list', []) if isinstance(vip, dict) else []
@@ -319,7 +319,7 @@ async def _read_guest_list(aseco: 'Aseco'):
 
 def _read_bans_toml(aseco: 'Aseco'):
     try:
-        data = _load_plugin_defaults_state()
+        data = _load_app_defaults_state()
         ban_list = data.get('jfreu_bans', {})
         logins = ban_list.get('login', []) if isinstance(ban_list, dict) else []
         times = ban_list.get('time', []) if isinstance(ban_list, dict) else []
@@ -338,12 +338,12 @@ def _read_bans_toml(aseco: 'Aseco'):
 
 def _write_lists_toml():
     try:
-        data = _load_plugin_defaults_state()
+        data = _load_app_defaults_state()
         data['jfreu_vips'] = {
             'vip_list': [lgn for lgn in _state.vip_list if lgn],
             'vip_team_list': [team for team in _state.vip_team_list if team],
         }
-        _save_plugin_defaults_state(data)
+        _save_app_defaults_state(data)
     except Exception as e:
         logger.warning('[Jfreu] Could not write vips file: %s', e)
 
@@ -351,7 +351,7 @@ def _write_lists_toml():
 def _write_config_toml():
     try:
         j = _state
-        data = _load_plugin_defaults_state()
+        data = _load_app_defaults_state()
         data['jfreu_plugin'] = {
             'servername': j.servername,
             'servertop': j.top,
@@ -383,7 +383,7 @@ def _write_config_toml():
         }
         for idx, message in enumerate(j.messages, 1):
             data['jfreu_messages'][f'message{idx}'] = message
-        _save_plugin_defaults_state(data)
+        _save_app_defaults_state(data)
     except Exception as e:
         logger.warning('[Jfreu] Could not write config file: %s', e)
 
@@ -397,12 +397,12 @@ def _write_bans_toml():
             if entry.banned > now:
                 logins.append(lgn)
                 times.append(int(entry.banned))
-        data = _load_plugin_defaults_state()
+        data = _load_app_defaults_state()
         data['jfreu_bans'] = {
             'login': logins,
             'time': times,
         }
-        _save_plugin_defaults_state(data)
+        _save_app_defaults_state(data)
     except Exception as e:
         logger.warning('[Jfreu] Could not write bans file: %s', e)
 
@@ -889,9 +889,9 @@ async def bad_words_handler(aseco: 'Aseco', chat: list):
 
     text = strip_colors(chat[2], for_tm=False).lower()
     # Normalise common substitutions
-    subs = {'@':'a','0':'o','!':'i','|':'l','Ã¡':'a','Ã ':'a','Ã¢':'a','Ã¤':'a',
-            'Ã©':'e','Ã¨':'e','Ã«':'e','Ãª':'e','Ã­':'i','Ã¬':'i','Ã¯':'i','Ã®':'i',
-            'Ã³':'o','Ã²':'o','Ã¶':'o','Ã´':'o','Ãº':'u','Ã¹':'u','Ã¼':'u','Ã»':'u'}
+    subs = {'@':'a','0':'o','!':'i','|':'l','á':'a','à':'a','â':'a','ä':'a',
+            'é':'e','è':'e','ë':'e','ê':'e','í':'i','ì':'i','ï':'i','î':'i',
+            'ó':'o','ò':'o','ö':'o','ô':'o','ú':'u','ù':'u','ü':'u','û':'u'}
     for k, v in subs.items():
         text = text.replace(k, v)
     text = re.sub(r'[\.\*\-_"\']', '', text)

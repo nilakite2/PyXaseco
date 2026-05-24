@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App
 
-from . import callbacks, commands
+from . import callbacks, commands, models, views
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -17,6 +17,7 @@ APP_METADATA = {
     "modules": [
         "apps/rasp/models.py",
         "apps/rasp/rankings.py",
+        "apps/rasp/social.py",
         "apps/rasp/jukebox.py",
         "apps/rasp/voting.py",
         "apps/rasp/flow.py",
@@ -54,7 +55,11 @@ class RaspApp(App):
         )
         self.command_surface = commands.get_component()
         self.callback_surface = callbacks.get_component()
+        self.model_surface = models.get_component()
+        self.view_surface = views.get_component()
         self.components = (
+            self.model_surface,
+            self.view_surface,
             self.command_surface,
             self.callback_surface,
         )

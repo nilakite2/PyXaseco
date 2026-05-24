@@ -1,4 +1,4 @@
-﻿"""
+"""
 toplists.py - Records-Eyepiece toplist windows + score-screen column widgets.
 
 Score-screen column widgets (shown at onEndRace, hidden at onEndRace1):
@@ -28,13 +28,14 @@ from typing import TYPE_CHECKING
 import tomllib
 from xml.sax.saxutils import escape
 from datetime import date
+from pyxaseco.core.base import Component
 from pyxaseco.models import Gameinfo
 from pyxaseco.helpers import format_time
 from pyxaseco.app_services import localdb_get_pool
 
 from .hud import append_window_start, append_window_end, append_four_player_columns
 from .config import _state, _effective_mode
-from .utils import _handle_special_chars, _safe_ml_text
+from .internal.utils import _handle_special_chars, _safe_ml_text
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -133,9 +134,9 @@ async def _db_query(sql: str, params: tuple = ()) -> list[tuple]:
 
 async def _query_ranked_record_counts(aseco: 'Aseco', limit: int) -> list[tuple]:
     """
-    Match chat_records2.py /toprecs logic:
+    Match the local records /toprecs logic:
     count ranked entries from the records table across the active challenge list,
-    limited per challenge by plugin_rasp.maxrecs and ordered by score/date.
+    limited per challenge by rasp.maxrecs and ordered by score/date.
     Returns rows shaped like: (login, nickname, count)
     """
     try:
@@ -930,8 +931,8 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
     # Preserve the expected display order.
     dedi_cfg = _state.dedi.get(_effective_mode(aseco))
     if gamemode != Gameinfo.STNT and getattr(dedi_cfg, 'enabled', False):
-        from .widgets.records_rpg import _is_rpg_track_active, _get_rpg_track, _get_rpg_records, _rpg_title
-        from .widgets.records_dedi import _get_dedi_records
+        from .record_views import _is_rpg_track_active, _get_rpg_track, _get_rpg_records, _rpg_title
+        from .record_views import _get_dedi_records
         source_rows = []
         title = getattr(dedi_cfg, 'title', 'Dedimania Records')
         if await _is_rpg_track_active(aseco):
@@ -976,7 +977,7 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             'action_id': 91804,
         })
 
-        from .widgets.trial_records import _is_trial_track_active, _get_trial_records
+        from .record_views import _is_trial_track_active, _get_trial_records
         if (not await _is_rpg_track_active(aseco)) and await _is_trial_track_active(aseco):
             trial_source_rows = await _get_trial_records(aseco, 25)
             trial_rows = []
@@ -1371,4 +1372,47 @@ async def _build_top_nations_window(aseco: 'Aseco') -> str:
 
     append_window_end(p)
     return ''.join(p)
+
+
+class RecordsEyepieceToplistsSurface(Component):
+    def __init__(self):
+        super().__init__(
+            component_id='records_eyepiece.toplists',
+            description='Toplist windows and score-column surface for Records Eyepiece.',
+        )
+
+
+TOPLISTS_SURFACE = RecordsEyepieceToplistsSurface()
+
+
+def get_component() -> RecordsEyepieceToplistsSurface:
+    return TOPLISTS_SURFACE
+
+
+__all__ = [
+    'ML_TOP_RANKINGS',
+    'ML_TOP_WINNERS',
+    'ML_MOST_RECORDS',
+    'ML_MOST_FINISHED',
+    'ML_TOP_PLAYTIME',
+    'ML_TOP_DONATORS',
+    'ML_TOP_NATIONS',
+    'ML_TOP_TRACKS',
+    'ML_TOP_VOTERS',
+    'ML_TOP_ROUNDSCORE',
+    'ML_TOP_WINNING_PAYOUTS',
+    'ML_TOP_VISITORS',
+    'ML_TOP_ACTIVE_PLAYERS',
+    'ML_WINDOW',
+    'ML_SUBWIN',
+    'draw_all_score_columns',
+    'hide_all_score_columns',
+    '_build_toplist_window_entry',
+    '_build_toplist_window',
+    '_build_generic_toplist_window',
+    '_build_top_nations_window',
+    'RecordsEyepieceToplistsSurface',
+    'TOPLISTS_SURFACE',
+    'get_component',
+]
 

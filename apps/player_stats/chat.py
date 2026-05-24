@@ -1,5 +1,5 @@
-﻿"""
-chat_stats.py - Port of plugins/chat.stats.php
+"""
+player_stats_chat.py - Port of plugins/chat.stats.php
 
 /stats [login]    - Player statistics window
 /statsall         - Redirects to /stats
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 def _tz_str() -> str:
     """Return timezone as short abbreviation (CEST/CET) or UTC+HH:MM fallback.
-    Matches plugin_track._tz_abbrev() - avoids long OS names like
+    Matches track._tz_abbrev() - avoids long OS names like
     'Central Europe Daylight Time' that strftime('%Z') produces on Windows."""
     import datetime as _dt
     now = _dt.datetime.now().astimezone()
@@ -49,7 +49,7 @@ def register(aseco: 'Aseco'):
         'stats',
         'Displays statistics of current player',
         owner='chat/stats',
-        app='stats',
+        app='player_stats',
         category='chat-stats',
         usage='/stats [login]',
         display_name='stats',
@@ -59,7 +59,7 @@ def register(aseco: 'Aseco'):
         'statsall',
         'Displays world statistics of a player',
         owner='chat/stats',
-        app='stats',
+        app='player_stats',
         category='chat-stats',
         usage='/statsall [login]',
         display_name='statsall',
@@ -69,7 +69,7 @@ def register(aseco: 'Aseco'):
         'settings',
         'Displays your personal settings',
         owner='chat/stats',
-        app='stats',
+        app='player_stats',
         category='chat-stats',
         usage='/settings [login]',
         display_name='settings',

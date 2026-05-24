@@ -1,5 +1,5 @@
-﻿"""
-plugin_rasp.py - Port of plugins/plugin.rasp.php
+"""
+RASP ranking backend - ported from the original XAseco RASP runtime.
 
 RASP ranking engine:
   - Calculates and stores player averages in rs_rank
@@ -21,7 +21,7 @@ from pyxaseco.helpers import (format_text, format_time, format_time_h,
                                strip_colors, display_manialink,
                                display_manialink_multi)
 from pyxaseco.app_services import localdb_get_player_id, localdb_get_pool
-from pyxaseco.plugin_config import get_app_defaults_path, get_plugin_section
+from pyxaseco.app_config import get_app_defaults_path, get_app_section
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -40,7 +40,7 @@ maxrecs = 500
 minrank = 3
 maxavg  = 10
 
-# Vote feature flags shared with plugin_rasp_votes
+# Vote feature flags shared with the RASP voting backend
 feature_votes = True
 vote_in_window = False
 allow_spec_startvote = False
@@ -76,7 +76,7 @@ global_explain = 1
 # Messages loaded from messages.toml
 _rasp_messages: dict = {}
 
-# Compatibility state for plugins that still import plugin_rasp._rasp
+# Compatibility state for legacy import paths that still read app state
 _rasp: dict = {}
 
 # Challenge list cache
@@ -123,7 +123,7 @@ async def rasp_startup(aseco: 'Aseco', _param):
     global r_ladder_max, r_replay_min, r_skip_max
     global ta_ladder_max, ta_replay_min, ta_skip_max, global_explain
 
-    section, cfg_path = get_plugin_section('plugin_rasp', aseco._base_dir)
+    section, cfg_path = get_app_section('rasp', aseco._base_dir)
     aseco.console(
         '[RASP] Loading config file [{1}]',
         str(cfg_path or get_app_defaults_path('rasp', aseco._base_dir)),
@@ -265,7 +265,7 @@ async def rasp_startup(aseco: 'Aseco', _param):
     }
 
     aseco.console('[RASP] Checking database structure...')
-    # Tables are created by plugin_localdatabase - just log OK
+    # Tables are created by the local database app - just log OK
     aseco.console('[RASP] ...Structure OK!')
 
     await _clean_data(aseco)

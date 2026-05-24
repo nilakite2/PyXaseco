@@ -1,5 +1,5 @@
 """
-plugin_bestcps.py — Python base port of plugin.bestcps.php
+bestcps.py — Python base port of the legacy bestcps PHP module
 
 Displays best checkpoint times on the current challenge in a compact widget,
 with a per-player toggle via `/bestcps`.
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pyxaseco.models import Gameinfo
-from pyxaseco.plugin_config import as_float, as_int, get_plugin_section
+from pyxaseco.app_config import as_float, as_int, get_app_section
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -78,7 +78,7 @@ def _parse_float(text: str, default: float) -> float:
 
 def _load_config(aseco: 'Aseco'):
     global _config
-    section, path = get_plugin_section('bestcps', getattr(aseco, '_base_dir', None))
+    section, path = get_app_section('bestcps', getattr(aseco, '_base_dir', None))
     config = section.get('config', {}) if isinstance(section, dict) else {}
     if not isinstance(config, dict):
         config = {}

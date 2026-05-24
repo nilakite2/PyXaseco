@@ -1,5 +1,5 @@
 """
-plugin_chatlog.py — Port of plugins/plugin.chatlog.php
+chatlog.py — Port of plugins/plugin.chatlog.php
 
 Keeps a rolling buffer of recent player chat messages and displays
 them in a ManiaLink window via /chatlog.

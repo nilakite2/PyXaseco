@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.models import Gameinfo
 from pyxaseco.core.aseco import PYXASECO_VERSION as CORE_PYXASECO_VERSION
-from pyxaseco.plugin_config import get_app_defaults_path
+from pyxaseco.app_config import get_app_defaults_path
 
-from .toml_loader import find_and_load
+from .internal.toml_loader import find_and_load
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -185,8 +185,8 @@ class EyepieceWidgetCfg:
 @dataclass
 class EyepieceState:
     loaded: bool = False
-    plugin_name: str = PLUGIN_NAME
-    plugin_version: str = PLUGIN_VERSION
+    app_name: str = PLUGIN_NAME
+    app_version: str = PLUGIN_VERSION
     manialink_prefix: str = PLUGIN_MANIALINK_PREFIX
     line_height: float = PLUGIN_LINE_HEIGHT
     refresh_interval: int = 10
@@ -771,7 +771,7 @@ def validate_phase1_runtime(aseco: 'Aseco') -> None:
     game_token = _runtime_game_token(aseco)
     if game_token not in SUPPORTED_GAME_TOKENS:
         raise RuntimeError(
-            f'[{PLUGIN_NAME}] This plugin supports only TMF/TmForever, '
+            f'[{PLUGIN_NAME}] This app supports only TMF/TmForever, '
             f'can not start with a "{game_token}" Dedicated-Server!'
         )
 
@@ -803,20 +803,20 @@ def validate_phase1_dependencies(aseco: 'Aseco') -> None:
         )
 
     forbidden = []
-    if 'plugin_elist' in loaded:
-        forbidden.append('plugin_elist')
-    if _state.cp.enabled and 'plugin_simplcp' in loaded:
-        forbidden.append('plugin_simplcp')
+    if 'elist' in loaded:
+        forbidden.append('elist')
+    if _state.cp.enabled and 'simplcp' in loaded:
+        forbidden.append('simplcp')
 
     if forbidden:
         raise RuntimeError(
-            f'[{PLUGIN_NAME}] This plugin can not run together with: ' + ', '.join(forbidden)
+            f'[{PLUGIN_NAME}] This app can not run together with: ' + ', '.join(forbidden)
         )
 
 
 def apply_phase1_defaults(aseco: 'Aseco') -> None:
-    _state.plugin_name = PLUGIN_NAME
-    _state.plugin_version = PLUGIN_VERSION
+    _state.app_name = PLUGIN_NAME
+    _state.app_version = PLUGIN_VERSION
     _state.manialink_prefix = PLUGIN_MANIALINK_PREFIX
     _state.line_height = PLUGIN_LINE_HEIGHT
 

@@ -1,14 +1,14 @@
 """
-pyxaseco/settings_loader.py - Unified plugin settings loader.
+pyxaseco/settings_loader.py - Unified app settings loader.
 
 Reads settings.toml once at startup and provides overlay functions that each
-plugin calls on top of its built-in defaults.
+app calls on top of its built-in defaults.
 
 Sections in settings.toml:
     server        core/general settings
     localdatabase local DB settings
     dedimania     dedimania settings
-    mania_karma   karma plugin settings
+    mania_karma   karma app settings
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import pathlib
 import tomllib
 from typing import Any
 
-from pyxaseco.plugin_config import load_plugin_defaults_catalog
+from pyxaseco.app_config import load_app_defaults_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,7 @@ def overlay_dedimania(dedi_db: dict, base_dir=None) -> None:
 def overlay_mania_karma(cfg: Any, base_dir=None) -> None:
     """
     Overlay mania_karma section into a KarmaConfig dataclass.
-    Call at the end of plugin_mania_karma._load_config.
+    Call at the end of mania_karma._load_config.
     """
     data = _get_data(base_dir)
     mk = data.get('mania_karma', {})
@@ -317,17 +317,17 @@ def overlay_mania_karma(cfg: Any, base_dir=None) -> None:
     logger.debug('[settings_loader] Overlaid mania_karma settings')
 
 
-def _get_plugin_defaults(base_dir=None) -> dict:
+def _get_app_defaults(base_dir=None) -> dict:
     """Return parsed app defaults config, loading and caching on first call."""
     global _pdef_cache
     if _pdef_cache is not None:
         return _pdef_cache
     try:
-        data, _sources, loaded_paths = load_plugin_defaults_catalog(base_dir)
+        data, _sources, loaded_paths = load_app_defaults_catalog(base_dir)
         if loaded_paths:
             total = sum(len(v) if isinstance(v, dict) else 1 for v in data.values())
             if len(loaded_paths) == 1 and loaded_paths[0].name == 'plugin_defaults.toml':
-                logger.info('[settings_loader] Loaded %d plugin defaults from %s', total, loaded_paths[0])
+                logger.info('[settings_loader] Loaded %d legacy app defaults from %s', total, loaded_paths[0])
             else:
                 root = pathlib.Path(base_dir).resolve() if base_dir else pathlib.Path('.').resolve()
                 logger.info(
@@ -344,18 +344,18 @@ def _get_plugin_defaults(base_dir=None) -> dict:
     return _pdef_cache
 
 
-def _pdef(section: str, key: str, base_dir=None):
-    """Read a single value from plugin_defaults config[section][key]."""
-    return _get_plugin_defaults(base_dir).get(section, {}).get(key)
+def _adef(section: str, key: str, base_dir=None):
+    """Read a single value from app defaults config[section][key]."""
+    return _get_app_defaults(base_dir).get(section, {}).get(key)
 
 
-def overlay_plugin_defaults(plugin_name: str, target: Any, attr_map: dict[str, str] | None = None, base_dir=None) -> None:
+def overlay_app_defaults(section_name: str, target: Any, attr_map: dict[str, str] | None = None, base_dir=None) -> None:
     """
-    Generic overlay: read plugin_defaults config[plugin_name] and set matching
+    Generic overlay: read app defaults config[section_name] and set matching
     attributes on *target*.
     """
-    data = _get_plugin_defaults(base_dir)
-    section = data.get(plugin_name, {})
+    data = _get_app_defaults(base_dir)
+    section = data.get(section_name, {})
     if not section:
         return
     count = 0
@@ -369,4 +369,16 @@ def overlay_plugin_defaults(plugin_name: str, target: Any, attr_map: dict[str, s
         _set(target, attr, value)
         count += 1
     if count:
-        logger.debug('[settings_loader] Overlaid %d defaults for %s', count, plugin_name)
+        logger.debug('[settings_loader] Overlaid %d defaults for %s', count, section_name)
+
+
+def _get_plugin_defaults(base_dir=None) -> dict:
+    return _get_app_defaults(base_dir)
+
+
+def _pdef(section: str, key: str, base_dir=None):
+    return _adef(section, key, base_dir)
+
+
+def overlay_plugin_defaults(plugin_name: str, target: Any, attr_map: dict[str, str] | None = None, base_dir=None) -> None:
+    overlay_app_defaults(plugin_name, target, attr_map=attr_map, base_dir=base_dir)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from .config import _state
+from ..config import _state
 
 
 def get_state():

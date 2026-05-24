@@ -1,5 +1,5 @@
 """
-chat_lastwin.py — Port of plugins/chat.lastwin.php
+lastwin_chat.py — Port of plugins/chat.lastwin.php
 
 /lastwin — Re-opens the last closed multi-page ManiaLink window.
 """

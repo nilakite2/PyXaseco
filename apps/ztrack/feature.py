@@ -1,5 +1,5 @@
 """
-plugin_ztrack.py — Port of plugins/plugin.ztrack.php (by ZiZa)
+ztrack.py — Port of plugins/plugin.ztrack.php (by ZiZa)
 
 CP-delta tracking overlay (ManiaLink id 19861111).
 Shows time delta vs a chosen local or dedi record at each checkpoint.
@@ -26,7 +26,7 @@ ML_ID = 19861111
 _zt: dict = {}
 
 # cpll_array reference: {login: {'time': int, 'cp': int}}
-# We read from plugin_cpll at checkpoint time
+# We read from cpll at checkpoint time
 
 
 def register(aseco: 'Aseco'):

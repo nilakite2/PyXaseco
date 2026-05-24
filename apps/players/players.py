@@ -1,5 +1,5 @@
-﻿"""
-chat_players.py - Port of plugins/chat.players.php
+"""
+players_chat.py - Port of plugins/chat.players.php
 
 /players [filter] - Displays current list of nicks/logins with clickable /stats.
 """
@@ -7,6 +7,7 @@ chat_players.py - Port of plugins/chat.players.php
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import ML_ID_MAIN, strip_colors, display_manialink_multi
+from pyxaseco.core.runtime_imports import import_runtime_callable
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -124,7 +125,7 @@ async def event_players(aseco: 'Aseco', answer: list):
             xml = f'<manialink id="{ML_ID_MAIN}"></manialink>'
             await aseco.client.query_ignore_result(
                 'SendDisplayManialinkPageToLogin', login, xml, 0, False)
-            from apps.player_stats.chat import chat_stats
+            chat_stats = import_runtime_callable('apps.player_stats.chat:chat_stats')
             await chat_stats(aseco, {'author': player, 'params': target_login})
 
 

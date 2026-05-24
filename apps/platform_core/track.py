@@ -1,5 +1,5 @@
-﻿"""
-plugin_track.py - Port of plugins/plugin.track.php
+"""
+track.py - Port of plugins/plugin.track.php
 
 /track    - Shows info about the current track
 /playtime - Shows time current track has been playing

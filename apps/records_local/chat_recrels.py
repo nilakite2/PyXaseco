@@ -1,5 +1,5 @@
-﻿"""
-chat_recrels.py - Port of plugins/chat.recrels.php
+"""
+records_relations_chat.py - Port of plugins/chat.recrels.php
 
 /firstrec /lastrec /nextrec /diffrec /recrange
 """

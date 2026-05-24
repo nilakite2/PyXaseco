@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import Component
 
+from . import lists, map, player, server
 from .chat import (
     chat_admin,
     chat_listadmins,
@@ -28,10 +29,20 @@ class AdminCommandSurface(Component):
 
 
 COMMAND_SURFACE = AdminCommandSurface()
+DOMAIN_COMPONENTS = (
+    server.get_component(),
+    map.get_component(),
+    player.get_component(),
+    lists.get_component(),
+)
 
 
 def get_component() -> AdminCommandSurface:
     return COMMAND_SURFACE
+
+
+def get_domain_components() -> tuple[Component, ...]:
+    return DOMAIN_COMPONENTS
 
 
 def register(aseco: 'Aseco'):
@@ -42,6 +53,7 @@ def register(aseco: 'Aseco'):
 __all__ = [
     'register',
     'get_component',
+    'get_domain_components',
     'chat_admin',
     'chat_listmasters',
     'chat_listadmins',

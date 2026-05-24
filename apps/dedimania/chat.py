@@ -1,5 +1,5 @@
-﻿"""
-chat_dedimania.py - Port of plugins/chat.dedimania.php
+"""
+Dedimania chat surface.
 
 Commands:
   /helpdedi, /dedihelp
@@ -168,7 +168,7 @@ async def show_dedirecs(aseco: 'Aseco', name: str, uid: str,
     """
     Show Dedimania ranking message to a player (login set) or all (login=None).
     mode: 0=new only, 1=start, 2=during, 3=end of track
-    Called by chat_dedinew, chat_dedilive, and plugin_dedimania begin/end-race hooks.
+    Called by the live/new Dedi chat paths and Dedimania begin/end-race hooks.
     """
     is_stnt      = _is_stnt(aseco)
     show_min     = _show_min_recs(aseco)

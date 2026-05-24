@@ -1,5 +1,5 @@
 ﻿"""
-plugin_rasp_chat.py - Port of plugins/plugin.rasp_chat.php
+RASP social chat backend - ported from the original XAseco chat runtime.
 
 Private messages, PM log, and social shout-out commands:
 /pm /pma /pmlog /hi /bye /thx /lol /lool /brb /afk /gg /gr /n1 /bgm /official /bootme
@@ -20,7 +20,7 @@ LINE_LEN = 70
 
 
 def register(aseco: 'Aseco'):
-    _apply_plugin_defaults(aseco)
+    _apply_app_defaults(aseco)
     cmds = [
         ('pm',       'Sends a private message to login or Player_ID'),
         ('pma',      'Sends a private message to player & admins'),
@@ -44,11 +44,11 @@ def register(aseco: 'Aseco'):
         aseco.register_event(f'onChat_{name}', globals()[f'chat_{name}'])
 
 
-def _apply_plugin_defaults(aseco: 'Aseco'):
+def _apply_app_defaults(aseco: 'Aseco'):
     try:
-        from pyxaseco.settings_loader import overlay_plugin_defaults
-        overlay_plugin_defaults(
-            'plugin_rasp_chat',
+        from pyxaseco.settings_loader import overlay_app_defaults
+        overlay_app_defaults(
+            'rasp_chat',
             sys.modules[__name__],
             attr_map={
                 'pm_buf_len': 'PM_BUF_LEN',

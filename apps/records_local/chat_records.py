@@ -1,5 +1,5 @@
-﻿"""
-chat_records.py - Port of plugins/chat.records.php
+"""
+records_chat.py - Port of plugins/chat.records.php
 
 /recs [help|pb|new|live|first|last|next|diff|range]
   Shows local records on the current track, with optional sub-commands.

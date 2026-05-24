@@ -48,7 +48,7 @@ async def chat_togglewidgets(aseco: 'Aseco', command: dict):
         # broadcast by the bar module, so immediately re-hide them again for any
         # players who still have widgets disabled.
         try:
-            from ..widgets.bar_widgets import draw_all_score_bars, draw_all_race_bars
+            from ..hud_views import draw_all_score_bars, draw_all_race_bars
 
             if _state.challenge_show_next:
                 await draw_all_score_bars(aseco)
@@ -95,7 +95,7 @@ async def chat_togglewidgets(aseco: 'Aseco', command: dict):
 
 
 async def chat_eyepiece(aseco: 'Aseco', command: dict):
-    from ..utils import _mode_name
+    from ..internal.utils import _mode_name
 
     player = command['author']
     login = player.login
@@ -191,7 +191,7 @@ async def _elist_redirect(aseco: 'Aseco', command: dict):
 
 
 async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
-    from ..utils import _loop_time
+    from ..internal.utils import _loop_time
     from ..widgets.common import _send_chat
     from .events import (
         _on_new_challenge,
@@ -201,7 +201,7 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
         _draw_local_all,
         _draw_dedi_all,
     )
-    from ..widgets.bar_widgets import (
+    from ..hud_views import (
         draw_all_race_bars,
         draw_all_score_bars,
         hide_all_race_bars,
@@ -209,13 +209,13 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
         _refresh_server_limits,
         _refresh_visitor_count,
     )
-    from ..score_view import (
+    from ..widgets.score_widgets import (
         draw_all_score_lists,
         hide_all_score_lists,
         draw_round_score,
         hide_round_score,
     )
-    from ..toplists_view import draw_all_score_columns, hide_all_score_columns
+    from ..toplists import draw_all_score_columns, hide_all_score_columns
 
     player = command['author']
     login = player.login
@@ -308,10 +308,9 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
 
 
 async def chat_estat(aseco: 'Aseco', command: dict) -> None:
-    from ..widgets.records_local import _build_local_records_window
-    from ..widgets.records_dedi import _build_dedi_records_window
-    from ..widgets.records_rpg import _is_rpg_track_active, _build_rpg_records_window
-    from ..widgets.trial_records import _is_trial_track_active, _build_trial_records_window
+    from ..record_views import _build_local_records_window, _build_dedi_records_window
+    from ..record_views import _is_rpg_track_active, _build_rpg_records_window
+    from ..record_views import _is_trial_track_active, _build_trial_records_window
     from ..toplists import _build_generic_toplist_window
     from ..widgets.common import _send, _send_chat
 

@@ -1,5 +1,5 @@
 """
-plugin_bestsecs.py - Python port of plugin_bestsecs.php (v2.0)
+bestsecs.py - Python port of the legacy bestsecs PHP module (v2.0)
             by DarkKnight, amgreborn
 
 Tracks best sector times (time between consecutive checkpoints) for every
@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pyxaseco.plugin_config import as_bool, as_float, as_int, get_plugin_section
+from pyxaseco.app_config import as_bool, as_float, as_int, get_app_section
 from pyxaseco.app_services import localdb_get_pool
 
 if TYPE_CHECKING:
@@ -134,7 +134,7 @@ def _load_config(aseco: "Aseco") -> None:
     global _cfg_announce_sec, _cfg_announce_own, _cfg_compare_own_to_self
     global _cfg_remove_on_delete, _cfg_pos_x, _cfg_pos_y, _cfg_window_enabled
 
-    section, path = get_plugin_section("bestsecs", getattr(aseco, "_base_dir", None))
+    section, path = get_app_section("bestsecs", getattr(aseco, "_base_dir", None))
     config = section.get("config", {}) if isinstance(section, dict) else {}
     if not isinstance(config, dict):
         config = {}

@@ -1,5 +1,5 @@
 """
-plugin_cplive_v3.py - Ported from plugin.cplive_v3.php (v3.4.3) - https://github.com/join-red/checkpoints_live/.
+cplive_v3.py - Ported from plugin.cplive_v3.php (v3.4.3) - https://github.com/join-red/checkpoints_live/.
 """
 
 from __future__ import annotations
@@ -1229,7 +1229,7 @@ async def _update_track_info(plugin: _CPLive, aseco: "Aseco"):
 # ---------------------------------------------------------------------------
 
 def register(aseco: "Aseco"):
-    _apply_plugin_defaults(aseco)
+    _apply_app_defaults(aseco)
     aseco.register_event("onSync", _on_sync)
     aseco.register_event("onEndRace", _on_end_race)
     aseco.register_event("onPlayerConnect", _on_player_connect)
@@ -1247,11 +1247,11 @@ def register(aseco: "Aseco"):
     aseco.register_event("onChat_cplive", chat_cplive)
 
 
-def _apply_plugin_defaults(aseco: "Aseco"):
+def _apply_app_defaults(aseco: "Aseco"):
     try:
-        from pyxaseco.settings_loader import overlay_plugin_defaults
-        overlay_plugin_defaults(
-            "plugin_cplive_v3",
+        from pyxaseco.settings_loader import overlay_app_defaults
+        overlay_app_defaults(
+            "cplive_v3",
             sys.modules[__name__],
             attr_map={
                 "max_display_rows": "MAX_DISPLAY_ROWS",
