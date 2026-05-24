@@ -1,4 +1,4 @@
-# PyXaseco 1.1 Stable
+# PyXaseco v1.1-Stable
 
 PyXaseco is a Python 3.12 controller for **TrackMania Forever** servers, inspired by XAseco and built around practical day-to-day server administration, records, widgets, RASP-style map flow, and XML-driven configuration.
 
@@ -265,13 +265,17 @@ PyXaseco/
 - Some plugins are close ports, while others are practical Python rewrites shaped around the PyXaseco core.
 - The shipped plugin names are Python-native, even when the feature ancestry comes from older PHP plugin names.
 
-## Known alpha expectations
+## Release Notes
 
-This pack is much further along than a blank alpha skeleton, but normal alpha realities still apply:
-- some optional plugins are more mature than others
-- niche parity edge cases can still show up
-- non-default loadouts need their own testing
-- ManiaLink/UI fidelity is still an area where small fixes may continue over time
+This pack is the `v1.1-Stable` release line.
+
+It is intended to be the validated XML-based stable pack for daily TrackMania Forever server use.
+
+Compared with earlier development snapshots, this release is positioned as:
+- stable for normal server operation
+- validated against real server usage
+- suitable for classic XAseco-style installs and migrations
+- focused on practical reliability rather than experimental architecture changes
 
 ## Contributing / testing
 
