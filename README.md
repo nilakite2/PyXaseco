@@ -5,7 +5,9 @@ PyXaseco is a Python 3.12 controller for **TrackMania Forever** servers, inspire
 ## Status
 
 Stable and validated release.
+
 Ready for daily use.
+
 If any issue is found, please contact me via [Discord](https://discord.gg/CwFNmzKX8G) server.
 
 ## Highlights
