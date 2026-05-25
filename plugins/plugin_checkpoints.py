@@ -327,9 +327,14 @@ async def chat_sectms(aseco: 'Aseco', command: dict, diff: bool = True):
         if rec.checks:
             pr = 0
             for j, cp in enumerate(rec.checks[:cpsmax]):
-                row.append(f'$n{format_time(cp - pr)}')
+                try:
+                    cp_i = int(cp)
+                except (TypeError, ValueError):
+                    continue
+                value = (cp_i - pr) if diff else cp_i
+                row.append(f'$n{format_time(value)}')
                 if diff:
-                    pr = cp
+                    pr = cp_i
             if len(rec.checks) > cpsmax:
                 row.append('+')
         rows.append(row)
