@@ -6,3 +6,17 @@ line_len = 70
 donation_values = [20, 50, 100, 200, 500, 1000, 2000]
 min_donation = 10
 public_appr_threshold = 100
+
+[platform_core.rpoints]
+enabled = false
+default_system = ""
+
+[platform_core.freezone]
+enabled = false
+ws_user = ""
+ws_password = ""
+testmode = true
+debugmode = false
+notify = 0
+notify_mute = "{1} has been forced to spectator (FreeZone)."
+notify_unmute = "{1} is now allowed to play (FreeZone)."

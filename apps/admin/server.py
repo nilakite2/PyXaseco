@@ -416,7 +416,7 @@ async def handle_subcommand(
     if sub == 'rpoints':
         await admin_chat._delegate_if_exists(
             aseco, login,
-            'skip/rpoints:admin_rpoints',
+            'apps.platform_core.rpoints:admin_rpoints',
             aseco, admin, logtitle, chattitle, arg.strip(),
             unavailable_msg='{#server}> {#admin}Custom Rounds points unavailable - enable the Rounds Points integration'
         )

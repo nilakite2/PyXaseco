@@ -34,6 +34,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _fufi_menu: "FufiMenu | None" = None
+_OPTIONAL_FEATURE_DEPENDENCIES = {
+    'plugin.rpoints.php': 'feature_rpoints',
+    'plugin.msglog.php': 'feature_msglog',
+    'plugin.tgj_allbutton.php': 'feature_allbutton',
+    'plugin.freezone.php': 'feature_freezone',
+    'plugin.stalker_actionids.php': 'feature_stalker_actionids',
+    'plugin.stalker_tools.php': 'feature_stalker_tools',
+}
 
 
 def _as_dict(value, default=None):
@@ -633,7 +641,11 @@ class FufiMenu:
         result = True
 
         for dep in [d.strip() for d in dependencies.split(",") if d.strip()]:
-            result = result and (f"{dep}|" in self.app_list or dep in self.app_list)
+            feature_flag = _OPTIONAL_FEATURE_DEPENDENCIES.get(dep)
+            if feature_flag:
+                result = result and bool(self.get_shared_attr(feature_flag, default=False))
+            else:
+                result = result and (f"{dep}|" in self.app_list or dep in self.app_list)
 
         if globalvariable:
             try:

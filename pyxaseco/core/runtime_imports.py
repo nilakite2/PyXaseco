@@ -11,9 +11,6 @@ _ROOT = Path(__file__).resolve().parents[2]
 _DISABLED_ROOT = _ROOT / "not_required" / "apps" / "00disabled"
 
 _OPTIONAL_DISABLED_FILES = {
-    "feature/rpoints": _DISABLED_ROOT / "skip" / "rpoints.py",
-    "plugin_rpoints": _DISABLED_ROOT / "skip" / "rpoints.py",
-    "skip/rpoints": _DISABLED_ROOT / "skip" / "rpoints.py",
     "plugin_autotime": _DISABLED_ROOT / "skip" / "autotime.py",
     "skip/autotime": _DISABLED_ROOT / "skip" / "autotime.py",
     "plugin_access": _DISABLED_ROOT / "skip" / "access.py",

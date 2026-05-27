@@ -192,9 +192,90 @@ ML_ID_DONATE = '6'   # Donate panel
 ML_ID_MSG    = '7'   # Messages window
 
 
+_WINDOW_MESSAGE_BUFFER_LEN = 21
+_WINDOW_MESSAGE_LINE_LEN = 800
+_WINDOW_MESSAGE_WINDOW_LEN = 5
+_window_message_buffer: list[str] = []
+
+
 def _esc(text: str) -> str:
     """HTML-escape text for ManiaLink XML."""
     return html.escape(validate_utf8(str(text)))
+
+
+def configure_window_message_history(*, buffer_len: int | None = None,
+                                     line_len: int | None = None,
+                                     window_len: int | None = None) -> None:
+    """Adjust shared popup-message history sizes used by send_window_message()."""
+    global _WINDOW_MESSAGE_BUFFER_LEN, _WINDOW_MESSAGE_LINE_LEN, _WINDOW_MESSAGE_WINDOW_LEN
+
+    if buffer_len is not None:
+        _WINDOW_MESSAGE_BUFFER_LEN = max(1, int(buffer_len))
+    if line_len is not None:
+        _WINDOW_MESSAGE_LINE_LEN = max(1, int(line_len))
+    if window_len is not None:
+        _WINDOW_MESSAGE_WINDOW_LEN = max(1, int(window_len))
+
+    if len(_window_message_buffer) > _WINDOW_MESSAGE_BUFFER_LEN:
+        del _window_message_buffer[:-_WINDOW_MESSAGE_BUFFER_LEN]
+
+
+def get_window_message_buffer() -> list[str]:
+    """Return a copy of the shared popup-message history buffer."""
+    return list(_window_message_buffer)
+
+
+async def _display_window_message_history(aseco: 'Aseco', messages: list[str], timeout: int) -> None:
+    if not messages:
+        return
+
+    count = len(messages)
+    xml = (
+        f'<manialink id="{ML_ID_MSG}"><frame posn="-49 43.5 0">'
+        f'<quad sizen="93 {1.5 + count * 2.5}" style="Bgs1" substyle="NavButton"/>'
+    )
+    pos = -1.0
+    for msg in messages:
+        xml += (
+            f'<label posn="1 {pos} 1" sizen="91 1" style="TextRaceChat" '
+            f'text="{_esc(msg)}"/>'
+        )
+        pos -= 2.5
+    xml += '</frame></manialink>'
+
+    await aseco.client.query_ignore_result('SendDisplayManialinkPage', aseco.format_colors(xml), timeout, False)
+
+
+async def send_window_message(aseco: 'Aseco', message: str, scoreboard: bool) -> None:
+    """Show a short popup window and retain the message history for /msglog-style viewers."""
+    for item in str(message or '').split('\n'):
+        if item is None:
+            continue
+        text = str(item)
+        if not text:
+            continue
+
+        wrapped = '$z$s' + text
+        while len(wrapped) > _WINDOW_MESSAGE_LINE_LEN:
+            line = wrapped[:_WINDOW_MESSAGE_LINE_LEN]
+            if len(_window_message_buffer) >= _WINDOW_MESSAGE_BUFFER_LEN:
+                _window_message_buffer.pop(0)
+            _window_message_buffer.append(line)
+            wrapped = '$z$s$n' + wrapped[_WINDOW_MESSAGE_LINE_LEN:]
+        if len(_window_message_buffer) >= _WINDOW_MESSAGE_BUFFER_LEN:
+            _window_message_buffer.pop(0)
+        _window_message_buffer.append(wrapped)
+
+    if scoreboard:
+        try:
+            timeout_info = await aseco.client.query('GetChatTime') or {}
+            timeout = int(timeout_info.get('CurrentValue', 0)) + 5000
+        except Exception:
+            timeout = 10000
+    else:
+        timeout = int(getattr(getattr(aseco, 'settings', None), 'window_timeout', 10)) * 1000
+
+    await _display_window_message_history(aseco, _window_message_buffer[-_WINDOW_MESSAGE_WINDOW_LEN:], timeout)
 
 
 # ---------------------------------------------------------------------------

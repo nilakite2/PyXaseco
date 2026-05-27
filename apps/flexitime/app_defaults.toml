@@ -1,0 +1,14 @@
+[flexitime]
+admin_level = 3
+whitelist = []
+default_time = 180
+custom_time = true
+author_mult = 5
+min_time = 45
+use_chat = true
+show_panel = true
+colour = "fff"
+warn_time = 300
+warn_colour = "ff4"
+danger_time = 60
+danger_colour = "f44"

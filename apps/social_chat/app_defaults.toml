@@ -1,3 +1,11 @@
 [social_chat]
 pm_buf_len = 30
 line_len = 70
+
+[social_chat.msglog]
+enabled = false
+buffer_length = 21
+line_length = 800
+window_lines = 5
+button_pos_x = -63.9
+button_pos_y = -33.5

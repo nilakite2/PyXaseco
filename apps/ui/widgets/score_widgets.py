@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 from xml.sax.saxutils import escape
 
 from pyxaseco.helpers import format_time
-from pyxaseco.core.runtime_imports import import_runtime_module
 from pyxaseco.models import Gameinfo
 
 from ..config import _state, _effective_mode
@@ -744,7 +743,8 @@ def _get_rpoints(aseco: 'Aseco', mode: int, shown_count: int = 0) -> list[int]:
     system = getattr(getattr(aseco, 'settings', None), 'default_rpoints', '') or ''
     rounds_points = None
     try:
-        rounds_points = getattr(import_runtime_module('skip/rpoints'), 'ROUNDS_POINTS', None)
+        from apps.platform_core.rpoints import ROUNDS_POINTS as _rounds_points
+        rounds_points = _rounds_points
     except Exception:
         rounds_points = None
     if rounds_points and system in rounds_points:

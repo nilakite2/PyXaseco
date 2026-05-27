@@ -1690,7 +1690,7 @@ async def chat_list(aseco: 'Aseco', command: dict):
         header = '{#black}/list$g will show tracks in rotation on the server:'
         data = [
             ['...', '{#black}help',           'Displays this help information'],
-            ['...', '{#black}nofinish',        "Shows tracks you haven't completed"],
+            ['...', '{#black}nofinish$g/{#black}nofin', "Shows tracks you haven't completed"],
             ['...', '{#black}norank',          "Shows tracks you don't have a rank on"],
             ['...', '{#black}nogold',          "Shows tracks you didn't beat gold time on"],
             ['...', '{#black}noauthor',        "Shows tracks you didn't beat author time on"],
@@ -1734,9 +1734,9 @@ async def chat_list(aseco: 'Aseco', command: dict):
         _show_or_error(aseco, player, login)
         return
 
-    if p0 in ('nofinish', 'norank', 'nogold', 'noauthor', 'recent', 'norecent'):
+    if p0 in ('nofinish', 'nofin', 'norank', 'nogold', 'noauthor', 'recent', 'norecent'):
         try:
-            if p0 == 'nofinish':
+            if p0 in ('nofinish', 'nofin'):
                 await _get_challenges_no_finish(aseco, player)
             elif p0 == 'norank':
                 await _get_challenges_no_rank(aseco, player)
@@ -2716,7 +2716,7 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
         header = '{#black}/autojuke$g will jukebox a track from /list selection:'
         data = [
             ['...', '{#black}help', 'Displays this help information'],
-            ['...', '{#black}nofinish', "Selects tracks you haven't completed"],
+            ['...', '{#black}nofinish$g/{#black}nofin', "Selects tracks you haven't completed"],
             ['...', '{#black}norank', "Selects tracks you don't have a rank on"],
             ['...', '{#black}nogold', "Selects tracks you didn't beat gold time on"],
             ['...', '{#black}noauthor', "Selects tracks you didn't beat author time on"],
@@ -2740,7 +2740,7 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
         return
 
     try:
-        if selection == 'nofinish':
+        if selection in ('nofinish', 'nofin'):
             await _get_challenges_no_finish(aseco, player)
         elif selection == 'norank':
             await _get_challenges_no_rank(aseco, player)

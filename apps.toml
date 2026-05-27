@@ -25,3 +25,6 @@ enabled = [
 "app/platform_ui",
 "app/ui"
 ]
+disabled = [
+"app/flexitime"
+]

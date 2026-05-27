@@ -20,6 +20,8 @@ APP_METADATA = {
         "apps/admin/map.py",
         "apps/admin/player.py",
         "apps/admin/lists.py",
+        "apps/admin/stalker_actionids.py",
+        "apps/admin/stalker_tools.py",
         "apps/admin/commands.py",
         "apps/admin/callbacks.py",
     ],
@@ -28,6 +30,8 @@ APP_METADATA = {
     ],
     "provides": [
         "chat/admin",
+        "plugin_stalker_actionids",
+        "plugin_stalker_tools",
         "bridge/server_admin_bridge",
     ],
     "depends_on": [

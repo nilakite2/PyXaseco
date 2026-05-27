@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import chatlog, checkpoints, donate, localdb, rounds, songmod, track
+from . import chatlog, checkpoints, donate, freezone, localdb, rounds, rpoints, songmod, track
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -21,6 +21,8 @@ APP_METADATA = {
         "apps/platform_core/chatlog.py",
         "apps/platform_core/checkpoints.py",
         "apps/platform_core/donate.py",
+        "apps/platform_core/freezone.py",
+        "apps/platform_core/rpoints.py",
         "apps/platform_core/songmod.py",
     ],
     "entries": [
@@ -34,6 +36,9 @@ APP_METADATA = {
         "core/chatlog",
         "core/checkpoints",
         "core/donate",
+        "plugin_freezone",
+        "feature/rpoints",
+        "plugin_rpoints",
         "chat/songmod",
     ],
 }
@@ -98,6 +103,16 @@ class PlatformCoreApp(App):
                 component_id='platform_core.donate',
                 description='Donation handling surface.',
                 module=donate,
+            ),
+            PlatformCoreModuleSurface(
+                component_id='platform_core.freezone',
+                description='Optional FreeZone access-control surface.',
+                module=freezone,
+            ),
+            PlatformCoreModuleSurface(
+                component_id='platform_core.rpoints',
+                description='Optional rounds-points system surface.',
+                module=rpoints,
             ),
             PlatformCoreModuleSurface(
                 component_id='platform_core.songmod',

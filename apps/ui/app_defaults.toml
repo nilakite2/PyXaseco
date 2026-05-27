@@ -1006,6 +1006,13 @@ substyle = "LvlGreen"
 style = "Icons64x64_1"
 substyle = "LvlYellow"
 
+[ui.allbutton]
+enabled = false
+main_pos_x = -61
+main_pos_y = -45.1
+submenu_pos_x = -39
+submenu_pos_y = -28.2
+
 
 
 [ui.karma]

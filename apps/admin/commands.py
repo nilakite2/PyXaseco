@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import Command, Component
 
-from . import lists, map, player, server
+from . import lists, map, player, server, stalker_actionids, stalker_tools
 from .command_router import (
     chat_admin,
     chat_listadmins,
@@ -89,6 +89,8 @@ DOMAIN_COMPONENTS = (
     map.get_component(),
     player.get_component(),
     lists.get_component(),
+    stalker_actionids.get_component(),
+    stalker_tools.get_component(),
 )
 
 

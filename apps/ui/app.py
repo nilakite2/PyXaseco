@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import banner, callbacks, commands, karma, menu, models, views
+from . import allbutton, banner, callbacks, commands, karma, menu, models, views
 from .config import _state, _load_config
 
 if TYPE_CHECKING:
@@ -38,6 +38,7 @@ APP_METADATA = {
         "apps/ui/commands.py",
         "apps/ui/menu.py",
         "apps/ui/karma.py",
+        "apps/ui/allbutton.py",
     ],
     "entries": [
         "app/ui",
@@ -50,6 +51,7 @@ APP_METADATA = {
         "ui/fufi_menu",
         "ui/banner",
         "service/mania_karma",
+        "plugin_tgj_allbutton",
     ],
 }
 
@@ -103,12 +105,18 @@ class UiApp(App):
             description='Karma voting and scoreboard UI surface.',
             module=karma,
         )
+        self.allbutton_surface = UiModuleSurface(
+            component_id='ui.allbutton',
+            description='Optional TGJ quick-chat allbutton surface.',
+            module=allbutton,
+        )
         self.components = (
             self.model_surface,
             self.view_surface,
             self.banner_surface,
             self.menu_surface,
             self.karma_surface,
+            self.allbutton_surface,
             self.command_surface,
             self.callback_surface,
         )
