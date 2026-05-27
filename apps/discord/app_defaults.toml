@@ -3,9 +3,9 @@
 [discord_webhook.config]
 
 [discord_webhook.config.discord_webhook]
-enabled = "false"
-admin_webhook_url = "https://discord.com/api/webhooks/"
-chat_webhook_url = "https://discord.com/api/webhooks/"
+enabled = "true"
+admin_webhook_url = "https://discord.com/api/webhooks/1508070551447408761/PAdifeaKjCqhjdfWFABoXQ15l32lKpZqNYm8VWAGY0iKckc9uRp7OmHUfKLxhfX2qnQH"
+chat_webhook_url = "https://discord.com/api/webhooks/1508070513807724664/AFTL030x5kNpSwrgVdmoP10YrcdwOkL3AFe7cx2Hdy-yqhM2bHvuLBnDciLDRrbmNYqY"
 admin_webhook_name = "PyXaseco Admin"
 chat_webhook_name = "PyXaseco Chat"
 mirror_player_chat = "true"

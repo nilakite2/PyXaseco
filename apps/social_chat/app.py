@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import commands
+from . import commands, social
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -13,15 +13,17 @@ if TYPE_CHECKING:
 APP_METADATA = {
     "id": "social_chat",
     "display_name": "Social Chat",
-    "description": "Small social and expressive chat commands.",
+    "description": "Small social, expressive, and private-message chat commands.",
     "modules": [
         "apps/social_chat/commands.py",
+        "apps/social_chat/social.py",
     ],
     "entries": [
         "app/social_chat",
     ],
     "provides": [
         "chat/me",
+        "feature/rasp_chat",
     ],
 }
 
@@ -31,7 +33,7 @@ class SocialChatApp(App):
         super().__init__(
             app_id="social_chat",
             display_name="Social Chat",
-            description="Small social and expressive chat commands.",
+            description="Small social, expressive, and private-message chat commands.",
             entry_modules=("app/social_chat",),
         )
         self.social_surfaces = (
@@ -39,6 +41,11 @@ class SocialChatApp(App):
                 component_id='social_chat.commands',
                 description='Small social and expressive chat command surface.',
                 module=commands,
+            ),
+            SocialChatModuleSurface(
+                component_id='social_chat.social',
+                description='Private-message and lightweight social shortcuts.',
+                module=social,
             ),
         )
         self.components = self.social_surfaces

@@ -7,7 +7,7 @@ from pyxaseco.core.base import Callback, Component
 from .bridge import (
     register as _register_admin_bridge,
 )
-from .chat import _admin_player_connect, _admin_startup, _event_admin
+from .command_router import _admin_player_connect, _admin_startup, _event_admin
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco

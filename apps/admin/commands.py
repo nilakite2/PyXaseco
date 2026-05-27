@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.core.base import Command, Component
 
 from . import lists, map, player, server
-from .chat import (
+from .command_router import (
     chat_admin,
     chat_listadmins,
     chat_listmasters,
@@ -28,7 +28,7 @@ class AdminCommandSurface(Component):
                     handler=chat_admin,
                     is_admin=True,
                     owner='chat/admin',
-                    aliases=('ad', 'a'),
+                    aliases=('ad', 'a', '/'),
                     usage='/admin <subcommand>',
                     display_name='admin',
                     category='admin-entry',

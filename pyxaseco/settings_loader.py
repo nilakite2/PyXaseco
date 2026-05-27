@@ -289,7 +289,7 @@ def overlay_mania_karma(cfg: Any, base_dir=None) -> None:
     kw = mk.get('karma_widget', {})
     if kw and hasattr(cfg, 'gamemodes'):
         try:
-            from apps.mania_karma.service import GM_TAG, WidgetGamemodeCfg
+            from apps.ui.karma import GM_TAG, WidgetGamemodeCfg
             tag_to_mode = {v: k for k, v in GM_TAG.items()}
             for tag, gm_cfg in kw.items():
                 if not isinstance(gm_cfg, dict):

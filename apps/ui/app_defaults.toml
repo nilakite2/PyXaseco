@@ -1,0 +1,1174 @@
+[ui]
+
+# Optional UI note: any widget section that already uses background_style/background_substyle
+# can also define background_color = "" to override it with a flat color.
+
+
+[ui.features]
+refresh_interval = 10
+mark_online_player_records = true
+illuminate_names = true
+sort_team = true
+number_format = "english"
+shorten_numbers = false
+
+[ui.features.karma]
+min_votes = 30
+calculation_method = "tmkarma"
+
+[ui.features.songlist]
+sorting = true
+force_songlist = true
+
+[ui.features.tracklist]
+sorting = "author"
+force_tracklist = true
+
+[ui.show_progress_indicator]
+tracklist = 120
+
+[ui.links]
+website = "http://www.undef.name/"
+welcome = "http://www.undef.name/"
+discord = "discord.gg/CwFNmzKX8G"
+mania_karma = "http://www.mania-karma.com/"
+
+[ui.style]
+
+[ui.style.widget_race]
+background_style = "Bgs1InRace"
+background_substyle = "NavButton"
+background_color = ""
+title_style = "BgsPlayerCard"
+title_substyle = "BgRacePlayerName"
+top_style = "BgsPlayerCard"
+top_substyle = "BgCardSystem"
+highlite_self_style = "BgsPlayerCard"
+highlite_self_substyle = "BgCardSystem"
+highlite_other_style = "BgsPlayerCard"
+highlite_other_substyle = "BgCardSystem"
+formatting_codes = ""
+
+[ui.style.widget_race.colors]
+default = "FFFF"
+scores = "DDDF"
+top = "FF0F"
+better = "F00F"
+worse = "CCCF"
+self = "3F5F"
+background_rank = "AAA5"
+background_score = "AAA3"
+background_name = "AAA1"
+
+[ui.style.widget_score]
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+background_color = ""
+title_style = "BgsPlayerCard"
+title_substyle = "ProgressBar"
+formatting_codes = ""
+
+[ui.style.widget_score.colors]
+default = "FFFF"
+scores = "DDDF"
+
+[ui.style.window]
+headline_bgcolor = "09FC"
+headline_textcolor = "FFFF"
+window_bgcolor = "001B"
+
+[ui.style.window.lightbox]
+enabled = false
+bgcolor = "0008"
+
+[ui.custom_ui]
+enabled = true
+notice = true
+challenge_info = true
+net_infos = true
+chat = true
+checkpoint_list = true
+round_scores = true
+scoretable = true
+
+[ui.welcome_window]
+enabled = false
+autohide = 10
+icon_style = "Icons128x128_1"
+icon_substyle = "Credits"
+message = "$FF0Welcome {player}!{br}{br}However, we ask you to urgently comply with the rules. They serve the gaming culture on this server and are all participating players have fun together! All violators will be kicked or banned depending on the seriousness of the offense.{br}{br}We think a certain minimum level of decency can be expected of all players. These include for example, a normal tone on this server. When insults, abuse and other non appropriate behavior appropriate action being taken.{br}{br}Play fair on this server! Behave like normal people. We think that the rules above should not be too difficult to follow. They reflect the interests of all players resist on this server.{br}{br}$w$oAnd now have fun at {server}!"
+
+[ui.welcome_window.hide]
+ranked_player = false
+
+[ui.welcome_window.image]
+normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/welcome-records-eyepiece-normal.jpg"
+focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/welcome-records-eyepiece-focus.jpg"
+link = "http://www.undef.name/"
+
+[ui.challenge_widget]
+enabled = true
+width = 15.5
+
+[ui.challenge_widget.icons]
+
+[ui.challenge_widget.icons.last_track]
+icon_style = "Icons128x128_1"
+icon_substyle = "NewTrack"
+
+[ui.challenge_widget.icons.current_track]
+icon_style = "Icons128x128_1"
+icon_substyle = "Challenge"
+
+[ui.challenge_widget.icons.next_track]
+icon_style = "Icons128x128_1"
+icon_substyle = "LoadTrack"
+
+[ui.challenge_widget.title]
+last_track = "Last Track"
+current_track = "Current Track"
+next_track = "Next Track"
+
+[ui.challenge_widget.race]
+pos_x = 49.05
+pos_y = 48
+
+[ui.challenge_widget.score]
+pos_x = 48.7
+pos_y = 48
+
+[ui.music_widget]
+enabled = false
+advertise = true
+title = "Current Song"
+width = 15.5
+pos_x = 33.45
+pos_y = 48
+icon_style = "Icons64x64_1"
+icon_substyle = "Music"
+
+[ui.checkpointcount_widget]
+enabled = true
+width = 16
+height = 4
+text_color = "DDEF"
+background_color = ""
+pos_x = -7.9
+pos_y = -34.1
+background_style = "Bgs1InRace"
+background_substyle = "NavButton"
+
+[ui.dedimania_records]
+title = "Dedimania Records"
+width = 15.5
+height = 0
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[ui.dedimania_records.gamemode]
+
+[ui.dedimania_records.gamemode.rounds]
+enabled = true
+pos_x = -64.7
+pos_y = 23.65
+entries = 12
+topcount = 3
+row_height = 1.8
+
+[ui.dedimania_records.gamemode.time_attack]
+enabled = true
+pos_x = 49.2
+pos_y = 0.7
+entries = 10
+topcount = 3
+row_height = 1.8
+
+[ui.dedimania_records.gamemode.team]
+enabled = true
+pos_x = -64.7
+pos_y = 23.65
+entries = 12
+topcount = 3
+row_height = 1.8
+
+[ui.dedimania_records.gamemode.laps]
+enabled = true
+pos_x = -64.7
+pos_y = 23.65
+entries = 12
+topcount = 3
+row_height = 1.8
+
+[ui.dedimania_records.gamemode.stunts]
+enabled = false
+
+[ui.dedimania_records.gamemode.cup]
+enabled = true
+pos_x = -64.7
+pos_y = 10.65
+entries = 12
+topcount = 3
+row_height = 1.8
+
+[ui.local_records]
+title = "Local Records"
+width = 15.5
+height = 0
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[ui.local_records.gamemode]
+
+[ui.local_records.gamemode.rounds]
+enabled = true
+pos_x = -64.7
+pos_y = -1.2
+entries = 11
+topcount = 3
+row_height = 1.8
+
+[ui.local_records.gamemode.time_attack]
+enabled = true
+pos_x = 49.2
+pos_y = 22.1
+entries = 10
+topcount = 3
+row_height = 1.8
+
+[ui.local_records.gamemode.team]
+enabled = true
+pos_x = -64.7
+pos_y = -1.2
+entries = 11
+topcount = 3
+row_height = 1.8
+
+[ui.local_records.gamemode.laps]
+enabled = true
+pos_x = -64.7
+pos_y = -1.2
+entries = 11
+topcount = 3
+row_height = 1.8
+
+[ui.local_records.gamemode.stunts]
+enabled = true
+pos_x = 49.2
+pos_y = 6.6
+entries = 10
+topcount = 3
+row_height = 1.8
+
+[ui.local_records.gamemode.cup]
+enabled = true
+pos_x = -64.7
+pos_y = -1.2
+entries = 11
+topcount = 3
+row_height = 1.8
+
+[ui.live_rankings]
+title = "Live Rankings"
+width = 15.5
+height = 0
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[ui.live_rankings.gamemode]
+
+[ui.live_rankings.gamemode.rounds]
+enabled = true
+display_type = "scores"
+format = "{score} ({remaining})"
+pos_x = 49.2
+pos_y = -10.7
+entries = 8
+topcount = 3
+row_height = 1.8
+
+[ui.live_rankings.gamemode.time_attack]
+enabled = false
+pos_x = 33.5
+pos_y = 48
+entries = 5
+topcount = 0
+row_height = 1.8
+
+[ui.live_rankings.gamemode.team]
+enabled = true
+pos_x = 49.2
+pos_y = -21.5
+entries = 2
+topcount = 2
+row_height = 1.8
+
+[ui.live_rankings.gamemode.laps]
+enabled = true
+display_type = "checkpoints"
+pos_x = 49.2
+pos_y = -10.4
+entries = 8
+topcount = 3
+row_height = 1.8
+
+[ui.live_rankings.gamemode.stunts]
+enabled = true
+pos_x = 49.2
+pos_y = -14.8
+entries = 6
+topcount = 3
+row_height = 1.8
+
+[ui.live_rankings.gamemode.cup]
+enabled = true
+pos_x = 49.2
+pos_y = -14.3
+entries = 7
+topcount = 3
+row_height = 1.8
+
+[ui.round_score]
+title = "Round Score"
+width = 15.5
+height = 0
+
+[ui.round_score.race]
+icon_style = "Icons64x64_1"
+icon_substyle = "RestartRace"
+
+[ui.round_score.warmup]
+icon_style = "BgRaceScore2"
+icon_substyle = "Warmup"
+
+[ui.round_score.gamemode]
+
+[ui.round_score.gamemode.rounds]
+enabled = true
+
+[ui.round_score.gamemode.rounds.race]
+pos_x = 49.2
+pos_y = 17.8
+entries = 14
+topcount = 3
+row_height = 1.8
+
+[ui.round_score.gamemode.rounds.warmup]
+pos_x = 49.2
+pos_y = 10.7
+entries = 10
+topcount = 3
+row_height = 1.8
+
+[ui.round_score.gamemode.time_attack]
+enabled = false
+
+[ui.round_score.gamemode.team]
+enabled = true
+
+[ui.round_score.gamemode.team.race]
+pos_x = 49.2
+pos_y = 17.8
+entries = 20
+topcount = 3
+row_height = 1.8
+
+[ui.round_score.gamemode.team.warmup]
+pos_x = 49.2
+pos_y = 10.7
+entries = 16
+topcount = 3
+row_height = 1.8
+
+[ui.round_score.gamemode.laps]
+enabled = true
+
+[ui.round_score.gamemode.laps.race]
+pos_x = 49.2
+pos_y = 16.6
+entries = 13
+topcount = 3
+row_height = 1.8
+
+[ui.round_score.gamemode.laps.warmup]
+pos_x = 49.2
+pos_y = 11
+entries = 10
+topcount = 3
+row_height = 1.8
+
+[ui.round_score.gamemode.stunts]
+enabled = false
+
+[ui.round_score.gamemode.cup]
+enabled = true
+
+[ui.round_score.gamemode.cup.race]
+pos_x = 49.2
+pos_y = 17.8
+entries = 16
+topcount = 3
+row_height = 1.8
+
+[ui.round_score.gamemode.cup.warmup]
+pos_x = 49.2
+pos_y = 10.7
+entries = 12
+topcount = 3
+row_height = 1.8
+
+[ui.join_leave_info]
+enabled = true
+messages_in_window = false
+add_rights = true
+join_message = "{#server}>> {#message}{title}: {#highlite}{nickname}$Z$S{#message} Zone: {#highlite}{zone}{#message} Visits: {#highlite}{visits}{#message} Ladder: {#highlite}{ladderrank}{#message} Rank: {#highlite}{serverrank}{#message}"
+leave_message = "{#server}>> {#highlite}{nickname}$Z$S{#message} from {#highlite}{nation}{#message} has left the game after {#highlite}{playtime}{#message} playtime."
+
+[ui.winning_payout]
+enabled = false
+minimum_server_coppers = 250
+
+[ui.winning_payout.players]
+minimum_amount = 8
+rank_limit = 10000
+maximum_coppers = 60
+reset_limit = 86400
+
+[ui.winning_payout.pay_coppers]
+first = 20
+second = 15
+third = 10
+
+[ui.winning_payout.ignore]
+operator = false
+admin = false
+masteradmin = false
+
+[ui.winning_payout.widget]
+background_color = ""
+title = "Finish Winners"
+pos_x = 37.8
+pos_y = -30.7
+width = 25.5
+height = 0
+row_height = 1.8
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+title_style = "BgsPlayerCard"
+title_substyle = "ProgressBar"
+icon_style = "BgRaceScore2"
+icon_substyle = "Fame"
+
+[ui.winning_payout.colors]
+won = "5F0F"
+coppers = "FF9F"
+rank_limit = "F00F"
+disconnected = "F00F"
+no_tmu = "FF0F"
+
+[ui.donation_widget]
+enabled = false
+text_color = "FC0F"
+amounts = "20,50,100,200,500,1000,1500,2000,2500,5000"
+public_appreciation_threshold = 50
+
+[ui.donation_widget.widget]
+background_color = ""
+pos_x = -47.9
+pos_y = 18.2
+width = 4.6
+height = 0
+row_height = 1.85
+icon_style = "Icons128x128_1"
+icon_substyle = "Coppers"
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+button_style = "Bgs1InRace"
+button_substyle = "BgIconBorder"
+button_color = "000F"
+
+[ui.ladderlimit_widget]
+enabled = false
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+roc_server = true
+pos_x = -63.85
+pos_y = 39.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.gamemode_widget]
+enabled = false
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = -59.05
+pos_y = 39.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.player_spectator_widget]
+enabled = true
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = -54.5
+pos_y = 41.1
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.current_ranking_widget]
+enabled = false
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = -49.45
+pos_y = 39.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.tmexchange_widget]
+enabled = false
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = 25.1
+pos_y = 39.3
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.toplist_widget]
+enabled = false
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = 29.9
+pos_y = 39.3
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.trackcount_widget]
+enabled = true
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = -59.2
+pos_y = 47.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.visitors_widget]
+enabled = true
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = -63.9
+pos_y = 47.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.clock_widget]
+enabled = true
+width = 4.6
+height = 6.5
+timeformat = "H:i"
+default_timezone = "Europe/Berlin"
+text_color = "FC0F"
+
+[ui.clock_widget.race]
+pos_x = -54.5
+pos_y = 47.8
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.clock_widget.score]
+pos_x = 41.05
+pos_y = 33.2
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[ui.favorite_widget]
+enabled = false
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+
+[ui.favorite_widget.race]
+pos_x = 44.3
+pos_y = 39.3
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.favorite_widget.score]
+pos_x = -47.9
+pos_y = 33.2
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[ui.next_environment_widget]
+enabled = true
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = 49.1
+pos_y = -40.9
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[ui.next_gamemode_widget]
+enabled = true
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = 53.9
+pos_y = -40.9
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[ui.eyepiece_widget]
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+
+[ui.eyepiece_widget.race]
+enabled = false
+pos_x = -62
+pos_y = 47
+
+[ui.eyepiece_widget.score]
+enabled = true
+pos_x = 58.7
+pos_y = -40.9
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+
+[ui.scoretable_lists]
+
+[ui.scoretable_lists.top_average_times]
+enabled = true
+title = "Average Last Round"
+pos_x = -63.5
+pos_y = 29.5
+width = 15.5
+height = 0
+entries = 9
+row_height = 1.8
+icon_style = "BgRaceScore2"
+icon_substyle = "ScoreLink"
+
+[ui.scoretable_lists.dedimania_records]
+enabled = true
+title = "Dedimania Records"
+pos_x = -63.5
+pos_y = -8
+width = 15.5
+height = 0
+entries = 8
+row_height = 1.8
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[ui.scoretable_lists.local_records]
+enabled = true
+title = "Local Records"
+pos_x = -63.5
+pos_y = 9.85
+width = 15.5
+height = 0
+entries = 8
+row_height = 1.8
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[ui.scoretable_lists.top_rankings]
+enabled = true
+title = "Top Ranks"
+pos_x = -63.5
+pos_y = 47.5
+width = 15.5
+height = 0
+entries = 6
+row_height = 1.8
+icon_style = "BgRaceScore2"
+icon_substyle = "Podium"
+
+[ui.scoretable_lists.top_winners]
+enabled = true
+title = "Top Winners"
+pos_x = -47.9
+pos_y = 47.5
+width = 15.5
+height = 0
+entries = 6
+row_height = 1.8
+icon_style = "Icons128x32_1"
+icon_substyle = "RT_Cup"
+
+[ui.scoretable_lists.most_records]
+enabled = true
+title = "Most Records"
+pos_x = -32.3
+pos_y = 47.5
+width = 15.5
+height = 0
+entries = 6
+row_height = 1.8
+icon_style = "Icons64x64_1"
+icon_substyle = "RestartRace"
+
+[ui.scoretable_lists.most_finished]
+enabled = true
+title = "Most Finished"
+pos_x = -16.7
+pos_y = 47.5
+width = 15.5
+height = 0
+entries = 6
+row_height = 1.8
+icon_style = "Icons128x128_1"
+icon_substyle = "Race"
+
+[ui.scoretable_lists.top_playtime]
+enabled = true
+title = "Hours Played"
+pos_x = -1.1
+pos_y = 47.5
+width = 15.5
+height = 0
+entries = 6
+row_height = 1.8
+icon_style = "Icons128x32_1"
+icon_substyle = "RT_TimeAttack"
+
+[ui.scoretable_lists.top_donators]
+enabled = true
+title = "Top Donators"
+pos_x = 14.5
+pos_y = 47.5
+width = 15.5
+height = 0
+entries = 6
+row_height = 1.8
+icon_style = "Icons128x128_1"
+icon_substyle = "Coppers"
+
+[ui.scoretable_lists.top_nations]
+enabled = true
+title = "Top Nations"
+pos_x = 30.1
+pos_y = 47.5
+width = 15.5
+height = 0
+entries = 6
+row_height = 1.8
+icon_style = "Icons64x64_1"
+icon_substyle = "ToolLeague1"
+
+[ui.scoretable_lists.top_tracks]
+enabled = true
+title = "Top Tracks"
+pos_x = 47.8
+pos_y = 17.6
+width = 15.5
+height = 0
+entries = 7
+row_height = 1.8
+icon_style = "Icons128x128_1"
+icon_substyle = "NewTrack"
+
+[ui.scoretable_lists.top_voters]
+enabled = true
+title = "Top Voters"
+pos_x = 47.8
+pos_y = 1.5
+width = 15.5
+height = 0
+entries = 7
+row_height = 1.8
+icon_style = "Icons128x128_1"
+icon_substyle = "Invite"
+
+[ui.scoretable_lists.top_visitors]
+enabled = true
+title = "Top Visitors"
+pos_x = 47.8
+pos_y = -14.6
+width = 15.5
+height = 0
+entries = 7
+row_height = 1.8
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[ui.scoretable_lists.top_active_players]
+enabled = false
+title = "Top Active Players"
+pos_x = 47.8
+pos_y = -14.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[ui.scoretable_lists.top_winning_payouts]
+enabled = false
+title = "Top Finish Winners"
+pos_x = 47.8
+pos_y = -14.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Coppers"
+
+[ui.scoretable_lists.top_betwins]
+enabled = false
+title = "Top Betwins"
+display = "average"
+pos_x = 47.8
+pos_y = -14.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Coppers"
+
+[ui.scoretable_lists.top_roundscore]
+enabled = false
+title = "Top Roundscore"
+pos_x = 47.8
+pos_y = -14.6
+entries = 7
+icon_style = "Icons128x128_1"
+icon_substyle = "Rankings"
+
+[ui.placement_widget]
+enabled = true
+
+[ui.nicemode]
+enabled = true
+force = false
+refresh_interval = 10
+
+[ui.nicemode.limits]
+lower_limit = 24
+upper_limit = 25
+
+[ui.nicemode.colors]
+top = "FF0F"
+worse = "19FF"
+
+[ui.nicemode.allow]
+dedimania_records = true
+local_records = true
+live_rankings = true
+
+[ui.messages]
+widgets_disabled = "{#server}>> Your record widgets are now hidden, press F7 to reactivate them."
+widgets_enabled = "{#server}>> Your record widgets are now shown, press F7 to hide them."
+widgets_preference_disabled = "{#server}>> Your record widgets are now permanent hidden and your preference was saved, type {#highlite}/eyepiece show{#server} to reactivate them."
+widgets_preference_enabled = "{#server}>> Your record widgets are now permanent shown and your preference was saved, type {#highlite}/eyepiece hide{#server} to hide them."
+toggling_disabled = "{#server}>> Sorry, you can not toggle the record widgets at the moment. There are too many players on the server, so they are in static mode now."
+disallow_windows_at_score = "{#server}>> Could not display this window at score! Please try again when the race is started."
+winning_mail_body = "{#karma}You won several races and won {#highlite}{1} Coppers{#karma}!{br}$L[tmtp://#addfavourite={2}]Please add {3}{#karma} to favorites!$L"
+
+[ui.images]
+widget_open_left = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/edge-open-ld-dark.png"
+widget_close_left = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/edge-close-lu-dark.png"
+widget_open_right = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/edge-open-rd-dark.png"
+widget_open_small = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/edge-open-ld-light.png"
+widget_plus_normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-plus-normal.png"
+widget_plus_focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-plus-focus.png"
+widget_minus_normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-minus-normal.png"
+widget_minus_focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-minus-focus.png"
+widget_ok_normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-ok-normal.png"
+widget_ok_focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/button-ok-focus.png"
+tmx_logo_normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/logo-tmx-normal.png"
+tmx_logo_focus = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/logo-tmx-focus.png"
+worldmap = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/worldmap-pure.png"
+no_screenshot = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/no-screenshot-tmf.jpg"
+progress_indicator = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/progress_bar_yellow_2D.bik"
+
+[ui.images.environment]
+
+[ui.images.environment.enabled]
+icon_bay = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-bay-enabled.png"
+icon_coast = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-coast-enabled.png"
+icon_desert = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-desert-enabled.png"
+icon_island = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-island-enabled.png"
+icon_rally = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-rally-enabled.png"
+icon_snow = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-enabled.png"
+icon_stadium = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-stadium-enabled.png"
+
+[ui.images.environment.focus]
+icon_bay = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-bay-focus.png"
+icon_coast = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-coast-focus.png"
+icon_desert = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-desert-focus.png"
+icon_island = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-island-focus.png"
+icon_rally = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-rally-focus.png"
+icon_snow = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-focus.png"
+icon_stadium = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-stadium-focus.png"
+
+[ui.images.environment.disabled]
+icon_bay = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-bay-disabled.png"
+icon_coast = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-coast-disabled.png"
+icon_desert = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-desert-disabled.png"
+icon_island = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-island-disabled.png"
+icon_rally = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-rally-disabled.png"
+icon_snow = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-disabled.png"
+icon_stadium = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-stadium-disabled.png"
+
+[ui.images.mood]
+
+[ui.images.mood.enabled]
+sunrise = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunrise-normal.png"
+day = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-day-normal.png"
+sunset = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunset-normal.png"
+night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-normal.png"
+
+[ui.images.mood.focus]
+sunrise = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunrise-focus.png"
+day = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-day-focus.png"
+sunset = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunset-focus.png"
+night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-focus.png"
+
+[ui.images.mood.disabled]
+sunrise = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunrise-disabled.png"
+day = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-day-disabled.png"
+sunset = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-sunset-disabled.png"
+night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-disabled.png"
+
+
+
+[ui.menu]
+menu_caption = "   Menu"
+size = "8 2.2"
+separatorheight = "0.75"
+menutimeout = "13000"
+position = "-50 47.8"
+horizontalorientation = "1"
+verticalorientation = "1"
+template_xml = "<!--start_header-->\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manialinks>\n  <manialink id='%menuid%'>\n    <frame posn=\"%framepos%\">\n<!--end_header-->\n\n<!--start_menubutton-->\n\t<quad sizen=\"%size%\" posn=\"%pos%\" style=\"%style%\" substyle=\"%substyle%\" action='%action%'/>\n\t<format textsize='1'/>\n\t<label sizen=\"%size%\" posn=\"%poslabel%\" valign='center' halign='center' text='$s%text%'/>\n<!--end_menubutton-->\n\n<!--start_menuentry-->\n\t<quad sizen=\"%width% %height%\" posn=\"0 %y% 23.1\" style=\"%style%\" substyle=\"%substyle%\" action='%action%'/>\n\t<format textsize='1'/>\n\t<label sizen=\"%lblwidth% %height%\" posn=\"2 %labely% 23.2\" valign='center' halign='left' text='%caption%'/>\n<!--end_menuentry-->\n\n<!--start_menuwindowcaption-->\n\t<format textsize='1'/>\n\t<label sizen=\"%lblwidth% %height%\" posn=\"0.5 %labely% 23.1\" valign='center' halign='left' text='$o%caption%'/>\n<!--end_menuwindowcaption-->\n\n<!--start_menuwindow-->\n\t<quad sizen=\"%size%\" posn=\"%pos%\" style=\"%style%\" substyle=\"%substyle%\"/>\n<!--end_menuwindow-->\n\n<!--start_indicator-->\n\t<quad sizen=\"1.8 1.8\" posn=\"%indx% %y% 23.98\" style=\"%style%\" substyle=\"%substyle%\"/>\n<!--end_indicator-->\n\n<!--start_icon-->\n\t<quad sizen=\"1.8 1.8\" posn=\"%x% %y% 23.5\" style=\"%style%\" substyle=\"%substyle%\"/>\n<!--end_icon-->\n\n<!--start_close-->\n\t<quad sizen=\"1.5 1.5\" halign=\"center\" valign=\"center\" posn=\"%pos% 24\" style=\"Icons64x64_1\" substyle=\"Close\" action=\"%action%\"/>\n<!--end_close-->\n\n<!--start_footer-->\n    </frame>\n  </manialink>\n</manialinks>\n<!--end_footer-->\n"
+entries_json = "[{\"caption\": \"Admin\", \"ability\": \"listabilities\", \"unique\": \"adminmenu\", \"entries\": [{\"caption\": \"Tracks\", \"unique\": \"admintracks\", \"entries\": [{\"caption\": \"Add This Track\", \"chatcmd\": \"/admin addthis\", \"unique\": \"adminaddthis\"}, {\"caption\": \"Remove This Track\", \"chatcmd\": \"/admin removethis\", \"unique\": \"adminremovethis\"}, {\"caption\": \"Erase This Track\", \"chatcmd\": \"/admin erasethis\", \"unique\": \"adminerasethis\"}, {\"caption\": \"Shuffle Tracklist\", \"chatcmd\": \"/admin shuffle\", \"unique\": \"admintlshuffle\"}, {\"caption\": \"List Duplicates\", \"chatcmd\": \"/admin listdupes\", \"unique\": \"admindupes\"}, {\"caption\": \"Clear Jukebox\", \"chatcmd\": \"/admin cjb\", \"unique\": \"adminclearjb\"}, {\"caption\": \"Clear History\", \"chatcmd\": \"/admin clearhist\", \"unique\": \"adminclearhist\"}, {\"caption\": \"Read Matchsettings\", \"chatcmd\": \"/admin readtracklist\", \"unique\": \"admintlread\"}, {\"caption\": \"Write Matchsettings\", \"chatcmd\": \"/admin writetracklist\", \"unique\": \"admintlwrite\"}]}, {\"caption\": \"Players\", \"unique\": \"adminplayers\", \"entries\": [{\"caption\": \"All\", \"chatcmd\": \"/admin players\", \"unique\": \"adminplayerslist\"}, {\"caption\": \"Live\", \"chatcmd\": \"/admin players live\", \"unique\": \"adminplayerslive\"}, {\"caption\": \"Ignores\", \"chatcmd\": \"/admin ignorelist\", \"unique\": \"adminignorelist\"}, {\"caption\": \"...Clean\", \"chatcmd\": \"/admin cleanignores\", \"unique\": \"admincleanignores\"}, {\"caption\": \"Bans\", \"chatcmd\": \"/admin listbans\", \"unique\": \"adminbanlist\"}, {\"caption\": \"...Clean\", \"chatcmd\": \"/admin cleanbanlist\", \"unique\": \"admincleanbanlist\"}, {\"caption\": \"Banned IPs\", \"chatcmd\": \"/admin listips\", \"unique\": \"adminbanipsshow\"}, {\"caption\": \"...Read\", \"chatcmd\": \"/admin readiplist\", \"unique\": \"adminipread\"}, {\"caption\": \"...Write\", \"chatcmd\": \"/admin writeiplist\", \"unique\": \"adminipwrite\"}, {\"caption\": \"...Clean\", \"chatcmd\": \"/admin cleaniplist\", \"unique\": \"admincleaniplist\"}, {\"caption\": \"Blacklists\", \"chatcmd\": \"/admin listblacks\", \"unique\": \"adminblshow\"}, {\"caption\": \"...Read\", \"chatcmd\": \"/admin readblacklist\", \"unique\": \"adminblread\"}, {\"caption\": \"...Write\", \"chatcmd\": \"/admin writeblacklist\", \"unique\": \"adminblwrite\"}, {\"caption\": \"...Clean\", \"chatcmd\": \"/admin cleanblacklist\", \"unique\": \"admincleanblacklist\"}, {\"caption\": \"Guests\", \"chatcmd\": \"/admin listguests\", \"unique\": \"adminglshow\"}, {\"caption\": \"...Read\", \"chatcmd\": \"/admin readguestlist\", \"unique\": \"adminglload\"}, {\"caption\": \"...Write\", \"chatcmd\": \"/admin writeguestlist\", \"unique\": \"adminglwrite\"}, {\"caption\": \"...Clean\", \"chatcmd\": \"/admin cleanguestlist\", \"unique\": \"admincleanguestlist\"}, {\"caption\": \"Merge Global BL\", \"chatcmd\": \"/admin mergegbl\", \"unique\": \"adminmergegbl\"}, {\"caption\": \"Access Control\", \"dependencies\": \"plugin.access.php\", \"unique\": \"adminaccess\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/admin access list\", \"unique\": \"adminacclist\"}, {\"caption\": \"Reload\", \"chatcmd\": \"/admin access reload\", \"unique\": \"adminaccreload\"}, {\"type\": \"separator\", \"unique\": \"accesssep1\"}, {\"caption\": \"Help\", \"chatcmd\": \"/admin access help\", \"unique\": \"adminacchelp\"}]}]}, {\"caption\": \"Admins\", \"unique\": \"adminadmins\", \"entries\": [{\"caption\": \"Masteradmins\", \"chatcmd\": \"/admin listmasters\", \"unique\": \"adminmasters\"}, {\"caption\": \"...Abilities\", \"chatcmd\": \"/admin listabilities\", \"unique\": \"adminlistabilitiesmaster\"}, {\"caption\": \"Admins\", \"chatcmd\": \"/admin listadmins\", \"unique\": \"adminadminslist\"}, {\"caption\": \"...Abilities\", \"chatcmd\": \"/admin listabilities admin\", \"unique\": \"adminlistabilitiesadmin\"}, {\"caption\": \"Operators\", \"chatcmd\": \"/admin listops\", \"unique\": \"adminops\"}, {\"caption\": \"...Abilities\", \"chatcmd\": \"/admin listabilities op\", \"unique\": \"adminlistabilitiesop\"}, {\"caption\": \"Read Lists\", \"chatcmd\": \"/admin readabilities\", \"unique\": \"adminabload\"}, {\"caption\": \"Write Lists\", \"chatcmd\": \"/admin writeabilities\", \"unique\": \"adminabwrite\"}]}, {\"caption\": \"Game Mode\", \"unique\": \"admingamemode\", \"entries\": [{\"caption\": \"Rounds\", \"indicator\": \"fufi_getGameModeIndicator\", \"params\": \"0\", \"chatcmd\": \"/admin setgamemode rounds\", \"unique\": \"admingmrounds\"}, {\"caption\": \"Time Attack\", \"indicator\": \"fufi_getGameModeIndicator\", \"params\": \"1\", \"chatcmd\": \"/admin setgamemode ta\", \"unique\": \"admingmtimeattack\"}, {\"caption\": \"Team\", \"indicator\": \"fufi_getGameModeIndicator\", \"params\": \"2\", \"chatcmd\": \"/admin setgamemode team\", \"unique\": \"admingmteam\"}, {\"caption\": \"Laps\", \"indicator\": \"fufi_getGameModeIndicator\", \"params\": \"3\", \"chatcmd\": \"/admin setgamemode laps\", \"unique\": \"admingmlaps\"}, {\"caption\": \"Stunts\", \"indicator\": \"fufi_getGameModeIndicator\", \"params\": \"4\", \"chatcmd\": \"/admin setgamemode stunts\", \"unique\": \"admingmstunts\"}, {\"caption\": \"Cup\", \"indicator\": \"fufi_getGameModeIndicator\", \"params\": \"5\", \"chatcmd\": \"/admin setgamemode cup\", \"unique\": \"admingmcup\"}]}, {\"caption\": \"Rounds Points\", \"dependencies\": \"plugin.rpoints.php\", \"unique\": \"adminroundspoints\", \"entries\": [{\"caption\": \"List Systems\", \"chatcmd\": \"/admin rpoints list\", \"unique\": \"adminrplist\"}, {\"caption\": \"Show Current\", \"chatcmd\": \"/admin rpoints show\", \"unique\": \"adminrpshow\"}, {\"caption\": \"Set System\", \"unique\": \"adminrpset\", \"entries\": [{\"caption\": \"Formula 1 GP New\", \"chatcmd\": \"/admin rpoints f1new\", \"unique\": \"adminrpf1new\"}, {\"caption\": \"Formula 1 GP Old\", \"chatcmd\": \"/admin rpoints f1old\", \"unique\": \"adminrpf1old\"}, {\"caption\": \"MotoGP\", \"chatcmd\": \"/admin rpoints motogp\", \"unique\": \"adminrpmotogp\"}, {\"caption\": \"MotoGP + 5\", \"chatcmd\": \"/admin rpoints motogp5\", \"unique\": \"adminrpmotogp5\"}, {\"caption\": \"Formula ET 1\", \"chatcmd\": \"/admin rpoints fet1\", \"unique\": \"adminrpfet1\"}, {\"caption\": \"Formula ET 2\", \"chatcmd\": \"/admin rpoints fet2\", \"unique\": \"adminrpfet2\"}, {\"caption\": \"Formula ET 3\", \"chatcmd\": \"/admin rpoints fet3\", \"unique\": \"adminrpfet3\"}, {\"caption\": \"Champ Car WS\", \"chatcmd\": \"/admin rpoints champcar\", \"unique\": \"adminrpchampcar\"}, {\"caption\": \"Simple 5\", \"chatcmd\": \"/admin rpoints simple5\", \"unique\": \"adminrpsimple5\"}, {\"caption\": \"Simple 10\", \"chatcmd\": \"/admin rpoints simple10\", \"unique\": \"adminrpsimple10\"}]}, {\"caption\": \"Off\", \"chatcmd\": \"/admin rpoints off\", \"unique\": \"adminrpoff\"}, {\"type\": \"separator\", \"unique\": \"roundspointsep1\"}, {\"caption\": \"Help\", \"chatcmd\": \"/admin rpoints help\", \"unique\": \"adminrphelp\"}]}, {\"caption\": \"Settings\", \"unique\": \"adminserver\", \"entries\": [{\"caption\": \"Server Info\", \"chatcmd\": \"/admin server\", \"unique\": \"adminserverinfo\"}, {\"caption\": \"Server Coppers\", \"chatcmd\": \"/admin coppers\", \"unique\": \"admincoppers\"}, {\"caption\": \"Relays List/Master\", \"chatcmd\": \"/admin relays\", \"unique\": \"adminrelays\"}, {\"caption\": \"Auto Scorepanel\", \"indicator\": \"fufi_getScorePanelIndicator\", \"chatcmd\": \"/admin scorepanel\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"adminscorepanel\"}, {\"caption\": \"Rounds Finishpanel\", \"indicator\": \"fufi_getRoundsPanelIndicator\", \"chatcmd\": \"/admin roundsfinish\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"adminroundspanel\"}, {\"caption\": \"Respawn Disabled\", \"indicator\": \"fufi_getRespawnDisabledIndicator\", \"chatcmd\": \"/admin disablerespawn\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"adminrespawndisabled\"}, {\"caption\": \"Force Show Opponents\", \"indicator\": \"fufi_getForceShowAllIndicator\", \"chatcmd\": \"/admin forceshowall\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"adminforceshowall\"}, {\"caption\": \"Challenge Download Allowed\", \"indicator\": \"fufi_getChallengeDownloadIndicator\", \"chatcmd\": \"/admin acdl\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"adminacdl\"}, {\"caption\": \"Auto TimeLimit\", \"indicator\": \"fufi_getAutoTimeIndicator\", \"chatcmd\": \"/admin autotime\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"adminautotime\"}, {\"caption\": \"Debugmode\", \"indicator\": \"fufi_getDebugModeIndicator\", \"chatcmd\": \"/admin debug\", \"unique\": \"admindebug\"}, {\"caption\": \"Referee Mode\", \"unique\": \"adminrefmode\", \"entries\": [{\"caption\": \"Top 3\", \"indicator\": \"fufi_getRefModeIndicator\", \"params\": \"0\", \"chatcmd\": \"/admin setrefmode 0\", \"unique\": \"adminref0\"}, {\"caption\": \"All\", \"indicator\": \"fufi_getRefModeIndicator\", \"params\": \"1\", \"chatcmd\": \"/admin setrefmode 1\", \"unique\": \"adminref1\"}]}]}, {\"caption\": \"Method Call\", \"unique\": \"adminmethodcall\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/admin call list\", \"unique\": \"admincalllist\"}, {\"type\": \"separator\", \"unique\": \"admincallsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/admin call help\", \"unique\": \"admincallhelp1\"}]}, {\"caption\": \"Admin PM Log\", \"chatcmd\": \"/admin pmlog\", \"unique\": \"adminpmlog\"}, {\"caption\": \"Shutdown XASECO\", \"chatcmd\": \"/admin shutdown\", \"unique\": \"adminshutdown\"}, {\"caption\": \"Shutdown SERVER\", \"chatcmd\": \"/admin shutdownall\", \"unique\": \"adminshutdownall\"}, {\"type\": \"separator\", \"unique\": \"adminsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/admin helpall\", \"unique\": \"adminhelp1\"}]}, {\"caption\": \"JFreu\", \"dependencies\": \"jfreu.plugin.php\", \"unique\": \"jfreu\", \"entries\": [{\"caption\": \"UnSpec Vote\", \"chatcmd\": \"/unspec\", \"unique\": \"jfreuunspec\"}, {\"caption\": \"Ranklimit\", \"chatcmd\": \"/ranklimit\", \"unique\": \"jfreuranklimit\"}, {\"caption\": \"Players\", \"unique\": \"jfreuplayers\", \"entries\": [{\"caption\": \"All\", \"chatcmd\": \"/jfreu players\", \"unique\": \"jfreuplayerslist\"}, {\"caption\": \"Live\", \"chatcmd\": \"/jfreu players live\", \"unique\": \"jfreuplayerslive\"}, {\"caption\": \"Temp Bans\", \"chatcmd\": \"/jfreu listbans\", \"unique\": \"jfreulistbans\"}, {\"caption\": \"VIP Players\", \"chatcmd\": \"/jfreu listvips\", \"unique\": \"jfreulistvips\"}, {\"caption\": \"VIP Teams\", \"chatcmd\": \"/jfreu listvipteams\", \"unique\": \"jfreulistvipteams\"}, {\"caption\": \"Read Lists\", \"chatcmd\": \"/jfreu readlists\", \"unique\": \"jfreureadlists\"}, {\"caption\": \"Write Lists\", \"chatcmd\": \"/jfreu writelists\", \"unique\": \"jfreuwritelists\"}]}, {\"caption\": \"Rank Limiting\", \"unique\": \"jfreuranklimiting\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/jfreu listlimits\", \"unique\": \"jfreulistlimits\"}, {\"caption\": \"Enable Ranklimit\", \"indicator\": \"fufi_getRanklimitIndicator\", \"chatcmd\": \"/jfreu setrank\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"jfreusetrank\"}, {\"caption\": \"Enable Autorank\", \"indicator\": \"fufi_getAutoRankIndicator\", \"chatcmd\": \"/jfreu autorank\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"jfreuautorank\"}, {\"caption\": \"...Include VIPs\", \"indicator\": \"fufi_getAutoRankVIPIndicator\", \"chatcmd\": \"/jfreu autorankvip\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"jfreuautorankvip\"}, {\"caption\": \"Auto Change Servername\", \"indicator\": \"fufi_getAutoChangeNameIndicator\", \"chatcmd\": \"/jfreu autochangename\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"jfreuautochangename\"}, {\"caption\": \"Kick High Ranks\", \"indicator\": \"fufi_getKickHiRankIndicator\", \"chatcmd\": \"/jfreu kickhirank\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"jfreukickhirank\"}]}, {\"caption\": \"Settings\", \"unique\": \"jfreusettings\", \"entries\": [{\"caption\": \"Badwords Bot Enabled\", \"indicator\": \"fufi_getBadwordsBotIndicator\", \"chatcmd\": \"/jfreu badwords\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"jfreubadwordsenabled\"}, {\"caption\": \"Ban on Badword\", \"indicator\": \"fufi_getBadwordsBanIndicator\", \"chatcmd\": \"/jfreu badwordsban\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"jfreubadwordsban\"}, {\"caption\": \"Unspec Enabled\", \"indicator\": \"fufi_getJFreuUnspecEnabledIndicator\", \"chatcmd\": \"/jfreu unspecvote\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"jfreuunspecenabled\"}, {\"caption\": \"CallVotes Disabled\", \"indicator\": \"fufi_getJFreuVotesDisabledIndicator\", \"chatcmd\": \"/jfreu novote\", \"chatcmdparams\": \"OFF/ON\", \"unique\": \"jfreuvotesdisabled\"}, {\"caption\": \"Cancel CallVote\", \"chatcmd\": \"/jfreu cancel\", \"unique\": \"jfreucancel\"}, {\"caption\": \"Info Messages\", \"unique\": \"jfreuinfomsg\", \"entries\": [{\"caption\": \"Window\", \"indicator\": \"fufi_getJFreuInfosIndicator\", \"params\": \"2\", \"chatcmd\": \"/jfreu infomessages 2\", \"unique\": \"jfreuinfos2\"}, {\"caption\": \"Chat\", \"indicator\": \"fufi_getJFreuInfosIndicator\", \"params\": \"1\", \"chatcmd\": \"/jfreu infomessages 1\", \"unique\": \"jfreuinfos1\"}, {\"caption\": \"Off\", \"indicator\": \"fufi_getJFreuInfosIndicator\", \"params\": \"0\", \"chatcmd\": \"/jfreu infomessages 0\", \"unique\": \"jfreuinfos0\"}]}, {\"caption\": \"Read Config\", \"chatcmd\": \"/jfreu readconfig\", \"unique\": \"jfreureadconfig\"}, {\"caption\": \"Write Config\", \"chatcmd\": \"/jfreu writeconfig\", \"unique\": \"jfreuwriteconfig\"}]}, {\"caption\": \"Password\", \"chatcmd\": \"/password\", \"unique\": \"jfreupassword\"}, {\"caption\": \"Message\", \"chatcmd\": \"/message\", \"unique\": \"jfreumessage\"}, {\"type\": \"separator\", \"unique\": \"jfreuhelpsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/jfreu helpall\", \"unique\": \"jfreuhelp1\"}]}, {\"caption\": \"Tracks\", \"unique\": \"tracks\", \"entries\": [{\"caption\": \"All Tracks\", \"chatcmd\": \"/list\", \"unique\": \"fulllist\"}, {\"caption\": \"Not Finished\", \"chatcmd\": \"/list nofinish\", \"unique\": \"nofinish\"}, {\"caption\": \"No Rank\", \"chatcmd\": \"/list norank\", \"unique\": \"norank\"}, {\"caption\": \"No Goldtime\", \"chatcmd\": \"/list nogold\", \"unique\": \"nogold\"}, {\"caption\": \"No Authortime\", \"chatcmd\": \"/list noauthor\", \"unique\": \"noauthor\"}, {\"caption\": \"Not Recently Played\", \"chatcmd\": \"/list norecent\", \"unique\": \"norecent\"}, {\"type\": \"separator\", \"unique\": \"tracklistsep1\"}, {\"caption\": \"Best Records\", \"chatcmd\": \"/list best\", \"unique\": \"best\"}, {\"caption\": \"Worst Records\", \"chatcmd\": \"/list worst\", \"unique\": \"worst\"}, {\"caption\": \"Longest Tracks\", \"chatcmd\": \"/list longest\", \"unique\": \"longest\"}, {\"caption\": \"Shortest Tracks\", \"chatcmd\": \"/list shortest\", \"unique\": \"shortest\"}, {\"caption\": \"Newest Tracks\", \"chatcmd\": \"/list newest\", \"unique\": \"newest\"}, {\"caption\": \"Oldest Tracks\", \"chatcmd\": \"/list oldest\", \"unique\": \"oldest\"}, {\"caption\": \"No Vote\", \"chatcmd\": \"/list novote\", \"unique\": \"novote\"}, {\"caption\": \"TMX\", \"unique\": \"xlistmain\", \"entries\": [{\"caption\": \"All Tracks\", \"chatcmd\": \"/xlist\", \"unique\": \"xlist\"}, {\"caption\": \"Recent Tracks\", \"chatcmd\": \"/xlist recent\", \"unique\": \"xlistrecent\"}, {\"type\": \"separator\", \"unique\": \"xlistsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/xlist help\", \"unique\": \"xlisthelp1\"}]}, {\"type\": \"separator\", \"unique\": \"tracklistsep2\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/list help\", \"unique\": \"listhelp1\"}]}, {\"caption\": \"Autojuke\", \"unique\": \"autojuke\", \"entries\": [{\"caption\": \"Not Finished\", \"chatcmd\": \"/autojuke nofinish\", \"unique\": \"ajnofinish\"}, {\"caption\": \"No Rank\", \"chatcmd\": \"/autojuke norank\", \"unique\": \"ajnorank\"}, {\"caption\": \"No Goldtime\", \"chatcmd\": \"/autojuke nogold\", \"unique\": \"ajnogold\"}, {\"caption\": \"No Authortime\", \"chatcmd\": \"/autojuke noauthor\", \"unique\": \"ajnoauthor\"}, {\"caption\": \"Not Recently Played\", \"chatcmd\": \"/autojuke norecent\", \"unique\": \"ajnorecent\"}, {\"type\": \"separator\", \"unique\": \"autojukesep1\"}, {\"caption\": \"Longest Tracks\", \"chatcmd\": \"/autojuke longest\", \"unique\": \"ajlongest\"}, {\"caption\": \"Shortest Tracks\", \"chatcmd\": \"/autojuke shortest\", \"unique\": \"ajshortest\"}, {\"caption\": \"Newest Tracks\", \"chatcmd\": \"/autojuke newest\", \"unique\": \"ajnewest\"}, {\"caption\": \"Oldest Tracks\", \"chatcmd\": \"/autojuke oldest\", \"unique\": \"ajoldest\"}, {\"caption\": \"No Vote\", \"chatcmd\": \"/autojuke novote\", \"unique\": \"ajnovote\"}, {\"type\": \"separator\", \"unique\": \"autojukesep2\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/autojuke help\", \"unique\": \"ajhelp1\"}]}, {\"caption\": \"Jukebox\", \"globalvariable\": \"feature_jukebox\", \"unique\": \"jukebox\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/jukebox display\", \"unique\": \"jukeboxdisplay\"}, {\"caption\": \"History\", \"chatcmd\": \"/history\", \"unique\": \"jukeboxhistory\"}, {\"type\": \"separator\", \"unique\": \"jukeboxsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/jukebox help\", \"unique\": \"jukeboxhelp1\"}]}, {\"caption\": \"Records\", \"dependencies\": \"chat.records.php, chat.records2.php, chat.recrels.php\", \"unique\": \"records\", \"entries\": [{\"caption\": \"Local\", \"unique\": \"localrecords\", \"entries\": [{\"caption\": \"All\", \"chatcmd\": \"/recs\", \"unique\": \"localall\"}, {\"caption\": \"Personal Best\", \"chatcmd\": \"/pb\", \"unique\": \"localpb\"}, {\"caption\": \"New Records\", \"chatcmd\": \"/newrecs\", \"unique\": \"recnew\"}, {\"caption\": \"Live Records\", \"chatcmd\": \"/liverecs\", \"unique\": \"reconline\"}, {\"caption\": \"First Record\", \"chatcmd\": \"/firstrec\", \"unique\": \"recfirst\"}, {\"caption\": \"Last Record\", \"chatcmd\": \"/lastrec\", \"unique\": \"reclast\"}, {\"caption\": \"Next Better\", \"chatcmd\": \"/nextrec\", \"unique\": \"relnext\"}, {\"caption\": \"Difference\", \"chatcmd\": \"/diffrec\", \"unique\": \"reldiff\"}, {\"caption\": \"Range\", \"chatcmd\": \"/recrange\", \"unique\": \"relrange\"}, {\"caption\": \"Sector Times\", \"chatcmd\": \"/sectms\", \"dependencies\": \"plugin.checkpoints.php\", \"unique\": \"sectms\"}, {\"type\": \"separator\", \"unique\": \"localrecsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/recs help\", \"unique\": \"localrecshelp1\"}]}, {\"caption\": \"My Best\", \"chatcmd\": \"/best\", \"unique\": \"recbest\"}, {\"caption\": \"My Worst\", \"chatcmd\": \"/worst\", \"unique\": \"recworst\"}, {\"caption\": \"My Summary\", \"chatcmd\": \"/summary\", \"unique\": \"recsummary\"}, {\"caption\": \"Summaries\", \"chatcmd\": \"/topsums\", \"unique\": \"rectopsums\"}, {\"caption\": \"Dedimania\", \"dependencies\": \"chat.dedimania.php, plugin.dedimania.php\", \"unique\": \"dedimania\", \"entries\": [{\"caption\": \"All\", \"chatcmd\": \"/dedirecs\", \"unique\": \"dedirecs\"}, {\"caption\": \"Personal Best\", \"chatcmd\": \"/dedipb\", \"unique\": \"dedipb\"}, {\"caption\": \"New Records\", \"chatcmd\": \"/dedinew\", \"unique\": \"dedinew\"}, {\"caption\": \"Live Records\", \"chatcmd\": \"/dedilive\", \"unique\": \"dedilive\"}, {\"caption\": \"First Record\", \"chatcmd\": \"/dedifirst\", \"unique\": \"dedifirst\"}, {\"caption\": \"Last Record\", \"chatcmd\": \"/dedilast\", \"unique\": \"dedilast\"}, {\"caption\": \"Next Better\", \"chatcmd\": \"/dedinext\", \"unique\": \"dedinext\"}, {\"caption\": \"Difference\", \"chatcmd\": \"/dedidiff\", \"unique\": \"dedidiff\"}, {\"caption\": \"Range\", \"chatcmd\": \"/dedirange\", \"unique\": \"dedirange\"}, {\"caption\": \"Sector Times\", \"chatcmd\": \"/dedisectms\", \"unique\": \"dedisectms\"}, {\"caption\": \"Stats\", \"chatcmd\": \"/dedistats\", \"unique\": \"dedistats\"}, {\"type\": \"separator\", \"unique\": \"dedisep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/dedirecs help\", \"unique\": \"dedihelp1\"}]}, {\"caption\": \"TMX Records\", \"chatcmd\": \"/tmxrecs\", \"dependencies\": \"plugin.tmxinfo.php\", \"unique\": \"tmxrecords\"}]}, {\"caption\": \"Players\", \"dependencies\": \"chat.players.php, chat.players2.php\", \"unique\": \"players\", \"entries\": [{\"caption\": \"All\", \"chatcmd\": \"/players\", \"unique\": \"onlineplayers\"}, {\"caption\": \"Ranks\", \"chatcmd\": \"/ranks\", \"unique\": \"onlineranks\"}, {\"caption\": \"Clans\", \"chatcmd\": \"/clans\", \"unique\": \"onlineclans\"}, {\"caption\": \"Top 100 Active\", \"dependencies\": \"plugin.rasp.php\", \"chatcmd\": \"/active\", \"unique\": \"raspactive\"}, {\"caption\": \"Top 100 Ranks\", \"dependencies\": \"plugin.rasp.php\", \"chatcmd\": \"/top100\", \"unique\": \"rasptop100\"}, {\"caption\": \"Top 100 Records\", \"dependencies\": \"chat.records.php, chat.records2.php, chat.recrels.php\", \"chatcmd\": \"/toprecs\", \"unique\": \"rectoprecs\"}, {\"caption\": \"Top 100 Winners\", \"dependencies\": \"plugin.rasp.php\", \"chatcmd\": \"/topwins\", \"unique\": \"rasptopwins\"}, {\"caption\": \"Top 100 Donators\", \"dependencies\": \"plugin.donate.php\", \"chatcmd\": \"/topdons\", \"unique\": \"topdons\"}, {\"caption\": \"Top Clans\", \"chatcmd\": \"/topclans\", \"unique\": \"topclans\"}, {\"caption\": \"My Mutes\", \"dependencies\": \"plugin.muting.php\", \"chatcmd\": \"/mutelist\", \"unique\": \"mutelist\"}]}, {\"caption\": \"Votes\", \"dependencies\": \"plugin.rasp_votes.php\", \"globalvariable\": \"feature_votes\", \"unique\": \"votes\", \"entries\": [{\"caption\": \"End Round\", \"chatcmd\": \"/endround\", \"unique\": \"votesendround\"}, {\"caption\": \"Ladder Restart\", \"chatcmd\": \"/ladder\", \"unique\": \"votesladder\"}, {\"caption\": \"Replay Track\", \"chatcmd\": \"/replay\", \"unique\": \"votesreplay\"}, {\"caption\": \"Skip Track\", \"chatcmd\": \"/skip\", \"unique\": \"votesskip\"}, {\"caption\": \"Cancel Vote\", \"chatcmd\": \"/cancel\", \"unique\": \"votescancel\"}, {\"type\": \"separator\", \"unique\": \"voteshelpsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/helpvote\", \"unique\": \"voteshelp1\"}]}, {\"caption\": \"Music\", \"dependencies\": \"plugin.musicserver.php\", \"unique\": \"music\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/music list\", \"unique\": \"musiclist\"}, {\"caption\": \"Jukebox\", \"chatcmd\": \"/music jb\", \"unique\": \"musicjb\"}, {\"caption\": \"Drop Song\", \"chatcmd\": \"/music drop\", \"unique\": \"musicdrop\"}, {\"caption\": \"Current Song\", \"chatcmd\": \"/music current\", \"unique\": \"musiccurrent\"}, {\"caption\": \"Settings\", \"chatcmd\": \"/music settings\", \"unique\": \"musicsettings\"}, {\"caption\": \"Administration\", \"ability\": \"chat_musicadmin\", \"unique\": \"musicadmin\", \"entries\": [{\"caption\": \"Reload\", \"chatcmd\": \"/music reload\", \"unique\": \"musicreload\"}, {\"caption\": \"Next\", \"chatcmd\": \"/music next\", \"unique\": \"musicnext\"}, {\"caption\": \"Sort\", \"chatcmd\": \"/music sort\", \"unique\": \"musicsort\"}, {\"caption\": \"Shuffle\", \"chatcmd\": \"/music shuffle\", \"unique\": \"musicshuffle\"}, {\"type\": \"separator\", \"unique\": \"musicadminsep1\"}, {\"caption\": \"Track Override\", \"indicator\": \"fufi_getMusicOverrideIndicator\", \"chatcmd\": \"/music override\", \"chatcmdparams\": \"off/on\", \"unique\": \"musicoverride\"}, {\"caption\": \"AutoNext\", \"indicator\": \"fufi_getMusicAutonextIndicator\", \"chatcmd\": \"/music autonext\", \"chatcmdparams\": \"off/on\", \"unique\": \"musicautonext\"}, {\"caption\": \"AutoShuffle\", \"indicator\": \"fufi_getMusicAutoshuffleIndicator\", \"chatcmd\": \"/music autoshuffle\", \"chatcmdparams\": \"off/on\", \"unique\": \"musicautoshuffle\"}, {\"caption\": \"Allow Jukebox\", \"indicator\": \"fufi_getMusicJukeboxIndicator\", \"chatcmd\": \"/music allowjb\", \"chatcmdparams\": \"off/on\", \"unique\": \"musicallowjb\"}, {\"caption\": \"Strip Subdirs\", \"indicator\": \"fufi_getMusicStripDirsIndicator\", \"chatcmd\": \"/music stripdirs\", \"chatcmdparams\": \"off/on\", \"unique\": \"musicstripdirs\"}, {\"caption\": \"Strip Extensions\", \"indicator\": \"fufi_getMusicStripExtsIndicator\", \"chatcmd\": \"/music stripexts\", \"chatcmdparams\": \"off/on\", \"unique\": \"musicstripexts\"}, {\"caption\": \"Shutdown Plugin\", \"chatcmd\": \"/music off\", \"unique\": \"musicshutdown\"}]}, {\"type\": \"separator\", \"unique\": \"musicsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/music help\", \"unique\": \"musichelp1\"}]}, {\"caption\": \"Customize HUD\", \"unique\": \"custommenu\", \"entries\": [{\"caption\": \"Checkpoint Tracking\", \"indicator\": \"fufi_getCPSIndicator\", \"chatcmd\": \"/cps\", \"chatcmdparams\": \"off/\", \"dependencies\": \"plugin.checkpoints.php\", \"unique\": \"cps\"}, {\"caption\": \"Dedimania CP Tracking\", \"indicator\": \"fufi_getDediCPSIndicator\", \"chatcmd\": \"/dedicps\", \"chatcmdparams\": \"off/\", \"dependencies\": \"chat.dedimania.php\", \"unique\": \"dedicps\"}, {\"caption\": \"Spectator CP Tracking\", \"indicator\": \"fufi_getCPSSpecIndicator\", \"chatcmd\": \"/cpsspec\", \"dependencies\": \"plugin.checkpoints.php\", \"unique\": \"cpsspec\"}, {\"caption\": \"Style\", \"dependencies\": \"plugin.style.php\", \"unique\": \"stylemenu\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/style list\", \"unique\": \"stylelist\"}, {\"caption\": \"Default\", \"chatcmd\": \"/style default\", \"unique\": \"styledefault\"}, {\"caption\": \"Off\", \"chatcmd\": \"/style off\", \"unique\": \"styleoff\"}, {\"type\": \"separator\", \"unique\": \"stylesep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/style help\", \"unique\": \"stylehelp1\"}]}, {\"caption\": \"Records Panel\", \"dependencies\": \"plugin.panels.php\", \"unique\": \"recpanel\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/recpanel list\", \"unique\": \"recpanellist\"}, {\"caption\": \"Default\", \"chatcmd\": \"/recpanel default\", \"unique\": \"recpaneldefault\"}, {\"caption\": \"Off\", \"chatcmd\": \"/recpanel off\", \"unique\": \"recpaneloff\"}, {\"type\": \"separator\", \"unique\": \"recpanelsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/recpanel help\", \"unique\": \"recpanelhelp1\"}]}, {\"caption\": \"Vote Panel\", \"dependencies\": \"plugin.panels.php\", \"unique\": \"votepanel\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/votepanel list\", \"unique\": \"votepanellist\"}, {\"caption\": \"Default\", \"chatcmd\": \"/votepanel default\", \"unique\": \"votepaneldefault\"}, {\"caption\": \"Off\", \"chatcmd\": \"/votepanel off\", \"unique\": \"votepaneloff\"}, {\"type\": \"separator\", \"unique\": \"votepanelsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/votepanel help\", \"unique\": \"votepanelhelp1\"}]}, {\"caption\": \"Donate Panel\", \"dependencies\": \"plugin.panels.php\", \"rights\": \"TMUF\", \"unique\": \"donpanel\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/donpanel list\", \"unique\": \"donpanellist\"}, {\"caption\": \"Default\", \"chatcmd\": \"/donpanel default\", \"unique\": \"donpaneldefault\"}, {\"caption\": \"Off\", \"chatcmd\": \"/donpanel off\", \"unique\": \"donpaneloff\"}, {\"type\": \"separator\", \"unique\": \"donpanelsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/donpanel help\", \"unique\": \"donpanelhelp1\"}]}, {\"caption\": \"Admin Panel\", \"dependencies\": \"plugin.panels.php\", \"ability\": \"panel\", \"unique\": \"adminpanel\", \"entries\": [{\"caption\": \"List\", \"chatcmd\": \"/admin panel list\", \"unique\": \"adminpanellist\"}, {\"caption\": \"Default\", \"chatcmd\": \"/admin panel default\", \"unique\": \"adminpaneldefault\"}, {\"caption\": \"Off\", \"chatcmd\": \"/admin panel off\", \"unique\": \"adminpaneloff\"}, {\"type\": \"separator\", \"unique\": \"adminpanelsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/admin panel help\", \"unique\": \"adminpanelhelp1\"}]}]}, {\"caption\": \"Info\", \"unique\": \"infomenu\", \"entries\": [{\"caption\": \"Personal\", \"unique\": \"personalinfo\", \"entries\": [{\"caption\": \"My Stats\", \"chatcmd\": \"/stats\", \"dependencies\": \"chat.stats.php\", \"unique\": \"mystats\"}, {\"caption\": \"My Wins\", \"chatcmd\": \"/wins\", \"dependencies\": \"chat.wins.php\", \"unique\": \"mywins\"}, {\"caption\": \"My Settings\", \"chatcmd\": \"/settings\", \"dependencies\": \"chat.stats.php\", \"unique\": \"mysettings\"}, {\"caption\": \"Current Rank\", \"dependencies\": \"plugin.rasp.php\", \"chatcmd\": \"/rank\", \"unique\": \"rasprank\"}, {\"caption\": \"Next Rank\", \"chatcmd\": \"/nextrank\", \"dependencies\": \"plugin.rasp_nextrank\", \"unique\": \"raspnextrank\"}, {\"caption\": \"Last Window\", \"chatcmd\": \"/lastwin\", \"dependencies\": \"chat.lastwin.php\", \"unique\": \"lastwin\"}]}, {\"caption\": \"Track\", \"unique\": \"trackinfo\", \"entries\": [{\"caption\": \"Playtime\", \"chatcmd\": \"/playtime\", \"dependencies\": \"plugin.track.php\", \"unique\": \"playtime\"}, {\"caption\": \"Current Track\", \"chatcmd\": \"/track\", \"dependencies\": \"plugin.track.php\", \"unique\": \"currenttrackinfo\"}, {\"caption\": \"Next Track\", \"chatcmd\": \"/nextmap\", \"dependencies\": \"plugin.rasp_nextmap.php\", \"unique\": \"shownext\"}, {\"caption\": \"TMX Info\", \"chatcmd\": \"/tmxinfo\", \"dependencies\": \"plugin.tmxinfo.php\", \"unique\": \"tmxinfo\"}, {\"caption\": \"Track Song\", \"chatcmd\": \"/song url\", \"dependencies\": \"chat.songmod.php\", \"unique\": \"song\"}, {\"caption\": \"Track Mod\", \"chatcmd\": \"/mod url\", \"dependencies\": \"chat.songmod.php\", \"unique\": \"mod\"}, {\"caption\": \"Track Karma\", \"dependencies\": \"plugin.rasp_karma.php\", \"globalvariable\": \"feature_karma\", \"chatcmd\": \"/karma\", \"unique\": \"karma\"}]}, {\"caption\": \"Logs\", \"unique\": \"logsinfo\", \"entries\": [{\"caption\": \"Chat Log\", \"chatcmd\": \"/chatlog\", \"dependencies\": \"plugin.chatlog.php\", \"unique\": \"chatlog\"}, {\"caption\": \"Message Log\", \"chatcmd\": \"/msglog\", \"dependencies\": \"plugin.msglog.php\", \"unique\": \"msglog\"}, {\"caption\": \"My PM Log\", \"chatcmd\": \"/pmlog\", \"dependencies\": \"plugin.rasp_chat.php\", \"unique\": \"pmlog\"}]}, {\"caption\": \"Server\", \"unique\": \"serverinfo\", \"entries\": [{\"caption\": \"Details\", \"chatcmd\": \"/server\", \"dependencies\": \"chat.server.php\", \"unique\": \"serverfullinfo\"}, {\"caption\": \"Rounds Points\", \"chatcmd\": \"/rpoints\", \"dependencies\": \"plugin.rpoints.php\", \"unique\": \"rpoints\"}, {\"caption\": \"XASECO\", \"chatcmd\": \"/xaseco\", \"dependencies\": \"chat.server.php\", \"unique\": \"xaseco\"}, {\"caption\": \"Plugins\", \"chatcmd\": \"/plugins\", \"dependencies\": \"chat.server.php\", \"unique\": \"plugins\"}, {\"caption\": \"Date/Time\", \"chatcmd\": \"/time\", \"dependencies\": \"plugin.track.php\", \"unique\": \"time\"}]}, {\"caption\": \"Nations\", \"chatcmd\": \"/nations\", \"dependencies\": \"chat.server.php\", \"unique\": \"nationsinfo\"}]}, {\"caption\": \"Donate\", \"dependencies\": \"plugin.donate.php\", \"rights\": \"TMUF\", \"unique\": \"donate\", \"entries\": [{\"caption\": \"10 Coppers\", \"chatcmd\": \"/donate 10\", \"unique\": \"don10\"}, {\"caption\": \"25 Coppers\", \"chatcmd\": \"/donate 25\", \"unique\": \"don25\"}, {\"caption\": \"50 Coppers\", \"chatcmd\": \"/donate 50\", \"unique\": \"don50\"}, {\"caption\": \"75 Coppers\", \"chatcmd\": \"/donate 75\", \"unique\": \"don75\"}, {\"caption\": \"100 Coppers\", \"chatcmd\": \"/donate 100\", \"unique\": \"don100\"}, {\"caption\": \"150 Coppers\", \"chatcmd\": \"/donate 150\", \"unique\": \"don150\"}, {\"caption\": \"200 Coppers\", \"chatcmd\": \"/donate 200\", \"unique\": \"don200\"}, {\"caption\": \"500 Coppers\", \"chatcmd\": \"/donate 500\", \"unique\": \"don500\"}, {\"caption\": \"1000 Coppers\", \"chatcmd\": \"/donate 1000\", \"unique\": \"don1000\"}, {\"caption\": \"2000 Coppers\", \"chatcmd\": \"/donate 2000\", \"unique\": \"don2000\"}]}, {\"caption\": \"Match\", \"dependencies\": \"plugin.matchsave.php\", \"unique\": \"match\", \"entries\": [{\"caption\": \"Standings\", \"chatcmd\": \"/standings\", \"unique\": \"matchstandings\"}, {\"caption\": \"Administration\", \"ability\": \"chat_match\", \"unique\": \"matchadmin\", \"entries\": [{\"caption\": \"Plugin Enabled\", \"indicator\": \"fufi_getMatchEnabledIndicator\", \"chatcmd\": \"/match\", \"chatcmdparams\": \"off/on\", \"unique\": \"matchenabled\"}, {\"caption\": \"Settings\", \"unique\": \"matchsettings\", \"entries\": [{\"caption\": \"Others Score\", \"indicator\": \"fufi_getMatchOthersIndicator\", \"chatcmd\": \"/match others\", \"chatcmdparams\": \"off/on\", \"unique\": \"matchothers\"}, {\"caption\": \"Teamforce\", \"indicator\": \"fufi_getMatchTeamforceIndicator\", \"chatcmd\": \"/match force\", \"chatcmdparams\": \"off/on\", \"unique\": \"matchforce\"}, {\"caption\": \"Teamchat\", \"indicator\": \"fufi_getMatchTeamchatIndicator\", \"chatcmd\": \"/match tc\", \"chatcmdparams\": \"off/on\", \"unique\": \"matchchat\"}]}, {\"caption\": \"Lists\", \"unique\": \"matchlists\", \"entries\": [{\"caption\": \"Teams\", \"chatcmd\": \"/match teams\", \"unique\": \"matchteams\"}, {\"caption\": \"Players\", \"chatcmd\": \"/match players\", \"unique\": \"matchplayers\"}, {\"caption\": \"Playlists\", \"chatcmd\": \"/match list\", \"unique\": \"matchplaylists\"}]}, {\"type\": \"separator\", \"unique\": \"matchsep1\"}, {\"caption\": \"Start Match\", \"unique\": \"matchstart\", \"entries\": [{\"caption\": \"Rounds\", \"unique\": \"msrounds\", \"entries\": [{\"caption\": \"1 Round\", \"chatcmd\": \"/match start 1\", \"unique\": \"msrounds1\"}, {\"caption\": \"2 Rounds\", \"chatcmd\": \"/match start 2\", \"unique\": \"msrounds2\"}, {\"caption\": \"3 Rounds\", \"chatcmd\": \"/match start 3\", \"unique\": \"msrounds3\"}, {\"caption\": \"4 Rounds\", \"chatcmd\": \"/match start 4\", \"unique\": \"msrounds4\"}, {\"caption\": \"5 Rounds\", \"chatcmd\": \"/match start 5\", \"unique\": \"msrounds5\"}]}, {\"caption\": \"Pointlimit\", \"unique\": \"mspoints\", \"entries\": [{\"caption\": \"12 Points\", \"chatcmd\": \"/match start pl 12\", \"unique\": \"mspoints12\"}, {\"caption\": \"22 Points\", \"chatcmd\": \"/match start pl 22\", \"unique\": \"mspoints22\"}, {\"caption\": \"32 Points\", \"chatcmd\": \"/match start pl 32\", \"unique\": \"mspoints32\"}, {\"caption\": \"42 Points\", \"chatcmd\": \"/match start pl 42\", \"unique\": \"mspoints42\"}, {\"caption\": \"52 Points\", \"chatcmd\": \"/match start pl 52\", \"unique\": \"mspoints52\"}]}]}, {\"caption\": \"Start AutoMatch\", \"unique\": \"matchauto\", \"entries\": [{\"caption\": \"Rounds\", \"unique\": \"msarounds\", \"entries\": [{\"caption\": \"1 Round\", \"chatcmd\": \"/match auto 1\", \"unique\": \"msarounds1\"}, {\"caption\": \"2 Rounds\", \"chatcmd\": \"/match auto 2\", \"unique\": \"msarounds2\"}, {\"caption\": \"3 Rounds\", \"chatcmd\": \"/match auto 3\", \"unique\": \"msarounds3\"}, {\"caption\": \"4 Rounds\", \"chatcmd\": \"/match auto 4\", \"unique\": \"msarounds4\"}, {\"caption\": \"5 Rounds\", \"chatcmd\": \"/match auto 5\", \"unique\": \"msarounds5\"}]}, {\"caption\": \"Pointlimit\", \"unique\": \"msapoints\", \"entries\": [{\"caption\": \"12 Points\", \"chatcmd\": \"/match auto pl 12\", \"unique\": \"msapoints12\"}, {\"caption\": \"22 Points\", \"chatcmd\": \"/match auto pl 22\", \"unique\": \"msapoints22\"}, {\"caption\": \"32 Points\", \"chatcmd\": \"/match auto pl 32\", \"unique\": \"msapoints32\"}, {\"caption\": \"42 Points\", \"chatcmd\": \"/match auto pl 42\", \"unique\": \"msapoints42\"}, {\"caption\": \"52 Points\", \"chatcmd\": \"/match auto pl 52\", \"unique\": \"msapoints52\"}]}]}, {\"caption\": \"End Match\", \"chatcmd\": \"/match end\", \"unique\": \"matchend\"}, {\"type\": \"separator\", \"unique\": \"matchhelpsep2\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/match help\", \"unique\": \"mahelp1\"}]}, {\"type\": \"separator\", \"unique\": \"matchhelpsep1\"}, {\"type\": \"help\", \"caption\": \"Help\", \"chatcmd\": \"/team help\", \"unique\": \"matchhelp1\"}]}, {\"type\": \"separator\", \"unique\": \"mainhelpsep\"}, {\"type\": \"help\", \"caption\": \"Help\", \"unique\": \"helpgroup\", \"entries\": [{\"type\": \"help\", \"caption\": \"Main\", \"chatcmd\": \"/helpall\", \"dependencies\": \"chat.help.php\", \"unique\": \"mainhelp\"}, {\"type\": \"help\", \"caption\": \"Admin\", \"chatcmd\": \"/admin helpall\", \"ability\": \"helpall\", \"unique\": \"adminhelp\"}, {\"type\": \"help\", \"caption\": \"JFreu\", \"dependencies\": \"jfreu.chat.php\", \"chatcmd\": \"/jfreu helpall\", \"unique\": \"jfreuhelp\"}, {\"type\": \"help\", \"caption\": \"Tracks\", \"chatcmd\": \"/list help\", \"unique\": \"listhelp\"}, {\"type\": \"help\", \"caption\": \"TMX Search\", \"chatcmd\": \"/xlist help\", \"unique\": \"xlisthelp\"}, {\"type\": \"help\", \"caption\": \"Autojuke\", \"globalvariable\": \"feature_jukebox\", \"chatcmd\": \"/autojuke help\", \"unique\": \"ajhelp\"}, {\"type\": \"help\", \"caption\": \"Jukebox\", \"globalvariable\": \"feature_jukebox\", \"chatcmd\": \"/jukebox help\", \"unique\": \"jukeboxhelp\"}, {\"type\": \"help\", \"caption\": \"Local Recs\", \"chatcmd\": \"/recs help\", \"unique\": \"localrecshelp\"}, {\"type\": \"help\", \"caption\": \"Dedimania Recs\", \"chatcmd\": \"/dedirecs help\", \"dependencies\": \"chat.dedimania.php, plugin.dedimania.php\", \"unique\": \"dedirecshelp\"}, {\"type\": \"help\", \"caption\": \"Dedimania Info\", \"chatcmd\": \"/helpdedi\", \"dependencies\": \"chat.dedimania.php, plugin.dedimania.php\", \"unique\": \"dedihelp\"}, {\"type\": \"help\", \"caption\": \"Vote\", \"dependencies\": \"plugin.rasp_votes.php\", \"chatcmd\": \"/helpvote\", \"unique\": \"voteshelp\"}, {\"type\": \"help\", \"caption\": \"Music\", \"dependencies\": \"plugin.musicserver.php\", \"chatcmd\": \"/music help\", \"unique\": \"musichelp\"}, {\"type\": \"help\", \"caption\": \"Style\", \"chatcmd\": \"/style help\", \"dependencies\": \"plugin.style.php\", \"unique\": \"stylehelp\"}, {\"type\": \"help\", \"caption\": \"Records Panel\", \"dependencies\": \"plugin.panels.php\", \"chatcmd\": \"/recpanel help\", \"unique\": \"recpanelhelp\"}, {\"type\": \"help\", \"caption\": \"Vote Panel\", \"dependencies\": \"plugin.panels.php\", \"chatcmd\": \"/votepanel help\", \"unique\": \"votepanelhelp\"}, {\"type\": \"help\", \"caption\": \"Donate Panel\", \"dependencies\": \"plugin.panels.php\", \"chatcmd\": \"/donpanel help\", \"unique\": \"donpanelhelp\"}, {\"type\": \"help\", \"caption\": \"Admin Panel\", \"dependencies\": \"plugin.panels.php\", \"ability\": \"panel\", \"chatcmd\": \"/admin panel help\", \"unique\": \"adminpanelhelp\"}, {\"type\": \"help\", \"caption\": \"Access Control\", \"dependencies\": \"plugin.access.php\", \"ability\": \"access\", \"chatcmd\": \"/admin access help\", \"unique\": \"adminaccesshelp\"}, {\"type\": \"help\", \"caption\": \"Rounds Points\", \"dependencies\": \"plugin.rpoints.php\", \"ability\": \"rpoints\", \"chatcmd\": \"/admin rpoints help\", \"unique\": \"adminrpointshelp\"}, {\"type\": \"help\", \"caption\": \"Method Call\", \"ability\": \"call\", \"chatcmd\": \"/admin call help\", \"unique\": \"admincallhelp\"}, {\"type\": \"help\", \"caption\": \"Match\", \"dependencies\": \"plugin.matchsave.php\", \"chatcmd\": \"/team help\", \"unique\": \"matchhelp\"}, {\"type\": \"help\", \"caption\": \"Match Admin\", \"ability\": \"chat_match\", \"dependencies\": \"plugin.matchsave.php\", \"chatcmd\": \"/team help\", \"unique\": \"mahelp\"}, {\"type\": \"separator\", \"unique\": \"mainhelpsep1\"}, {\"caption\": \"Leave Server\", \"chatcmd\": \"/bootme\", \"unique\": \"bootme\"}]}]\n"
+
+[ui.menu.styles]
+
+[ui.menu.styles.menubutton]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[ui.menu.styles.menubackground]
+style = "Bgs1"
+substyle = "BgTitle3"
+
+[ui.menu.styles.menuicon]
+style = "Icons128x128_1"
+substyle = "United"
+
+[ui.menu.styles.menuentry]
+style = "BgsPlayerCard"
+substyle = "BgCardSystem"
+
+[ui.menu.styles.menuentryactive]
+style = "BgsPlayerCard"
+substyle = "BgMediaTracker"
+
+[ui.menu.styles.menugroupicon]
+style = "Icons128x128_1"
+substyle = "Browse"
+
+[ui.menu.styles.menuhelpicon]
+style = "Icons64x64_1"
+substyle = "TrackInfo"
+
+[ui.menu.styles.menuactionicon]
+style = "Icons64x64_1"
+substyle = "ToolLeague1"
+
+[ui.menu.styles.separator]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[ui.menu.styles.indicatorfalse]
+style = "Icons64x64_1"
+substyle = "LvlRed"
+
+[ui.menu.styles.indicatortrue]
+style = "Icons64x64_1"
+substyle = "LvlGreen"
+
+[ui.menu.styles.indicatoronhold]
+style = "Icons64x64_1"
+substyle = "LvlYellow"
+
+
+
+[ui.karma]
+number_format = "english"
+show_welcome = "true"
+allow_public_vote = "true"
+show_at_start = "true"
+show_details = "true"
+show_votes = "true"
+show_karma = "true"
+require_finish = "1"
+remind_to_vote = "score"
+score_mx_window = "true"
+messages_in_window = "true"
+show_player_vote_public = "true"
+save_karma_also_local = "true"
+sync_global_karma_local = "true"
+karma_calculation_method = "default"
+uptodate_check = "true"
+uptodate_info = "default"
+wait_timeout = "40"
+connect_timeout = "30"
+keepalive_min_timeout = "100"
+
+[ui.karma.widget_styles]
+
+[ui.karma.widget_styles.vote_buttons]
+
+[ui.karma.widget_styles.vote_buttons.positive]
+bgcolor_default = "DFDF"
+bgcolor_focus = "FFFF"
+text_color = "070F"
+
+[ui.karma.widget_styles.vote_buttons.negative]
+bgcolor_default = "FDDF"
+bgcolor_focus = "FFFF"
+text_color = "700F"
+
+[ui.karma.widget_styles.vote_buttons.votes]
+bgcolor_disabled = "9CFF"
+bgcolor_vote = "F70F"
+
+[ui.karma.widget_styles.race]
+title = "$FFFManiaKarma"
+icon_style = "Icons64x64_1"
+icon_substyle = "ToolLeague1"
+background_style = "Bgs1InRace"
+background_substyle = "NavButton"
+title_style = "BgsPlayerCard"
+title_substyle = "BgRacePlayerName"
+
+[ui.karma.widget_styles.score]
+title = "$FFFManiaKarma"
+icon_style = "Icons64x64_1"
+icon_substyle = "ToolLeague1"
+background_style = "BgsPlayerCard"
+background_substyle = "BgRacePlayerName"
+title_style = "BgsPlayerCard"
+title_substyle = "ProgressBar"
+
+[ui.karma.reminder_window]
+display = "score"
+
+[ui.karma.reminder_window.race]
+pos_x = "-41"
+pos_y = "-29.35"
+
+[ui.karma.reminder_window.score]
+pos_x = "-41"
+pos_y = "-26"
+
+[ui.karma.karma_lottery]
+enabled = "false"
+minimum_players = "5"
+coppers_win = "5"
+minimum_server_coppers = "50"
+
+[ui.karma.karma_widget]
+
+[ui.karma.karma_widget.gamemode]
+
+[ui.karma.karma_widget.gamemode.rounds]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "32.86"
+
+[ui.karma.karma_widget.gamemode.time_attack]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "32.86"
+
+[ui.karma.karma_widget.gamemode.team]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "32.86"
+
+[ui.karma.karma_widget.gamemode.laps]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "27.36"
+
+[ui.karma.karma_widget.gamemode.stunts]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "17.5"
+
+[ui.karma.karma_widget.gamemode.cup]
+enabled = "true"
+pos_x = "49.2"
+pos_y = "32.86"
+
+[ui.karma.karma_widget.gamemode.score]
+enabled = "true"
+pos_x = "47.8"
+pos_y = "33.2"
+
+[ui.karma.messages]
+welcome = "{#server}*** This Server uses the ManiaKarma world Track vote system at {#highlite}$l[{1}]{2}$l{br}{#server}*** Type {#highlite}/karma help{#server} for more info."
+uptodate_ok = "{#emotic}*** This ManiaKarma plugin version {#highlite}{1}{#emotic} is up to date."
+uptodate_new = "{#emotic}*** New ManiaKarma plugin version {#highlite}{1}{#emotic} available from {#highlite}{2}"
+uptodate_failed = "{#error}*** Could not check plugin version, connection failed."
+karma_message = "{#server}> {#karma}Karma of {#highlite}{1}{#karma} is {#highlite}{2}"
+karma_your_vote = "{#karma}, you think this Track is {#highlite}{1}{#karma}. Command {#highlite}{2}"
+karma_not_voted = "{#karma}, you have {#highlite}not yet voted!"
+karma_details = "{#server}> {#karma}Fantastic: {#highlite}{2}%{#karma} ($n{#highlite}{3}{#karma}$m), Beautiful: {#highlite}{4}%{#karma} ($n{#highlite}{5}{#karma}$m), Good: {#highlite}{6}%{#karma} ($n{#highlite}{7}{#karma}$m), Bad: {#highlite}{8}%{#karma} ($n{#highlite}{9}{#karma}$m), Poor: {#highlite}{10}%{#karma} ($n{#highlite}{11}{#karma}$m), Waste: {#highlite}{12}%{#karma} ($n{#highlite}{13}{#karma}$m)"
+karma_done = "{#server}> {#karma}Vote successful for Track {#highlite}{1}{#karma}!"
+karma_change = "{#server}> {#karma}Vote changed for Track {#highlite}{1}{#karma}!"
+karma_voted = "{#server}> {#karma}You have already voted for this Track"
+karma_remind = "{#server}> {#karma}Remember to vote karma for this Track! Type {#highlite}/karma help{#server} for more info."
+karma_require_finish = "{#server}> {#error}You need to finish this Track at least {#highlite}$I {1}{#error} time{2} before being able to vote!"
+karma_no_public = "{#server}> {#error}Public karma votes disabled, use $i{#highlite}{1}{#error} instead!"
+karma_list_help = "{#server}> {#emotic}Use {#highlite}/list{#emotic} first - Type {#highlite}/list help{#emotic} for more info."
+karma_help = "{#server}This is the World Track vote System, with this system all votes are stored in a central Database and not only at this Server. The Karma of each Track {#server}are from all votes Worldwide.{br}{br}The Track-Authors and the Server-Admins need to know how good the Tracks are, so please vote all Tracks!{br}{br}{#server}You can vote with:{br}  {#highlite}/+++{#server} for fantastic{br}  {#highlite}/++{#server}   for beautiful{br}  {#highlite}/+{#server}     for good{br}  {#highlite}/-{#server}      for bad{br}  {#highlite}/--{#server}     for poor{br}  {#highlite}/---{#server}    for waste{br}{br}{#server}You can also use the {#highlite}Karma-Widget{#server} or the {#highlite}Reminder-Window{#server} at the Scoretable.{br}{br}{#server}Enter {#highlite}/karma{#server} to see the Karma of the current Track.{br}{br}{#server}Enter {#highlite}/karma details{#server} to see the detailed Karma of the current Track."
+karma_reminder_at_score = "How did you like this Track?"
+karma_vote_singular = "vote"
+karma_vote_plural = "votes"
+karma_you_have_voted = "You have voted:"
+karma_fantastic = "fantastic"
+karma_beautiful = "beautiful"
+karma_good = "good"
+karma_undecided = "undecided"
+karma_bad = "bad"
+karma_poor = "poor"
+karma_waste = "waste"
+karma_show_opinion = "{#server}>> {#highlite}[{1}]{#server} thinks this Track is {#highlite}{2}{#server}! What do you think?"
+karma_show_undecided = "{#server}>> {#highlite}[{1}]{#server} is {#highlite}undecided{#server} about this Track. What do you think?"
+lottery_mail_body = "{br}{#karma}Congratulations! You have won at the ManiaKarma lottery on {#highlite}{1}{#karma}!{br}You won {#highlite}{2} Coppers{#karma}!!!{br}{br}$L[tmtp://#addfavourite={3}]Click here to add this server to your favorites!$L"
+lottery_player_won = "{#server}> {1}$Z$S{#karma} won the ManiaKarma lottery and got {#highlite}{2} Coppers{#karma}!!! Congratulations!"
+lottery_low_coppers = "{#server}> {#message}The ManiaKarma lottery has too few Coppers, please donate some Coppers to enable lottery."
+lottery_to_few_players = "{#server}> {#message}The ManiaKarma lottery did not draw a winner, because there are not enough players online or too few voted."
+lottery_total_player_win = "{#server}> {#karma}You have won a total of {#highlite}{1} Coppers{#karma} until now."
+lottery_help = "{br}{br}{#server}Enter {#highlite}/karma lottery{#server} to see your current total win at ManiaKarma lottery (lottery only available for TMU players)."
+
+[ui.karma.images]
+widget_open_left = "http://maniacdn.net/undef.de/xaseco1/mania-karma/edge-open-ld-dark.png"
+widget_open_right = "http://maniacdn.net/undef.de/xaseco1/mania-karma/edge-open-rd-dark.png"
+tmx_logo_normal = "http://maniacdn.net/undef.de/xaseco1/mania-karma/logo-tmx-normal.png"
+tmx_logo_focus = "http://maniacdn.net/undef.de/xaseco1/mania-karma/logo-tmx-focus.png"
+cup_gold = "http://maniacdn.net/undef.de/xaseco1/mania-karma/cup_gold.png"
+cup_silver = "http://maniacdn.net/undef.de/xaseco1/mania-karma/cup_silver.png"
+maniakarma_logo = "http://maniacdn.net/undef.de/xaseco1/mania-karma/logo-tm-karma.png"
+progress_indicator = "http://maniacdn.net/undef.de/xaseco1/mania-karma/progress_bar_yellow_2D.bik"
+
+[ui.karma.urls]
+website = "www.mania-karma.com"
+api_auth = "http://worldwide.mania-karma.com/api/tmforever-trackmania-v4.php"

@@ -26,7 +26,7 @@ APP_METADATA = {
     ],
     "depends_on": [
         "platform_core",
-        "records_eyepiece",
+        "ui",
     ],
 }
 
@@ -37,7 +37,7 @@ class RecordsRpgApp(App):
             app_id="records_rpg",
             display_name="RPG Records",
             description="RPG API-backed records service and related records widget ownership.",
-            depends_on=("platform_core", "records_eyepiece"),
+            depends_on=("platform_core", "ui"),
             entry_modules=("app/records_rpg",),
         )
 

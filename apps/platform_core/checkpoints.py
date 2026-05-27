@@ -53,11 +53,9 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onPlayerFinish1',    _store_finish)
     aseco.register_event('onPlayerInfoChanged',_spec_togglecp)
 
-    aseco.add_chat_command('cpsspec','Shows checkpoints of spectated player')
     aseco.add_chat_command('cptms',  "Displays all local records' checkpoint times")
     aseco.add_chat_command('sectms', "Displays all local records' sector times")
 
-    aseco.register_event('onChat_cpsspec', chat_cpsspec)
     aseco.register_event('onChat_cptms',   chat_cptms)
     aseco.register_event('onChat_sectms',  chat_sectms)
 
@@ -292,14 +290,6 @@ async def _spec_togglecp(aseco: 'Aseco', playerinfo: dict):
 # Chat commands
 # ---------------------------------------------------------------------------
 
-async def chat_cpsspec(aseco: 'Aseco', command: dict):
-    login = command['author'].login
-    await aseco.client.query_ignore_result(
-        'ChatSendServerMessageToLogin',
-        aseco.format_colors('{#server}> {#error}CPS spectator mode requires TMF panels plugin.'),
-        login)
-
-
 async def chat_cptms(aseco: 'Aseco', command: dict):
     await chat_sectms(aseco, command, diff=False)
 
@@ -326,9 +316,14 @@ async def chat_sectms(aseco: 'Aseco', command: dict, diff: bool = True):
         if rec.checks:
             pr = 0
             for j, cp in enumerate(rec.checks[:cpsmax]):
-                row.append(f'$n{format_time(cp - pr)}')
+                try:
+                    cp_i = int(cp)
+                except (TypeError, ValueError):
+                    continue
+                value = (cp_i - pr) if diff else cp_i
+                row.append(f'$n{format_time(value)}')
                 if diff:
-                    pr = cp
+                    pr = cp_i
             if len(rec.checks) > cpsmax:
                 row.append('+')
         rows.append(row)

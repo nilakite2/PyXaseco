@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import feature
-from .feature import BESTFINISHES_SETTINGS_SCHEMA
+from . import widget
+from .widget import BESTFINISHES_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -16,7 +16,7 @@ APP_METADATA = {
     "display_name": "Best Finishes",
     "description": "Finish-time comparison features.",
     "modules": [
-        "apps/bestfinishes/feature.py",
+        "apps/bestfinishes/widget.py",
     ],
     "entries": [
         "app/bestfinishes",
@@ -42,9 +42,9 @@ class BestFinishesApp(App):
         )
         self.bestfinishes_surfaces = (
             BestFinishesModuleSurface(
-                component_id='bestfinishes.feature',
-                description='Finish-time comparison feature surface.',
-                module=feature,
+                component_id='bestfinishes.widget',
+                description='Finish-time comparison widget surface.',
+                module=widget,
             ),
         )
         self.components = self.bestfinishes_surfaces

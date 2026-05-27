@@ -112,9 +112,9 @@ def _load_cfg(aseco: "Aseco"):
 
 def _resolve_eyepiece_state():
     module_names = (
-        "apps.records_eyepiece.internal.state",
-        "apps.records_eyepiece.app",
-        "apps.records_eyepiece.plugin",
+        "apps.ui.internal.state",
+        "apps.ui.app",
+        "apps.ui.plugin",
     )
     for name in module_names:
         try:
@@ -132,7 +132,7 @@ def _resolve_eyepiece_state():
 
 def _resolve_eyepiece_apply():
     module_names = (
-        "apps.records_eyepiece.handlers.events",
+        "apps.ui.handlers.events",
     )
     for name in module_names:
         try:

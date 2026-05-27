@@ -990,6 +990,11 @@ class Aseco:
         Returns True when a registered slash command was recognized and dispatched,
         otherwise False.
         """
+        stripped = str(text or '').strip()
+        if stripped.startswith('//'):
+            admin_tail = stripped[2:].lstrip()
+            text = '/admin' if not admin_tail else f'/admin {admin_tail}'
+
         if not text or not str(text).startswith('/'):
             return False
 

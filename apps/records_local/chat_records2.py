@@ -431,7 +431,7 @@ async def chat_summary(aseco: 'Aseco', command: dict):
 
     maxrecs = 0
     try:
-        from apps.rasp.rankings import maxrecs as _mr
+        from apps.players.rankings import maxrecs as _mr
         maxrecs = _mr
     except ImportError:
         pass
@@ -581,7 +581,7 @@ async def chat_toprecs(aseco: 'Aseco', command: dict):
     try:
         maxrecs = 0
         try:
-            from apps.rasp.rankings import maxrecs as _mr
+            from apps.players.rankings import maxrecs as _mr
             maxrecs = _mr
         except ImportError:
             pass

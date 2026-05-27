@@ -63,7 +63,7 @@ async def handle_subcommand(
     logtitle: str,
     chattitle: str,
 ) -> bool:
-    from . import chat as admin_chat
+    from . import command_router as admin_chat
 
     if sub == 'unlock':
         lock_password = admin_chat._lock_password_enabled(aseco)
@@ -280,7 +280,7 @@ async def handle_subcommand(
         return True
 
     if sub == 'uptodate':
-        from apps.platform_core.uptodate import admin_uptodate
+        from apps.server_info.uptodate import admin_uptodate
         await admin_uptodate(aseco, command)
         return True
 

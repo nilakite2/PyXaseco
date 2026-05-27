@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 
-from apps.records_eyepiece.config import _state, _effective_mode
-from apps.records_eyepiece.hud import (
+from apps.ui.config import _state, _effective_mode
+from apps.ui.hud import (
     append_window_start,
     append_window_end,
     append_four_player_columns,
 )
-from apps.records_eyepiece.internal.utils import _handle_special_chars
+from apps.ui.internal.utils import _handle_special_chars
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -132,8 +132,8 @@ def _close_to_you(records, login: str, limit: int, topcount: int, player_nick: s
 
 
 async def _draw_local_player(aseco: 'Aseco', login: str):
-    from apps.records_eyepiece.widgets.common import _hide, _send
-    from apps.records_eyepiece.widgets.records_common import _build_record_widget
+    from apps.ui.widgets.common import _hide, _send
+    from apps.ui.widgets.records_common import _build_record_widget
 
     if not _state.player_visible.get(login, True):
         await _hide(aseco, login, ML_LOCAL)
@@ -175,7 +175,7 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
 
 
 async def _build_local_records_window(aseco: 'Aseco', page: int) -> str:
-    from apps.records_eyepiece.internal.utils import _safe_ml_text
+    from apps.ui.internal.utils import _safe_ml_text
 
     records = list(aseco.server.records)
     if not records:

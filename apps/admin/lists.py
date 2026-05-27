@@ -59,6 +59,36 @@ def can_handle(sub: str) -> bool:
     return sub in HANDLED_SUBCOMMANDS
 
 
+def _show_admin_list_window(
+    admin_chat,
+    aseco: 'Aseco',
+    admin,
+    header: str,
+    icon: list,
+    table_header: list[str],
+    entries: list[list],
+    widths: list[float],
+) -> None:
+    pages = []
+    page = [table_header]
+    lines = 0
+
+    for row in entries:
+        page.append(row)
+        lines += 1
+        if lines >= 14:
+            pages.append(page)
+            page = [table_header]
+            lines = 0
+
+    if len(page) > 1:
+        pages.append(page)
+
+    admin.msgs = [[1, header, widths, icon]]
+    admin.msgs.extend(pages or [[table_header]])
+    admin_chat.display_manialink_multi(aseco, admin)
+
+
 async def handle_subcommand(
     aseco: 'Aseco',
     command: dict[str, Any],
@@ -70,19 +100,14 @@ async def handle_subcommand(
     logtitle: str,
     chattitle: str,
 ) -> bool:
-    from . import chat as admin_chat
+    from . import command_router as admin_chat
 
     if sub == 'help':
         cmds_list = admin_chat._visible_admin_commands_for_player(aseco, admin)
-        shown = cmds_list[:20]
-
-        if shown:
-            msg = (
-                f'{{#server}}> Available commands for {{#highlite}}/admin <cmd>{{#message}}: '
-                + ' '.join(f'{{#highlite}}{n}{{#message}}' for n, _ in shown)
-            )
-            if len(cmds_list) > len(shown):
-                msg += ' {#message}... use {#highlite}/admin helpall'
+        if cmds_list:
+            head = aseco.format_colors('{#interact}Currently supported subcommands for /admin, /ad, /a, //:\n')
+            msg = head + ', '.join(name for name, _ in cmds_list)
+            msg += aseco.format_colors('\n{#interact}Use {#highlite}/admin helpall{#interact} for descriptions.')
         else:
             msg = '{#server}> {#error}No commands available.'
 
@@ -95,7 +120,7 @@ async def handle_subcommand(
         pages = [rows[i:i + 14] for i in range(0, max(len(rows), 1), 14)]
         admin.msgs = [[
             1,
-            'Available /admin subcommands:',
+            'Currently supported /admin subcommands:',
             [1.2, 0.3, 0.9],
             ['Icons128x128_1', 'ProfileAdvanced', 0.02]
         ]]
@@ -217,18 +242,20 @@ async def handle_subcommand(
                     for b in bans
                 ]
                 header = 'Current Ban List:'
-                rows = [['#', 'Login', 'Nick', 'Action']]
+                rows = []
                 for i, b in enumerate(bans, 1):
                     rows.append([
                         f'{i:02d}.',
                         b.get('Login', ''),
                         admin_chat.strip_colors(b.get('NickName', '')),
-                        f'$l[{admin_chat.ML_LIST_UNBAN_BASE + i}]{{#highlite}}UNBAN$l'
+                        ['{#highlite}UNBAN', admin_chat.ML_LIST_UNBAN_BASE + i],
                     ])
-                admin_chat.display_manialink(
-                    aseco, login, header,
+                _show_admin_list_window(
+                    admin_chat, aseco, admin, header,
                     ['Icons64x64_1', 'NotBuddy'],
-                    rows, [0.10, 0.38, 0.34, 0.18], 'OK'
+                    ['#', 'Login', 'Nick', 'Action'],
+                    rows,
+                    [1.10, 0.12, 0.42, 0.40, 0.16],
                 )
             else:
                 await admin_chat._reply(aseco, login, '{#server}> Ban list is empty.')
@@ -245,18 +272,20 @@ async def handle_subcommand(
                     for b in bl
                 ]
                 header = 'Current Black List:'
-                rows = [['#', 'Login', 'Nick', 'Action']]
+                rows = []
                 for i, b in enumerate(bl, 1):
                     rows.append([
                         f'{i:02d}.',
                         b.get('Login', ''),
                         admin_chat.strip_colors(b.get('NickName', '')),
-                        f'$l[{admin_chat.ML_LIST_UNBLACK_BASE + i}]{{#highlite}}UNBLACK$l'
+                        ['{#highlite}UNBLACK', admin_chat.ML_LIST_UNBLACK_BASE + i],
                     ])
-                admin_chat.display_manialink(
-                    aseco, login, header,
+                _show_admin_list_window(
+                    admin_chat, aseco, admin, header,
                     ['Icons64x64_1', 'NotBuddy'],
-                    rows, [0.10, 0.38, 0.34, 0.18], 'OK'
+                    ['#', 'Login', 'Nick', 'Action'],
+                    rows,
+                    [1.10, 0.12, 0.42, 0.40, 0.16],
                 )
             else:
                 await admin_chat._reply(aseco, login, '{#server}> Black list is empty.')
@@ -266,21 +295,23 @@ async def handle_subcommand(
 
     if sub in ('showiplist', 'listips'):
         try:
-            ips = await aseco.client.query('GetBannedIPs') or []
+            ips = admin_chat._get_bannedips_state(aseco)
             if ips:
                 admin.iplist = list(ips)
                 header = 'Banned IPs:'
-                rows = [['#', 'IP Address', 'Action']]
+                rows = []
                 for i, ip in enumerate(ips, 1):
                     rows.append([
                         f'{i:02d}.',
                         ip,
-                        f'$l[{admin_chat.ML_UNBANIP_NEG_BASE - i}]{{#highlite}}UNBAN$l'
+                        ['{#highlite}UNBAN', admin_chat.ML_UNBANIP_NEG_BASE - i],
                     ])
-                admin_chat.display_manialink(
-                    aseco, login, header,
+                _show_admin_list_window(
+                    admin_chat, aseco, admin, header,
                     ['Icons64x64_1', 'NotBuddy'],
-                    rows, [0.10, 0.65, 0.25], 'OK'
+                    ['#', 'IP Address', 'Action'],
+                    rows,
+                    [1.00, 0.12, 0.68, 0.20],
                 )
             else:
                 await admin_chat._reply(aseco, login, '{#server}> No banned IPs.')
@@ -297,18 +328,20 @@ async def handle_subcommand(
                     for g in gl
                 ]
                 header = 'Current Guest List:'
-                rows = [['#', 'Login', 'Nick', 'Action']]
+                rows = []
                 for i, g in enumerate(gl, 1):
                     rows.append([
                         f'{i:02d}.',
                         g.get('Login', ''),
                         admin_chat.strip_colors(g.get('NickName', '')),
-                        f'$l[{admin_chat.ML_LIST_REMOVEGUEST_BASE + i}]{{#highlite}}REMOVE$l'
+                        ['{#highlite}REMOVE', admin_chat.ML_LIST_REMOVEGUEST_BASE + i],
                     ])
-                admin_chat.display_manialink(
-                    aseco, login, header,
+                _show_admin_list_window(
+                    admin_chat, aseco, admin, header,
                     ['Icons128x128_1', 'Invite'],
-                    rows, [0.10, 0.38, 0.34, 0.18], 'OK'
+                    ['#', 'Login', 'Nick', 'Action'],
+                    rows,
+                    [1.10, 0.12, 0.42, 0.40, 0.16],
                 )
             else:
                 await admin_chat._reply(aseco, login, '{#server}> Guest list is empty.')
@@ -326,7 +359,12 @@ async def handle_subcommand(
 
     if sub in ('cleaniplist',):
         try:
-            await aseco.client.query_ignore_result('CleanBannedIPs')
+            for ip in admin_chat._get_bannedips_state(aseco):
+                try:
+                    await aseco.client.query_ignore_result('UnBanIP', ip)
+                except Exception:
+                    pass
+            admin_chat._set_bannedips_state(aseco, [])
             await admin_chat._write_bannedips_toml(aseco)
             await admin_chat._reply(aseco, login, '{#server}> Banned IPs list cleaned.')
         except Exception as e:
@@ -408,14 +446,15 @@ async def handle_subcommand(
         if ml:
             admin.playerlist = [{'login': lgn, 'nickname': lgn} for lgn in ml]
             header = 'Global Mute/Ignore List:'
-            rows = [['#', 'Login', 'Action']]
+            rows = []
             for i, lgn in enumerate(ml, 1):
-                action = f'$l[{admin_chat.ML_LIST_UNIGNORE_BASE + i}]{{#highlite}}UNMUTE$l'
-                rows.append([f'{i:02d}.', lgn, action])
-            admin_chat.display_manialink(
-                aseco, login, header,
+                rows.append([f'{i:02d}.', lgn, ['{#highlite}UNMUTE', admin_chat.ML_LIST_UNIGNORE_BASE + i]])
+            _show_admin_list_window(
+                admin_chat, aseco, admin, header,
                 ['Icons64x64_1', 'NotBuddy'],
-                rows, [0.10, 0.65, 0.25], 'OK'
+                ['#', 'Login', 'Action'],
+                rows,
+                [1.00, 0.12, 0.68, 0.20],
             )
         else:
             await admin_chat._reply(aseco, login, '{#server}> Mute list is empty.')

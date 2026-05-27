@@ -38,6 +38,16 @@ def register(aseco: 'Aseco'):
         order=111,
     )
     aseco.add_chat_command(
+        'pyxaseco',
+        'Alias for /xaseco',
+        owner='chat/server',
+        app='server_info',
+        category='chat-server',
+        usage='/pyxaseco',
+        display_name='pyxaseco',
+        order=112,
+    )
+    aseco.add_chat_command(
         'plugins',
         'Displays active app runtime entries and capabilities',
         owner='chat/server',
@@ -45,7 +55,17 @@ def register(aseco: 'Aseco'):
         category='chat-server',
         usage='/plugins',
         display_name='plugins',
-        order=112,
+        order=113,
+    )
+    aseco.add_chat_command(
+        'apps',
+        'Alias for /plugins',
+        owner='chat/server',
+        app='server_info',
+        category='chat-server',
+        usage='/apps',
+        display_name='apps',
+        order=114,
     )
     aseco.add_chat_command(
         'nations',
@@ -55,11 +75,13 @@ def register(aseco: 'Aseco'):
         category='chat-server',
         usage='/nations',
         display_name='nations',
-        order=113,
+        order=115,
     )
     aseco.register_event('onChat_server', chat_server)
     aseco.register_event('onChat_xaseco', chat_xaseco)
+    aseco.register_event('onChat_pyxaseco', chat_pyxaseco)
     aseco.register_event('onChat_plugins', chat_plugins)
+    aseco.register_event('onChat_apps', chat_apps)
     aseco.register_event('onChat_nations', chat_nations)
 
 
@@ -82,17 +104,17 @@ async def chat_server(aseco: 'Aseco', command: dict):
     feature_votes = False
     maxrecs = int(getattr(aseco.settings, 'max_records', 30) or 30)
     try:
-        from apps.rasp.rankings import admin_contact as _ac
+        from apps.players.rankings import admin_contact as _ac
         admin_contact = _ac or ''
     except Exception:
         pass
     try:
-        from apps.rasp.voting import feature_votes as _fv
+        from apps.voting.voting import feature_votes as _fv
         feature_votes = bool(_fv)
     except Exception:
         pass
     try:
-        from apps.rasp.rankings import maxrecs as _mr
+        from apps.players.rankings import maxrecs as _mr
         maxrecs = int(_mr or maxrecs)
     except Exception:
         pass
@@ -149,7 +171,7 @@ async def chat_xaseco(aseco: 'Aseco', command: dict):
 
     admin_contact = ''
     try:
-        from apps.rasp.rankings import admin_contact as _ac
+        from apps.players.rankings import admin_contact as _ac
         admin_contact = _ac or ''
     except Exception:
         pass
@@ -188,6 +210,10 @@ async def chat_xaseco(aseco: 'Aseco', command: dict):
                       info, [1.0, 0.3, 0.7], 'OK')
 
 
+async def chat_pyxaseco(aseco: 'Aseco', command: dict):
+    await chat_xaseco(aseco, command)
+
+
 async def chat_plugins(aseco: 'Aseco', command: dict):
     player = command['author']
     active_apps = list(getattr(aseco, 'active_apps', []) or [])
@@ -217,6 +243,10 @@ async def chat_plugins(aseco: 'Aseco', command: dict):
     player.msgs = [[1, head, [0.7], ['Icons128x128_1', 'Browse', 0.02]]]
     player.msgs.extend(pages)
     display_manialink_multi(aseco, player)
+
+
+async def chat_apps(aseco: 'Aseco', command: dict):
+    await chat_plugins(aseco, command)
 
 
 async def chat_nations(aseco: 'Aseco', command: dict):

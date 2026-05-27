@@ -4,6 +4,7 @@ track.py - Port of plugins/plugin.track.php
 /track    - Shows info about the current track
 /playtime - Shows time current track has been playing
 /time     - Shows current server time & date
+/nextmap  - Shows info about the next track
 
 Also fires onNewChallenge2 events for timing and CURRENT_TRACK display.
 """
@@ -14,6 +15,7 @@ import time as _time
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import format_text, format_time, format_time_h, strip_colors
 from pyxaseco.models import Gameinfo
+from pyxaseco.models import _strip_newlines
 from pyxaseco.app_services import get_tmx_service
 
 if TYPE_CHECKING:
@@ -40,10 +42,12 @@ def register(aseco: 'Aseco'):
     aseco.add_chat_command('track',    'Shows info about the current track')
     aseco.add_chat_command('playtime', 'Shows time current track has been playing')
     aseco.add_chat_command('time',     'Shows current server time & date')
+    aseco.add_chat_command('nextmap',  'Shows name of the next challenge')
 
     aseco.register_event('onChat_track',    chat_track)
     aseco.register_event('onChat_playtime', chat_playtime)
     aseco.register_event('onChat_time',     chat_time)
+    aseco.register_event('onChat_nextmap',  chat_nextmap)
 
 
 def _tmx_linked_name(aseco: 'Aseco', challenge) -> str:
@@ -70,6 +74,11 @@ def _tz_abbrev() -> str:
     sign = '+' if total >= 0 else '-'
     total = abs(total)
     return f'UTC{sign}{total // 60:02d}:{total % 60:02d}'
+
+
+def time_playing(aseco: 'Aseco') -> float:
+    start_t = getattr(aseco.server.challenge, 'starttime', aseco.server.starttime)
+    return max(0.0, float(int(_time.time()) - int(start_t)))
 
 
 async def time_initreplays(aseco: 'Aseco', _param):
@@ -174,4 +183,70 @@ async def chat_time(aseco: 'Aseco', command: dict):
     await aseco.client.query_ignore_result(
         'ChatSendServerMessageToLogin', aseco.format_colors(message),
         command['author'].login)
+
+
+async def chat_nextmap(aseco: 'Aseco', command: dict):
+    login = command['author'].login
+
+    if aseco.server.isrelay:
+        msg = format_text(aseco.get_chat_message('NOTONRELAY'))
+        await aseco.client.query_ignore_result(
+            'ChatSendServerMessageToLogin', aseco.format_colors(msg), login)
+        return
+
+    try:
+        from apps.players.rankings import get_messages
+        msgs = get_messages()
+    except Exception:
+        msgs = {}
+
+    next_name = ''
+    next_env = ''
+
+    try:
+        from apps.jukebox.jukebox import get_jukebox
+        jukebox = get_jukebox()
+    except Exception:
+        jukebox = {}
+
+    if jukebox:
+        _uid, track = next(iter(jukebox.items()))
+        next_name = track.get('Name', '')
+        try:
+            info = await aseco.client.query('GetChallengeInfo', track.get('FileName', ''))
+            next_env = info.get('Environnement', '')
+        except Exception:
+            pass
+    else:
+        try:
+            if aseco.server.get_game() != 'TMF':
+                current_idx = await aseco.client.query('GetCurrentChallengeIndex')
+                track_list = await aseco.client.query('GetChallengeList', 1, int(current_idx) + 1)
+                if not track_list:
+                    track_list = await aseco.client.query('GetChallengeList', 1, 0)
+            else:
+                next_idx = await aseco.client.query('GetNextChallengeIndex')
+                track_list = await aseco.client.query('GetChallengeList', 1, next_idx)
+                if not track_list:
+                    track_list = await aseco.client.query('GetChallengeList', 1, 0)
+            if track_list:
+                next_name = _strip_newlines(track_list[0].get('Name', ''))
+                next_env = track_list[0].get('Environnement', '')
+        except Exception:
+            next_name = '?'
+
+    if aseco.server.packmask == 'Stadium':
+        message = format_text(
+            msgs.get('NEXTMAP', ['{#server}> The next Challenge will be: {#highlite}{1}'])[0],
+            strip_colors(next_name),
+        )
+    else:
+        message = format_text(
+            msgs.get('NEXTENVMAP', ['{#server}> The next Challenge will be: {#highlite}[{1}] {2}'])[0],
+            next_env,
+            strip_colors(next_name),
+        )
+
+    await aseco.client.query_ignore_result(
+        'ChatSendServerMessageToLogin', aseco.format_colors(message), login)
 

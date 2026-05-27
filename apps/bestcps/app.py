@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import feature
-from .feature import BESTCPS_SETTINGS_SCHEMA
+from . import widget
+from .widget import BESTCPS_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 APP_METADATA = {
     "id": "bestcps",
     "display_name": "BestCps",
-    "description": "Best checkpoints feature.",
+    "description": "Best checkpoints widget.",
     "modules": [
-        "apps/bestcps/feature.py",
+        "apps/bestcps/widget.py",
     ],
     "entries": [
         "app/bestcps",
@@ -35,16 +35,16 @@ class BestCpsApp(App):
         super().__init__(
             app_id="bestcps",
             display_name="BestCps",
-            description="Best checkpoints feature.",
+            description="Best checkpoints widget.",
             depends_on=("platform_core",),
             entry_modules=("app/bestcps",),
             settings_schema=BESTCPS_SETTINGS_SCHEMA,
         )
         self.bestcps_surfaces = (
             BestCpsModuleSurface(
-                component_id="bestcps.feature",
-                description="Best checkpoints feature surface.",
-                module=feature,
+                component_id="bestcps.widget",
+                description="Best checkpoints widget surface.",
+                module=widget,
             ),
         )
         self.components = self.bestcps_surfaces

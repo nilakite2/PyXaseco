@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import laston, players, players2, wins
+from . import laston, nextrank, players, players2, rankings, stats, wins
+from .ranking_backend import PLAYER_RANKING_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -13,12 +14,16 @@ if TYPE_CHECKING:
 APP_METADATA = {
     "id": "players",
     "display_name": "Players",
-    "description": "Player browsing, rank lookup, wins, and last seen flows.",
+    "description": "Player browsing, stats, rank lookup, wins, and last seen flows.",
     "modules": [
         "apps/players/players.py",
         "apps/players/players2.py",
         "apps/players/wins.py",
         "apps/players/laston.py",
+        "apps/players/stats.py",
+        "apps/players/rankings.py",
+        "apps/players/nextrank.py",
+        "apps/players/ranking_backend.py",
     ],
     "entries": [
         "app/players",
@@ -28,6 +33,10 @@ APP_METADATA = {
         "chat/players2",
         "chat/wins",
         "chat/laston",
+        "chat/stats",
+        "chat/topdons",
+        "feature/rasp",
+        "feature/rasp_nextrank",
     ],
     "depends_on": [
         "platform_core",
@@ -40,9 +49,10 @@ class PlayersApp(App):
         super().__init__(
             app_id="players",
             display_name="Players",
-            description="Player browsing, rank lookup, wins, and last seen flows.",
+            description="Player browsing, stats, rank lookup, wins, and last seen flows.",
             depends_on=("platform_core",),
             entry_modules=("app/players",),
+            settings_schema=PLAYER_RANKING_SETTINGS_SCHEMA,
         )
         self.player_surfaces = (
             PlayersModuleSurface(
@@ -65,6 +75,13 @@ class PlayersApp(App):
                 description='Last online lookup surface.',
                 module=laston,
             ),
+            PlayersStatsSurface(
+                component_id='players.stats',
+                description='Player statistics and top-donators command surface.',
+            ),
+            rankings.get_command_component(),
+            nextrank.get_command_component(),
+            rankings.get_callback_component(),
         )
         self.components = self.player_surfaces
 
@@ -100,6 +117,14 @@ class PlayersModuleSurface(Component):
         shutdown = getattr(self.module, 'shutdown', None)
         if callable(shutdown):
             await shutdown(context)
+
+
+class PlayersStatsSurface(Component):
+    def __init__(self, component_id: str, description: str):
+        super().__init__(component_id=component_id, description=description)
+
+    def register(self, aseco: 'Aseco') -> None:
+        stats.register(aseco)
 
 
 APP_CLASS = PlayersApp

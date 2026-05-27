@@ -51,11 +51,14 @@ async def handle_subcommand(
     logtitle: str,
     chattitle: str,
 ) -> bool:
-    from . import chat as admin_chat
+    from . import command_router as admin_chat
 
     if sub == 'warn':
-        target = await admin_chat._get_player_param(aseco, admin, arg)
+        target = await admin_chat._get_player_param(aseco, admin, arg, offline=True)
         if target:
+            if not admin_chat._is_connected_player(aseco, target):
+                await admin_chat._deny_offline_target(aseco, admin, target.login)
+                return True
             if not admin_chat._can_target_player(aseco, admin, target):
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
                 return True
@@ -68,8 +71,11 @@ async def handle_subcommand(
         return True
 
     if sub == 'kick':
-        target = await admin_chat._get_player_param(aseco, admin, arg)
+        target = await admin_chat._get_player_param(aseco, admin, arg, offline=True)
         if target:
+            if not admin_chat._is_connected_player(aseco, target):
+                await admin_chat._deny_offline_target(aseco, admin, target.login)
+                return True
             if not admin_chat._can_target_player(aseco, admin, target):
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
                 return True
@@ -96,7 +102,7 @@ async def handle_subcommand(
         return True
 
     if sub == 'ban':
-        target = await admin_chat._get_player_param(aseco, admin, arg)
+        target = await admin_chat._get_player_param(aseco, admin, arg, offline=True)
         if target:
             if not admin_chat._can_target_player(aseco, admin, target):
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
@@ -128,6 +134,10 @@ async def handle_subcommand(
         if ip:
             try:
                 await aseco.client.query_ignore_result('BanIP', ip)
+                banned = admin_chat._get_bannedips_state(aseco)
+                if ip.lower() not in {item.lower() for item in banned}:
+                    banned.append(ip)
+                admin_chat._set_bannedips_state(aseco, banned)
                 await admin_chat._write_bannedips_toml(aseco)
                 aseco.console('{1} [{2}] banned IP [{3}]', logtitle, login, ip)
                 await admin_chat._reply(aseco, login, f'{{#server}}> Banned IP: {{#highlite}}{ip}')
@@ -140,6 +150,11 @@ async def handle_subcommand(
         if ip:
             try:
                 await aseco.client.query_ignore_result('UnBanIP', ip)
+                banned = [
+                    item for item in admin_chat._get_bannedips_state(aseco)
+                    if item.lower() != ip.lower()
+                ]
+                admin_chat._set_bannedips_state(aseco, banned)
                 await admin_chat._write_bannedips_toml(aseco)
                 aseco.console('{1} [{2}] unbanned IP [{3}]', logtitle, login, ip)
                 await admin_chat._reply(aseco, login, f'{{#server}}> Unbanned IP: {{#highlite}}{ip}')
@@ -148,7 +163,7 @@ async def handle_subcommand(
         return True
 
     if sub == 'black':
-        target = await admin_chat._get_player_param(aseco, admin, arg)
+        target = await admin_chat._get_player_param(aseco, admin, arg, offline=True)
         if target:
             if not admin_chat._can_target_player(aseco, admin, target):
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
@@ -161,7 +176,8 @@ async def handle_subcommand(
                     aseco,
                     admin_chat._fmt_admin(aseco, admin, chattitle, 'blacklists', admin_chat.strip_colors(target.nickname))
                 )
-                await aseco.client.query_ignore_result('Kick', target.login)
+                if admin_chat._is_connected_player(aseco, target):
+                    await aseco.client.query_ignore_result('Kick', target.login)
             except Exception as e:
                 await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{e}')
         return True
@@ -212,8 +228,11 @@ async def handle_subcommand(
         return True
 
     if sub in ('mute', 'ignore'):
-        target = await admin_chat._get_player_param(aseco, admin, arg)
+        target = await admin_chat._get_player_param(aseco, admin, arg, offline=True)
         if target:
+            if not admin_chat._is_connected_player(aseco, target):
+                await admin_chat._deny_offline_target(aseco, admin, target.login)
+                return True
             if not admin_chat._can_target_player(aseco, admin, target):
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
                 return True
@@ -348,8 +367,11 @@ async def handle_subcommand(
         return True
 
     if sub == 'forcespec':
-        target = await admin_chat._get_player_param(aseco, admin, arg)
+        target = await admin_chat._get_player_param(aseco, admin, arg, offline=True)
         if target:
+            if not admin_chat._is_connected_player(aseco, target):
+                await admin_chat._deny_offline_target(aseco, admin, target.login)
+                return True
             if not admin_chat._can_target_player(aseco, admin, target):
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
                 return True
@@ -367,8 +389,11 @@ async def handle_subcommand(
         return True
 
     if sub == 'specfree':
-        target = await admin_chat._get_player_param(aseco, admin, arg)
+        target = await admin_chat._get_player_param(aseco, admin, arg, offline=True)
         if target:
+            if not admin_chat._is_connected_player(aseco, target):
+                await admin_chat._deny_offline_target(aseco, admin, target.login)
+                return True
             if not admin_chat._can_target_player(aseco, admin, target):
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
                 return True

@@ -1,0 +1,10 @@
+[players]
+feature_ranks = true
+feature_stats = true
+always_show_pb = false
+nextrank_show_rp = true
+prune_records_times = false
+reset_cache_start = true
+maxrecs = 500
+minrank = 3
+maxavg = 10

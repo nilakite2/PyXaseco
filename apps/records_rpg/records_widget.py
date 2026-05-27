@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import copy
 import logging
@@ -8,18 +8,18 @@ from typing import TYPE_CHECKING
 from pyxaseco.helpers import format_time, safe_manialink_text
 from pyxaseco.models import Gameinfo
 
-from apps.records_eyepiece.config import _state, _effective_mode
-from apps.records_eyepiece.hud import (
+from apps.ui.config import _state, _effective_mode
+from apps.ui.hud import (
     append_window_start,
     append_window_end,
     append_four_player_columns,
 )
-from apps.records_eyepiece.internal.utils import _handle_special_chars, _safe_ml_text
+from apps.ui.internal.utils import _handle_special_chars, _safe_ml_text
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
-from apps.dedimania.records_widget import (
+from apps.records_dedimania.records_widget import (
     ML_DEDI,
     ML_SUBWIN,
     ML_WINDOW,
@@ -164,8 +164,8 @@ async def _get_rpg_records(aseco: "Aseco", limit: int | None = None) -> list[dic
 
 
 async def _draw_rpg_player(aseco: "Aseco", login: str):
-    from apps.records_eyepiece.widgets.common import _hide, _send
-    from apps.records_eyepiece.widgets.records_common import _build_record_widget
+    from apps.ui.widgets.common import _hide, _send
+    from apps.ui.widgets.records_common import _build_record_widget
 
     if not _state.player_visible.get(login, True):
         await _hide(aseco, login, ML_DEDI)

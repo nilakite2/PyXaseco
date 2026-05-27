@@ -1,0 +1,3 @@
+[social_chat]
+pm_buf_len = 30
+line_len = 70

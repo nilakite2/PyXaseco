@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
@@ -7,9 +7,9 @@ from pyxaseco.helpers import format_time, safe_manialink_text, strip_colors
 from pyxaseco.models import Gameinfo
 from pyxaseco.app_services import localdb_get_pool
 
-from apps.records_eyepiece.config import _state
-from apps.records_eyepiece.internal.helpers import _enrich_track_with_tmx
-from apps.records_eyepiece.hud import append_window_start, append_window_end
+from apps.ui.config import _state
+from apps.ui.internal.helpers import _enrich_track_with_tmx
+from apps.ui.hud import append_window_start, append_window_end
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -229,8 +229,8 @@ async def _get_player_track_stats(aseco: 'Aseco', player) -> dict:
 
 def _get_maxrecs(aseco: 'Aseco') -> int:
     try:
-        from apps.rasp.rankings import _rasp
-        return int(_rasp.get('maxrecs', 50) or 50)
+        from apps.players.rankings import maxrecs
+        return int(maxrecs or 50)
     except Exception:
         return 50
 
@@ -249,15 +249,15 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
       Cards: 4 cols x 5 rows
     """
     try:
-        from apps.rasp.jukebox import jukebox, jb_buffer
+        from apps.jukebox.jukebox import jukebox, jb_buffer
     except ImportError:
         jukebox = {}
         jb_buffer = []
 
     maxrecs = 50
     try:
-        from apps.rasp.rankings import _rasp
-        maxrecs = _rasp.get('maxrecs', 50)
+        from apps.players.rankings import maxrecs
+        maxrecs = int(maxrecs or 50)
     except Exception:
         pass
 
@@ -669,7 +669,7 @@ async def _send_tracklist_window(
     Fetch data, apply filter, build and send the card-grid window to the player.
     Stores state on player object for pagination.
     """
-    from apps.records_eyepiece.widgets.common import _send
+    from apps.ui.widgets.common import _send
 
     all_tracks = await _fetch_tracklist_data(aseco)
     track_by_uid = {t['uid']: t for t in all_tracks if t.get('uid')}
@@ -688,7 +688,7 @@ async def _send_tracklist_window(
 
     title = ''
     try:
-        from apps.rasp.jukebox import jukebox, jb_buffer
+        from apps.jukebox.jukebox import jukebox, jb_buffer
     except ImportError:
         jukebox = {}
         jb_buffer = []
@@ -852,13 +852,13 @@ async def _send_tracklist_window(
 
 
 async def _close_tracklist_window(aseco: 'Aseco', login: str):
-    from apps.records_eyepiece.widgets.common import _send
+    from apps.ui.widgets.common import _send
 
     xml = f'<manialink id="{ML_WINDOW}"></manialink><manialink id="{ML_SUBWIN}"></manialink>'
     await _send(aseco, login, xml)
 
 async def _send_trackauthorlist_window(aseco: 'Aseco', player, page: int = 0):
-    from apps.records_eyepiece.widgets.common import _send
+    from apps.ui.widgets.common import _send
     all_tracks = await _fetch_tracklist_data(aseco)
     authors = sorted({strip_colors(t.get('author', ''), for_tm=False) for t in all_tracks if t.get('author')}, key=lambda a: a.lower())
     player._tl_authors = authors

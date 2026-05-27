@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import service, tracklist
+from . import service, tracklist, video
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -13,22 +13,24 @@ if TYPE_CHECKING:
 APP_METADATA = {
     "id": "tmx",
     "display_name": "TMX",
-    "description": "TMX metadata service and tracklist ownership.",
+    "description": "TMX metadata service, videos, and tracklist ownership.",
     "modules": [
         "apps/tmx/service.py",
         "apps/tmx/tracklist.py",
         "apps/tmx/challenge_widget.py",
+        "apps/tmx/video.py",
     ],
     "entries": [
         "app/tmx",
     ],
     "provides": [
         "service/tmx",
+        "feature/tmxvideo",
     ],
     "depends_on": [
         "platform_core",
         "admin",
-        "records_eyepiece",
+        "ui",
     ],
 }
 
@@ -38,8 +40,8 @@ class TmxApp(App):
         super().__init__(
             app_id="tmx",
             display_name="TMX",
-            description="TMX metadata service and tracklist ownership.",
-            depends_on=("platform_core", "admin", "records_eyepiece"),
+            description="TMX metadata service, videos, and tracklist ownership.",
+            depends_on=("platform_core", "admin", "ui"),
             entry_modules=("app/tmx",),
         )
         self.tmx_surfaces = (
@@ -52,6 +54,11 @@ class TmxApp(App):
                 component_id='tmx.tracklist',
                 description='Tracklist and challenge-window rendering helpers used by Eyepiece and admin flows.',
                 module=tracklist,
+            ),
+            TmxModuleSurface(
+                component_id='tmx.video',
+                description='TMX video lookup and GPS command surface.',
+                module=video,
             ),
         )
         self.components = self.tmx_surfaces

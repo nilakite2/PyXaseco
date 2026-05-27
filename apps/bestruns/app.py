@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import feature
-from .feature import BESTRUNS_SETTINGS_SCHEMA
+from . import widget
+from .widget import BESTRUNS_SETTINGS_SCHEMA
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 APP_METADATA = {
     "id": "bestruns",
     "display_name": "BestRuns",
-    "description": "Best runs feature.",
+    "description": "Best runs widget.",
     "modules": [
-        "apps/bestruns/feature.py",
+        "apps/bestruns/widget.py",
     ],
     "entries": [
         "app/bestruns",
@@ -35,16 +35,16 @@ class BestRunsApp(App):
         super().__init__(
             app_id="bestruns",
             display_name="BestRuns",
-            description="Best runs feature.",
+            description="Best runs widget.",
             depends_on=("platform_core",),
             entry_modules=("app/bestruns",),
             settings_schema=BESTRUNS_SETTINGS_SCHEMA,
         )
         self.bestruns_surfaces = (
             BestRunsModuleSurface(
-                component_id="bestruns.feature",
-                description="Best runs feature surface.",
-                module=feature,
+                component_id="bestruns.widget",
+                description="Best runs widget surface.",
+                module=widget,
             ),
         )
         self.components = self.bestruns_surfaces

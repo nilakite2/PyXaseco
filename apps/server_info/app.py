@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import commands
+from . import commands, public_stats, uptodate
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -13,15 +13,20 @@ if TYPE_CHECKING:
 APP_METADATA = {
     "id": "server_info",
     "display_name": "Server Info",
-    "description": "Server information and runtime introspection commands.",
+    "description": "Server information, runtime introspection, and update-check commands.",
     "modules": [
         "apps/server_info/commands.py",
+        "apps/server_info/public_stats.py",
+        "apps/server_info/uptodate.py",
     ],
     "entries": [
         "app/server_info",
     ],
     "provides": [
         "chat/server",
+        "app/public_stats",
+        "bridge/public_stats",
+        "core/uptodate",
     ],
 }
 
@@ -31,7 +36,7 @@ class ServerInfoApp(App):
         super().__init__(
             app_id="server_info",
             display_name="Server Info",
-            description="Server information and runtime introspection commands.",
+            description="Server information, runtime introspection, and update-check commands.",
             entry_modules=("app/server_info",),
         )
         self.server_info_surfaces = (
@@ -39,6 +44,16 @@ class ServerInfoApp(App):
                 component_id='server_info.commands',
                 description='Server information and runtime introspection chat surface.',
                 module=commands,
+            ),
+            ServerInfoModuleSurface(
+                component_id='server_info.uptodate',
+                description='Version check and update notice surface.',
+                module=uptodate,
+            ),
+            ServerInfoModuleSurface(
+                component_id='server_info.public_stats',
+                description='External public statistics publishing surface.',
+                module=public_stats,
             ),
         )
         self.components = self.server_info_surfaces

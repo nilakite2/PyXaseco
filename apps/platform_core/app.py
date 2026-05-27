@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import chatlog, checkpoints, donate, lastwin, localdb, rounds, track, uptodate
+from . import chatlog, checkpoints, donate, localdb, rounds, songmod, track
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -21,8 +21,7 @@ APP_METADATA = {
         "apps/platform_core/chatlog.py",
         "apps/platform_core/checkpoints.py",
         "apps/platform_core/donate.py",
-        "apps/platform_core/uptodate.py",
-        "apps/platform_core/lastwin.py",
+        "apps/platform_core/songmod.py",
     ],
     "entries": [
         "app/platform_core",
@@ -31,11 +30,11 @@ APP_METADATA = {
         "core/localdb",
         "core/rounds",
         "core/track",
+        "feature/rasp_nextmap",
         "core/chatlog",
         "core/checkpoints",
         "core/donate",
-        "core/uptodate",
-        "chat/lastwin",
+        "chat/songmod",
     ],
 }
 
@@ -101,14 +100,9 @@ class PlatformCoreApp(App):
                 module=donate,
             ),
             PlatformCoreModuleSurface(
-                component_id='platform_core.uptodate',
-                description='Version check and update notice surface.',
-                module=uptodate,
-            ),
-            PlatformCoreModuleSurface(
-                component_id='platform_core.lastwin',
-                description='Last-win chat information surface.',
-                module=lastwin,
+                component_id='platform_core.songmod',
+                description='Current track song and mod command surface.',
+                module=songmod,
             ),
         )
         self.components = self.service_surfaces

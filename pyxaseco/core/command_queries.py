@@ -72,25 +72,31 @@ def visible_admin_commands_for_player(
     aseco: "Aseco",
     player: "Player",
     *,
-    categories: tuple[str, ...] = ("admin-subcommand", "admin-public"),
+    categories: tuple[str, ...] | None = None,
     auth_check: Callable[[str, CommandRegistration], bool] | None = None,
 ) -> list[tuple[str, CommandRegistration]]:
     result: list[tuple[str, CommandRegistration]] = []
     seen: set[str] = set()
 
-    for category in categories:
-        for name, registration in iter_commands(aseco, is_admin=True, category=category):
-            key = (
-                getattr(registration, "permission", "")
-                or getattr(registration, "display_name", "")
-                or name.split("/")[-1]
-            ).strip().lower()
-            if not key or key in seen:
+    for name, registration in iter_commands(aseco, is_admin=True):
+        reg_category = str(getattr(registration, "category", "") or "")
+        if categories is None:
+            if not reg_category.startswith("admin-"):
                 continue
-            if auth_check is not None and not auth_check(key, registration):
-                continue
-            result.append((name, registration))
-            seen.add(key)
+        elif reg_category not in categories:
+            continue
+
+        key = (
+            getattr(registration, "permission", "")
+            or getattr(registration, "display_name", "")
+            or name.split("/")[-1]
+        ).strip().lower()
+        if not key or key in seen:
+            continue
+        if auth_check is not None and not auth_check(key, registration):
+            continue
+        result.append((name, registration))
+        seen.add(key)
 
     return result
 
@@ -129,17 +135,23 @@ def combined_visible_commands_for_player(
 def admin_ability_names(
     aseco: "Aseco",
     *,
-    categories: tuple[str, ...] = ("admin-subcommand", "admin-public"),
+    categories: tuple[str, ...] | None = None,
     legacy_names: set[str] | None = None,
 ) -> list[str]:
     names = set(legacy_names or set())
-    for category in categories:
-        for name, registration in iter_commands(aseco, is_admin=True, category=category):
-            part = (
-                getattr(registration, "permission", "")
-                or getattr(registration, "display_name", "")
-                or str(name).split("/")[-1]
-            ).strip().lower()
-            if part:
-                names.add(part)
+    for name, registration in iter_commands(aseco, is_admin=True):
+        reg_category = str(getattr(registration, "category", "") or "")
+        if categories is None:
+            if not reg_category.startswith("admin-"):
+                continue
+        elif reg_category not in categories:
+            continue
+
+        part = (
+            getattr(registration, "permission", "")
+            or getattr(registration, "display_name", "")
+            or str(name).split("/")[-1]
+        ).strip().lower()
+        if part:
+            names.add(part)
     return sorted(names)

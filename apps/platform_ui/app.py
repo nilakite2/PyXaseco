@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import banner, panels, style
+from . import lastwin, panels, settings, style
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -13,11 +13,12 @@ if TYPE_CHECKING:
 APP_METADATA = {
     "id": "platform_ui",
     "display_name": "Platform UI",
-    "description": "Shared style, panel, and banner infrastructure.",
+    "description": "Shared style, panel, and personal UI preference infrastructure.",
     "modules": [
         "apps/platform_ui/style.py",
         "apps/platform_ui/panels.py",
-        "apps/platform_ui/banner.py",
+        "apps/platform_ui/settings.py",
+        "apps/platform_ui/lastwin.py",
     ],
     "entries": [
         "app/platform_ui",
@@ -25,7 +26,8 @@ APP_METADATA = {
     "provides": [
         "ui/style",
         "ui/panels",
-        "ui/banner",
+        "chat/settings",
+        "chat/lastwin",
     ],
     "depends_on": [
         "platform_core",
@@ -59,7 +61,7 @@ class PlatformUiApp(App):
         super().__init__(
             app_id="platform_ui",
             display_name="Platform UI",
-            description="Shared style, panel, and banner infrastructure.",
+            description="Shared style, panel, and personal UI preference infrastructure.",
             depends_on=("platform_core",),
             entry_modules=("app/platform_ui",),
         )
@@ -75,9 +77,14 @@ class PlatformUiApp(App):
                 module=panels,
             ),
             PlatformUiModuleSurface(
-                component_id='platform_ui.banner',
-                description='Server banner and intro surface.',
-                module=banner,
+                component_id='platform_ui.settings',
+                description='Personal UI settings command surface.',
+                module=settings,
+            ),
+            PlatformUiModuleSurface(
+                component_id='platform_ui.lastwin',
+                description='Last closed multi-page window reopen surface.',
+                module=lastwin,
             ),
         )
         self.components = self.ui_surfaces

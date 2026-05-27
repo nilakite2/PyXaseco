@@ -26,7 +26,18 @@ def register(aseco: 'Aseco'):
         display_name='recs',
         order=100,
     )
+    aseco.add_chat_command(
+        'pb',
+        'Shows your personal best on current track',
+        owner='chat/records',
+        app='records_local',
+        category='chat-records',
+        usage='/pb',
+        display_name='pb',
+        order=101,
+    )
     aseco.register_event('onChat_recs', chat_recs)
+    aseco.register_event('onChat_pb', chat_pb)
 
 
 async def chat_recs(aseco: 'Aseco', command: dict):
@@ -135,7 +146,7 @@ async def _dispatch(aseco: 'Aseco', command: dict, target: str):
     """Dispatch sub-command to the relevant handler."""
     if target == 'pb':
         try:
-            from apps.rasp.rankings import chat_pb
+            from apps.players.rankings import chat_pb
             await chat_pb(aseco, command)
         except ImportError:
             pass
@@ -149,5 +160,9 @@ async def _dispatch(aseco: 'Aseco', command: dict, target: str):
         from apps.records_local.chat_records2 import show_trackrecs
         mode = 0 if target == 'newrecs' else 2
         await show_trackrecs(aseco, command['author'].login, mode, 0)
+
+
+async def chat_pb(aseco: 'Aseco', command: dict):
+    await _dispatch(aseco, command, 'pb')
 
 

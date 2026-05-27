@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import feature
+from . import overlay
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -15,7 +15,7 @@ APP_METADATA = {
     "display_name": "ZTrack",
     "description": "ZTrack helper and map integration feature.",
     "modules": [
-        "apps/ztrack/feature.py",
+        "apps/ztrack/overlay.py",
     ],
     "entries": [
         "app/ztrack",
@@ -41,9 +41,9 @@ class ZTrackApp(App):
         )
         self.ztrack_surfaces = (
             ZTrackModuleSurface(
-                component_id='ztrack.feature',
-                description='ZTrack helper and map integration feature surface.',
-                module=feature,
+                component_id='ztrack.overlay',
+                description='ZTrack overlay and map integration surface.',
+                module=overlay,
             ),
         )
         self.components = self.ztrack_surfaces

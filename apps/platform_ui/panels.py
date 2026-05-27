@@ -572,7 +572,7 @@ async def allvotepanels_on(aseco: "Aseco", starter_login: str, ycolor: str):
     Spectator state read via spectatorstatus % 10.
     """
     try:
-        from apps.rasp.voting import auto_vote_starter, allow_spec_voting
+        from apps.voting.voting import auto_vote_starter, allow_spec_voting
     except Exception:
         auto_vote_starter = True
         allow_spec_voting = False

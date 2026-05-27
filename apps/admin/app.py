@@ -15,6 +15,7 @@ APP_METADATA = {
     "display_name": "Admin",
     "description": "Admin commands, moderation, map control, and server management.",
     "modules": [
+        "apps/admin/command_router.py",
         "apps/admin/server.py",
         "apps/admin/map.py",
         "apps/admin/player.py",
@@ -32,7 +33,8 @@ APP_METADATA = {
     "depends_on": [
         "platform_core",
         "tmx",
-        "rasp",
+        "jukebox",
+        "voting",
         "records_local",
     ],
 }
@@ -44,7 +46,7 @@ class AdminApp(App):
             app_id="admin",
             display_name="Admin",
             description="Admin commands, moderation, map control, and server management.",
-            depends_on=("platform_core", "tmx", "rasp", "records_local"),
+            depends_on=("platform_core", "tmx", "jukebox", "voting", "records_local"),
             entry_modules=("app/admin",),
         )
         self.domain_components = commands.get_domain_components()

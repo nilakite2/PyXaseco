@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import feature
+from . import gameplay
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -15,7 +15,7 @@ APP_METADATA = {
     "display_name": "JFreu",
     "description": "JFreu gameplay and rights feature set.",
     "modules": [
-        "apps/jfreu/feature.py",
+        "apps/jfreu/gameplay.py",
     ],
     "entries": [
         "app/jfreu",
@@ -40,9 +40,9 @@ class JFreuApp(App):
         )
         self.jfreu_surfaces = (
             JFreuModuleSurface(
-                component_id='jfreu.feature',
-                description='JFreu gameplay and rights feature surface.',
-                module=feature,
+                component_id='jfreu.gameplay',
+                description='JFreu gameplay and rights surface.',
+                module=gameplay,
             ),
         )
         self.components = self.jfreu_surfaces

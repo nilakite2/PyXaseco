@@ -15,7 +15,7 @@ import logging
 from html import escape
 from typing import TYPE_CHECKING
 
-from pyxaseco.helpers import display_manialink_multi, format_text, strip_colors
+from pyxaseco.helpers import format_text
 from pyxaseco.app_services import localdb_get_pool, localdb_update_donations
 
 if TYPE_CHECKING:
@@ -36,15 +36,15 @@ ANSWER_PAY_NO = 2800002
 ML_ID_PAYMENT = 2800000
 
 
-def register(aseco: "Aseco"):
+def register_donate_commands(aseco: "Aseco"):
     aseco.register_event("onBillUpdated", bill_updated)
     aseco.register_event("onPlayerManialinkPageAnswer", donate_manialink)
-
     aseco.add_chat_command("donate", "Donates coppers to server")
-    aseco.add_chat_command("topdons", "Displays top 100 highest donators")
-
     aseco.register_event("onChat_donate", chat_donate)
-    aseco.register_event("onChat_topdons", chat_topdons)
+
+
+def register(aseco: "Aseco"):
+    register_donate_commands(aseco)
 
 
 async def _send_login(aseco: "Aseco", login: str, message: str):
@@ -297,71 +297,6 @@ async def bill_updated(aseco: "Aseco", bill: list):
             coppers, login, tx_id
         )
         _bills.pop(bill_id, None)
-
-
-async def chat_topdons(aseco: "Aseco", command: dict):
-    player = command["author"]
-    login = player.login
-
-    if not _server_is_tmf(aseco):
-        await _send_login(aseco, login, aseco.get_chat_message("FOREVER_ONLY"))
-        return
-
-    if not aseco.server.rights:
-        await _send_login(
-            aseco,
-            login,
-            format_text(aseco.get_chat_message("UNITED_ONLY"), "server"),
-        )
-        return
-
-    try:
-        pool = await localdb_get_pool(aseco)
-        if not pool:
-            await _send_login(aseco, login, "{#server}> {#error}Local database unavailable!")
-            return
-
-        async with pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    """
-                    SELECT p.NickName, x.donations
-                    FROM players p
-                    LEFT JOIN players_extra x ON (p.Id = x.playerID)
-                    WHERE x.donations <> 0
-                    ORDER BY x.donations DESC
-                    LIMIT 100
-                    """
-                )
-                rows_db = await cur.fetchall()
-
-        if not rows_db:
-            await _send_login(aseco, login, "{#server}> {#error}No donator(s) found!")
-            return
-
-        rows = []
-        for i, row in enumerate(rows_db, 1):
-            nick = row[0] or ""
-            if not getattr(aseco.settings, "lists_colornicks", False):
-                nick = strip_colors(nick)
-            rows.append([f"{i:02d}.", "{#black}" + nick, int(row[1] or 0)])
-
-        player.msgs = [[
-            1,
-            "Current TOP 100 Donators:",
-            [0.9, 0.1, 0.6, 0.2],
-            ["Icons128x128_1", "Coppers", -0.01],
-        ]]
-        player.msgs.extend([rows[i:i + 15] for i in range(0, len(rows), 15)])
-        display_manialink_multi(aseco, player)
-
-    except Exception as e:
-        logger.exception("[Donate] /topdons failed: %s", e)
-        await _send_login(
-            aseco,
-            login,
-            "{#server}> {#error}Error loading donators list.",
-        )
 
 
 async def donate_manialink(aseco: "Aseco", answer: list):

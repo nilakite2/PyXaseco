@@ -25,7 +25,13 @@ def get_tmx_service(aseco):
 
 
 def get_dedimania_service(aseco):
-    return _get_service(aseco, 'dedimania', 'service/dedimania')
+    return _get_service(
+        aseco,
+        'records_dedimania',
+        'service/records_dedimania',
+        'dedimania',
+        'service/dedimania',
+    )
 
 
 def get_dedi_db(aseco) -> dict[str, Any]:

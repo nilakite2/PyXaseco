@@ -68,12 +68,12 @@ async def handle_subcommand(
     logtitle: str,
     chattitle: str,
 ) -> bool:
-    from . import chat as admin_chat
+    from . import command_router as admin_chat
 
     if sub in ('nextmap', 'next', 'skipmap', 'skip'):
         skipped_jb = None
         try:
-            from apps.rasp.jukebox import force_jukebox_next, jukebox
+            from apps.jukebox.jukebox import force_jukebox_next, jukebox
 
             if jukebox:
                 _uid, skipped_jb = next(iter(jukebox.items()))
@@ -105,7 +105,7 @@ async def handle_subcommand(
 
     if sub in ('previous', 'prev'):
         try:
-            from apps.rasp.jukebox import jb_buffer
+            from apps.jukebox.jukebox import jb_buffer
 
             if not isinstance(jb_buffer, list) or len(jb_buffer) < 2:
                 await admin_chat._reply(
@@ -196,7 +196,7 @@ async def handle_subcommand(
 
     if sub in ('dropjukebox', 'djb'):
         try:
-            from apps.rasp.jukebox import jukebox
+            from apps.jukebox.jukebox import jukebox
             if not jukebox:
                 await admin_chat._reply(aseco, login, '{#server}> {#error}Jukebox is empty!')
                 return True
@@ -230,7 +230,7 @@ async def handle_subcommand(
 
     if sub in ('clearjukebox', 'cjb'):
         try:
-            from apps.rasp.jukebox import jukebox
+            from apps.jukebox.jukebox import jukebox
             jukebox.clear()
             await admin_chat._broadcast(
                 aseco,
@@ -242,7 +242,7 @@ async def handle_subcommand(
 
     if sub == 'clearhist':
         try:
-            from apps.rasp.jukebox import jb_buffer
+            from apps.jukebox.jukebox import jb_buffer
 
             buf = jb_buffer
             if not isinstance(buf, list):
@@ -299,8 +299,8 @@ async def handle_subcommand(
 
     if sub == 'pass':
         try:
-            from apps.rasp.voting import chatvote, tmxadd
-            from apps.rasp.jukebox import chat_y
+            from apps.voting.voting import chatvote, tmxadd
+            from apps.jukebox.jukebox import chat_y
             if chatvote or tmxadd:
                 if chatvote:
                     chatvote['votes'] = 0
@@ -316,7 +316,7 @@ async def handle_subcommand(
 
     if sub in ('cancel', 'can'):
         try:
-            from apps.rasp.voting import chatvote, tmxadd
+            from apps.voting.voting import chatvote, tmxadd
             if chatvote:
                 aseco.console('{1} [{2}] cancelled vote', logtitle, login)
                 msg = admin_chat.format_text('{#server}>> {#error}Vote cancelled by admin.')
@@ -512,7 +512,7 @@ async def handle_subcommand(
         jukebox_adminadd = True
         for trkid in track_ids:
             try:
-                from apps.rasp.jukebox import admin_add_tmx_track
+                from apps.jukebox.jukebox import admin_add_tmx_track
                 ok, info = await admin_add_tmx_track(
                     aseco, trkid, login, source_hint, use_add_challenge=True
                 )
@@ -533,7 +533,7 @@ async def handle_subcommand(
 
     if sub == 'addthis':
         try:
-            from apps.rasp.jukebox import tmxplayed
+            from apps.jukebox.jukebox import tmxplayed
         except Exception:
             tmxplayed = None
 
@@ -547,7 +547,7 @@ async def handle_subcommand(
                 return True
 
             try:
-                from apps.rasp.jukebox import _matchsettings_path, _ensure_matchsettings_entry
+                from apps.jukebox.jukebox import _matchsettings_path, _ensure_matchsettings_entry
             except Exception:
                 _matchsettings_path = None
                 _ensure_matchsettings_entry = None
@@ -564,7 +564,7 @@ async def handle_subcommand(
                 )
 
             try:
-                import apps.rasp.jukebox as rasp_jukebox_mod
+                import apps.jukebox.jukebox as rasp_jukebox_mod
                 rasp_jukebox_mod.tmxplayed = False
             except Exception:
                 pass
@@ -589,7 +589,7 @@ async def handle_subcommand(
                 await aseco.release_event('onTracklistChanged', ['add', rel_insert])
 
                 try:
-                    from apps.rasp.jukebox import _parse_gbx_metadata, _matchsettings_path, _ensure_matchsettings_entry
+                    from apps.jukebox.jukebox import _parse_gbx_metadata, _matchsettings_path, _ensure_matchsettings_entry
 
                     gbx_path = (aseco._base_dir.parent / 'GameData' / 'Tracks' / rel_insert).resolve()
                     metadata = await asyncio.to_thread(_parse_gbx_metadata, gbx_path)
@@ -673,9 +673,9 @@ async def handle_subcommand(
     if sub in ('delrec', 'prunerecs'):
         await admin_chat._delegate_if_exists(
             aseco, login,
-            'apps.records_eyepiece.app:chat_admin_records',
+            'apps.ui.app:chat_admin_records',
             aseco, command,
-            unavailable_msg='{#server}> {#admin}Record admin commands unavailable - include app/records_eyepiece'
+            unavailable_msg='{#server}> {#admin}Record admin commands unavailable - include app/ui'
         )
         return True
 
