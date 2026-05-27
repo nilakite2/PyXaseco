@@ -835,11 +835,21 @@ class Aseco:
         Returns True when a registered slash command was recognized and dispatched,
         otherwise False.
         """
-        if not text or not str(text).startswith('/'):
+        if not text:
+            return False
+
+        text = str(text)
+        if text == '//':
+            text = '/admin'
+        elif text.startswith('//'):
+            rest = text[2:].lstrip()
+            text = f'/admin {rest}' if rest else '/admin'
+
+        if not text.startswith('/'):
             return False
 
         # Split command name and args
-        parts = str(text)[1:].split(None, 1)
+        parts = text[1:].split(None, 1)
         cmd_name = parts[0].lower() if parts else ''
         cmd_args = parts[1] if len(parts) > 1 else ''
 

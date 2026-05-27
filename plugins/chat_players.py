@@ -7,7 +7,7 @@ chat_players.py — Port of plugins/chat.players.php
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import ML_ID_MAIN, strip_colors, display_manialink_multi
-from pyxaseco.plugins.plugin_localdatabase import map_country
+from pyxaseco.plugins.plugin_localdatabase import map_country, get_pool
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -33,6 +33,14 @@ def _display_country(pl) -> str:
     return country
 
 
+def _is_admin_login(aseco: 'Aseco', login: str) -> bool:
+    return (
+        aseco.is_master_admin_login(login)
+        or aseco.is_admin_login(login)
+        or aseco.is_operator_login(login)
+    )
+
+
 def register(aseco: 'Aseco'):
     aseco.add_chat_command('players', 'Displays current list of nicks/logins')
     aseco.register_event('onChat_players',              chat_players)
@@ -44,29 +52,72 @@ async def chat_players(aseco: 'Aseco', command: dict):
     params = command['params'].split(None, 1)
     search = params[0].lower() if params else ''
 
-    head   = 'Players On This Server:'
+    head   = 'Players Known To This Server:'
     HEADER = ['Id', '{#nick}Nick $g/{#login} Login', '{#black}Nation']
+
+    online_players = {pl.login: pl for pl in aseco.server.players.all()}
+    db_rows = []
+    try:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        'SELECT Login, NickName, Nation, UpdatedAt '
+                        'FROM players ORDER BY UpdatedAt DESC, Login ASC'
+                    )
+                    db_rows = await cur.fetchall()
+    except Exception:
+        db_rows = []
 
     pid = 1
     player.playerlist = []
     entries = []   # list of data rows (no header rows here)
 
-    for pl in aseco.server.players.all():
-        nick_plain = strip_colors(pl.nickname)
-        if search and search not in nick_plain.lower() and search not in pl.login.lower():
-            continue
+    if db_rows:
+        for row in db_rows:
+            login = str((row[0] if row and len(row) > 0 else '') or '').strip()
+            nickname_db = str((row[1] if row and len(row) > 1 else '') or '').strip()
+            nation_db = str((row[2] if row and len(row) > 2 else '') or '').strip()
+            if not login:
+                continue
 
-        player.playerlist.append({'login': pl.login})
+            online = online_players.get(login)
+            nickname = getattr(online, 'nickname', '') or nickname_db or login
+            nick_plain = strip_colors(nickname)
+            if search and search not in nick_plain.lower() and search not in login.lower():
+                continue
 
-        nick_display = '{#black}' + pl.nickname + '$z / ' + \
-                       ('{#logina}' if aseco.is_any_admin(pl) else '{#login}') + pl.login
-        if aseco.settings.clickable_lists and pid <= 200:
-            nick_display = [nick_display, pid + 2000]
+            player.playerlist.append({'login': login})
 
-        nat = _display_country(pl)
+            nick_display = '{#black}' + nickname + '$z / ' + \
+                           ('{#logina}' if _is_admin_login(aseco, login) else '{#login}') + login
+            if aseco.settings.clickable_lists and pid <= 200:
+                nick_display = [nick_display, pid + 2000]
 
-        entries.append([f'{pid:02d}.', nick_display, '{#black}' + nat])
-        pid += 1
+            nat = _display_country(online) if online else nation_db
+            if nat and len(nat) > 14:
+                nat = map_country(nat)
+
+            entries.append([f'{pid:02d}.', nick_display, '{#black}' + nat])
+            pid += 1
+    else:
+        for pl in aseco.server.players.all():
+            nick_plain = strip_colors(pl.nickname)
+            if search and search not in nick_plain.lower() and search not in pl.login.lower():
+                continue
+
+            player.playerlist.append({'login': pl.login})
+
+            nick_display = '{#black}' + pl.nickname + '$z / ' + \
+                           ('{#logina}' if aseco.is_any_admin(pl) else '{#login}') + pl.login
+            if aseco.settings.clickable_lists and pid <= 200:
+                nick_display = [nick_display, pid + 2000]
+
+            nat = _display_country(pl)
+
+            entries.append([f'{pid:02d}.', nick_display, '{#black}' + nat])
+            pid += 1
 
     if not entries:
         await aseco.client.query_ignore_result(

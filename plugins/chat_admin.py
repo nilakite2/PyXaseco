@@ -356,11 +356,53 @@ def _visible_normal_commands_for_player(aseco: 'Aseco', player) -> list[tuple[st
 
     return result
 
+
+def _show_admin_list_window(
+    aseco: 'Aseco',
+    admin,
+    header: str,
+    icon: list,
+    table_header: list[str],
+    entries: list[list],
+    widths: list[float],
+) -> None:
+    pages = []
+    page = [table_header]
+    lines = 0
+
+    for row in entries:
+        page.append(row)
+        lines += 1
+        if lines >= 14:
+            pages.append(page)
+            page = [table_header]
+            lines = 0
+
+    if len(page) > 1:
+        pages.append(page)
+
+    admin.msgs = [[1, header, widths, icon]]
+    admin.msgs.extend(pages or [[table_header]])
+    display_manialink_multi(aseco, admin)
+
 async def _deny_protected_target(aseco: 'Aseco', actor, target_login: str):
     await _reply(
         aseco,
         actor.login,
         f'{{#server}}> {{#error}}You are not allowed to target {{#highlite}}{target_login}{{#error}} due to access hierarchy.'
+    )
+
+
+def _is_connected_player(aseco: 'Aseco', target) -> bool:
+    login = getattr(target, 'login', '')
+    return bool(login and aseco.server.players.get_player(login))
+
+
+async def _deny_offline_target(aseco: 'Aseco', admin, target_login: str):
+    await _reply(
+        aseco,
+        getattr(admin, 'login', ''),
+        f'{{#server}}> {{#error}}Player is known but not currently connected: {{#highlite}}{target_login}',
     )
 
 def _all_visible_commands_for_player(aseco: 'Aseco', player) -> list[tuple[str, str]]:
@@ -813,12 +855,12 @@ async def _get_player_param(aseco: 'Aseco', admin, arg: str, offline: bool = Fal
         db_player = await _get_offline_player_from_db(aseco, value)
         if db_player:
             return db_player
-
-        class _OfflinePlayer:
-            def __init__(self, login: str):
-                self.login = login
-                self.nickname = login
-        return _OfflinePlayer(value)
+        await _reply(
+            aseco,
+            admin.login,
+            f'{{#server}}> {{#error}}Player not found in database: {{#highlite}}{value}'
+        )
+        return None
 
     await _reply(
         aseco,
@@ -1109,6 +1151,56 @@ def _playerlist_get_ip(admin, idx1: int) -> str | None:
     return None
 
 
+def _bannedips_path(aseco: 'Aseco') -> pathlib.Path:
+    filename = getattr(getattr(aseco, 'settings', None), 'bannedips_file', 'bannedips.xml') or 'bannedips.xml'
+    return pathlib.Path(getattr(aseco, '_base_dir', '.')).resolve() / filename
+
+
+def _get_bannedips_state(aseco: 'Aseco') -> list[str]:
+    values = getattr(getattr(aseco, 'settings', None), 'bannedips', []) or []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        ip = str(value or '').strip()
+        if not ip:
+            continue
+        key = ip.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(ip)
+    return result
+
+
+def _set_bannedips_state(aseco: 'Aseco', ips: list[str]) -> None:
+    setattr(getattr(aseco, 'settings', None), 'bannedips', list(ips))
+
+
+async def _write_bannedips_xml(aseco: 'Aseco') -> pathlib.Path | None:
+    path = _bannedips_path(aseco)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entries = '\n'.join(f'\t<ipaddress>{ip}</ipaddress>' for ip in _get_bannedips_state(aseco))
+    content = (
+        '<?xml version="1.0" encoding="utf-8" ?>\n'
+        '<bannedips>\n'
+        f'{entries}\n'
+        '</bannedips>\n'
+    )
+    try:
+        await asyncio.to_thread(path.write_text, content, encoding='utf-8')
+        return path
+    except Exception:
+        return None
+
+
+async def _read_bannedips_xml(aseco: 'Aseco') -> bool:
+    try:
+        from pyxaseco.core.config import load_bannedips
+        return bool(load_bannedips(_bannedips_path(aseco), aseco.settings))
+    except Exception:
+        return False
+
+
 async def _dispatch_public_admin_subcommand(aseco: 'Aseco', command: dict, sub: str):
     forwarded = dict(command)
     forwarded['params'] = sub
@@ -1313,15 +1405,15 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     if sub == 'help':
         cmds_list = _visible_admin_commands_for_player(aseco, admin)
-        shown = cmds_list[:20]
 
-        if shown:
-            msg = (
-                f'{{#server}}> Available commands for {{#highlite}}/admin <cmd>{{#message}}: ' +
-                ' '.join(f'{{#highlite}}{n}{{#message}}' for n, _ in shown)
+        if cmds_list:
+            msg = aseco.format_colors(
+                '{#interact}Currently supported subcommands for /admin, /ad, /a, //:\n'
             )
-            if len(cmds_list) > len(shown):
-                msg += ' {#message}... use {#highlite}/admin helpall'
+            msg += ', '.join(name for name, _ in cmds_list)
+            msg += aseco.format_colors(
+                '\n{#interact}Use {#highlite}/admin helpall{#interact} for descriptions.'
+            )
         else:
             msg = '{#server}> {#error}No commands available.'
 
@@ -1702,6 +1794,9 @@ async def chat_admin(aseco: 'Aseco', command: dict):
     elif sub == 'warn':
         target = await _get_player_param(aseco, admin, arg)
         if target:
+            if not _is_connected_player(aseco, target):
+                await _deny_offline_target(aseco, admin, target.login)
+                return
             if not _can_target_player(aseco, admin, target):
                 await _deny_protected_target(aseco, admin, target.login)
                 return
@@ -1718,6 +1813,9 @@ async def chat_admin(aseco: 'Aseco', command: dict):
     elif sub == 'kick':
         target = await _get_player_param(aseco, admin, arg)
         if target:
+            if not _is_connected_player(aseco, target):
+                await _deny_offline_target(aseco, admin, target.login)
+                return
             if not _can_target_player(aseco, admin, target):
                 await _deny_protected_target(aseco, admin, target.login)
                 return
@@ -1741,9 +1839,9 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 await _reply(aseco, login, f'{{#server}}> {{#error}}{e}')
 
     elif sub == 'ban':
-        target = await _get_player_param(aseco, admin, arg)
+        target = await _get_player_param(aseco, admin, arg, offline=True)
         if target:
-            if not _can_target_player(aseco, admin, target):
+            if not _can_target_login(aseco, admin, target.login):
                 await _deny_protected_target(aseco, admin, target.login)
                 return
 
@@ -1771,7 +1869,11 @@ async def chat_admin(aseco: 'Aseco', command: dict):
         if ip:
             try:
                 await aseco.client.query_ignore_result('BanIP', ip)
-                await aseco.client.query_ignore_result('SaveBannedIPs', 'bannedips.xml')
+                current = _get_bannedips_state(aseco)
+                if ip.lower() not in {item.lower() for item in current}:
+                    current.append(ip)
+                    _set_bannedips_state(aseco, current)
+                await _write_bannedips_xml(aseco)
                 aseco.console('{1} [{2}] banned IP [{3}]', logtitle, login, ip)
                 await _reply(aseco, login, f'{{#server}}> Banned IP: {{#highlite}}{ip}')
             except Exception as e:
@@ -1782,16 +1884,18 @@ async def chat_admin(aseco: 'Aseco', command: dict):
         if ip:
             try:
                 await aseco.client.query_ignore_result('UnBanIP', ip)
-                await aseco.client.query_ignore_result('SaveBannedIPs', 'bannedips.xml')
+                current = [item for item in _get_bannedips_state(aseco) if item.lower() != ip.lower()]
+                _set_bannedips_state(aseco, current)
+                await _write_bannedips_xml(aseco)
                 aseco.console('{1} [{2}] unbanned IP [{3}]', logtitle, login, ip)
                 await _reply(aseco, login, f'{{#server}}> Unbanned IP: {{#highlite}}{ip}')
             except Exception as e:
                 await _reply(aseco, login, f'{{#server}}> {{#error}}{e}')
 
     elif sub == 'black':
-        target = await _get_player_param(aseco, admin, arg)
+        target = await _get_player_param(aseco, admin, arg, offline=True)
         if target:
-            if not _can_target_player(aseco, admin, target):
+            if not _can_target_login(aseco, admin, target.login):
                 await _deny_protected_target(aseco, admin, target.login)
                 return
 
@@ -1801,7 +1905,8 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                 aseco.console('{1} [{2}] blacklisted [{3}]', logtitle, login, target.login)
                 await _broadcast(aseco, _fmt_admin(aseco, admin, chattitle,
                                                    'blacklists', strip_colors(target.nickname)))
-                await aseco.client.query_ignore_result('Kick', target.login)
+                if _is_connected_player(aseco, target):
+                    await aseco.client.query_ignore_result('Kick', target.login)
             except Exception as e:
                 await _reply(aseco, login, f'{{#server}}> {{#error}}{e}')
 
@@ -1853,6 +1958,9 @@ async def chat_admin(aseco: 'Aseco', command: dict):
     elif sub in ('mute', 'ignore'):
         target = await _get_player_param(aseco, admin, arg)
         if target:
+            if not _is_connected_player(aseco, target):
+                await _deny_offline_target(aseco, admin, target.login)
+                return
             if not _can_target_player(aseco, admin, target):
                 await _deny_protected_target(aseco, admin, target.login)
                 return
@@ -1889,14 +1997,15 @@ async def chat_admin(aseco: 'Aseco', command: dict):
         if ml:
             admin.playerlist = [{'login': lgn, 'nickname': lgn} for lgn in ml]
             header = 'Global Mute/Ignore List:'
-            rows = [['#', 'Login', 'Action']]
+            rows = []
             for i, lgn in enumerate(ml, 1):
-                action = f'$l[{ML_LIST_UNIGNORE_BASE + i}]{{#highlite}}UNMUTE$l'
-                rows.append([f'{i:02d}.', lgn, action])
-            display_manialink(
-                aseco, login, header,
+                rows.append([f'{i:02d}.', lgn, ['{#highlite}UNMUTE', ML_LIST_UNIGNORE_BASE + i]])
+            _show_admin_list_window(
+                aseco, admin, header,
                 ['Icons64x64_1', 'NotBuddy'],
-                rows, [0.10, 0.65, 0.25], 'OK'
+                ['#', 'Login', 'Action'],
+                rows,
+                [1.00, 0.12, 0.68, 0.20],
             )
         else:
             await _reply(aseco, login, '{#server}> Mute list is empty.')
@@ -2157,18 +2266,20 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                     for b in bans
                 ]
                 header = 'Current Ban List:'
-                rows = [['#', 'Login', 'Nick', 'Action']]
+                rows = []
                 for i, b in enumerate(bans, 1):
                     rows.append([
                         f'{i:02d}.',
                         b.get('Login', ''),
                         strip_colors(b.get('NickName', '')),
-                        f'$l[{ML_LIST_UNBAN_BASE + i}]{{#highlite}}UNBAN$l'
+                        ['{#highlite}UNBAN', ML_LIST_UNBAN_BASE + i],
                     ])
-                display_manialink(
-                    aseco, login, header,
+                _show_admin_list_window(
+                    aseco, admin, header,
                     ['Icons64x64_1', 'NotBuddy'],
-                    rows, [0.10, 0.38, 0.34, 0.18], 'OK'
+                    ['#', 'Login', 'Nick', 'Action'],
+                    rows,
+                    [1.10, 0.12, 0.42, 0.40, 0.16],
                 )
             else:
                 await _reply(aseco, login, '{#server}> Ban list is empty.')
@@ -2184,18 +2295,20 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                     for b in bl
                 ]
                 header = 'Current Black List:'
-                rows = [['#', 'Login', 'Nick', 'Action']]
+                rows = []
                 for i, b in enumerate(bl, 1):
                     rows.append([
                         f'{i:02d}.',
                         b.get('Login', ''),
                         strip_colors(b.get('NickName', '')),
-                        f'$l[{ML_LIST_UNBLACK_BASE + i}]{{#highlite}}UNBLACK$l'
+                        ['{#highlite}UNBLACK', ML_LIST_UNBLACK_BASE + i],
                     ])
-                display_manialink(
-                    aseco, login, header,
+                _show_admin_list_window(
+                    aseco, admin, header,
                     ['Icons64x64_1', 'NotBuddy'],
-                    rows, [0.10, 0.38, 0.34, 0.18], 'OK'
+                    ['#', 'Login', 'Nick', 'Action'],
+                    rows,
+                    [1.10, 0.12, 0.42, 0.40, 0.16],
                 )
             else:
                 await _reply(aseco, login, '{#server}> Black list is empty.')
@@ -2204,21 +2317,23 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub in ('showiplist', 'listips'):
         try:
-            ips = await aseco.client.query('GetBannedIPs') or []
+            ips = _get_bannedips_state(aseco)
             if ips:
                 admin.iplist = list(ips)
                 header = 'Banned IPs:'
-                rows = [['#', 'IP Address', 'Action']]
+                rows = []
                 for i, ip in enumerate(ips, 1):
                     rows.append([
                         f'{i:02d}.',
                         ip,
-                        f'$l[{ML_UNBANIP_NEG_BASE - i}]{{#highlite}}UNBAN$l'
+                        ['{#highlite}UNBAN', ML_UNBANIP_NEG_BASE - i],
                     ])
-                display_manialink(
-                    aseco, login, header,
+                _show_admin_list_window(
+                    aseco, admin, header,
                     ['Icons64x64_1', 'NotBuddy'],
-                    rows, [0.10, 0.65, 0.25], 'OK'
+                    ['#', 'IP Address', 'Action'],
+                    rows,
+                    [1.00, 0.12, 0.68, 0.20],
                 )
             else:
                 await _reply(aseco, login, '{#server}> No banned IPs.')
@@ -2234,18 +2349,20 @@ async def chat_admin(aseco: 'Aseco', command: dict):
                     for g in gl
                 ]
                 header = 'Current Guest List:'
-                rows = [['#', 'Login', 'Nick', 'Action']]
+                rows = []
                 for i, g in enumerate(gl, 1):
                     rows.append([
                         f'{i:02d}.',
                         g.get('Login', ''),
                         strip_colors(g.get('NickName', '')),
-                        f'$l[{ML_LIST_REMOVEGUEST_BASE + i}]{{#highlite}}REMOVE$l'
+                        ['{#highlite}REMOVE', ML_LIST_REMOVEGUEST_BASE + i],
                     ])
-                display_manialink(
-                    aseco, login, header,
+                _show_admin_list_window(
+                    aseco, admin, header,
                     ['Icons128x128_1', 'Invite'],
-                    rows, [0.10, 0.38, 0.34, 0.18], 'OK'
+                    ['#', 'Login', 'Nick', 'Action'],
+                    rows,
+                    [1.10, 0.12, 0.42, 0.40, 0.16],
                 )
             else:
                 await _reply(aseco, login, '{#server}> Guest list is empty.')
@@ -2261,7 +2378,13 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub in ('cleaniplist',):
         try:
-            await aseco.client.query_ignore_result('CleanBannedIPs')
+            for ip in _get_bannedips_state(aseco):
+                try:
+                    await aseco.client.query_ignore_result('UnBanIP', ip)
+                except Exception:
+                    pass
+            _set_bannedips_state(aseco, [])
+            await _write_bannedips_xml(aseco)
             await _reply(aseco, login, '{#server}> Banned IPs list cleaned.')
         except Exception as e:
             await _reply(aseco, login, f'{{#server}}> {{#error}}{e}')
@@ -2310,15 +2433,21 @@ async def chat_admin(aseco: 'Aseco', command: dict):
 
     elif sub in ('writeiplist',):
         try:
-            await aseco.client.query_ignore_result('SaveBannedIPs', 'bannedips.xml')
-            await _reply(aseco, login, '{#server}> Banned IPs list saved.')
+            path = await _write_bannedips_xml(aseco)
+            if path:
+                await _reply(aseco, login, '{#server}> Banned IPs list saved.')
+            else:
+                await _reply(aseco, login, '{#server}> {#error}Could not save banned IPs list.')
         except Exception as e:
             await _reply(aseco, login, f'{{#server}}> {{#error}}{e}')
 
     elif sub in ('readiplist',):
         try:
-            await aseco.client.query_ignore_result('LoadBannedIPs', 'bannedips.xml')
-            await _reply(aseco, login, '{#server}> Banned IPs list loaded.')
+            ok = await _read_bannedips_xml(aseco)
+            if ok:
+                await _reply(aseco, login, '{#server}> Banned IPs list loaded.')
+            else:
+                await _reply(aseco, login, '{#server}> {#error}Could not load banned IPs list.')
         except Exception as e:
             await _reply(aseco, login, f'{{#server}}> {{#error}}{e}')
 

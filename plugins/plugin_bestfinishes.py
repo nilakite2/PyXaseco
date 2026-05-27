@@ -33,9 +33,19 @@ class BestFinishesState:
 _state = BestFinishesState()
 
 
+def _in_score_mode(aseco: "Aseco") -> bool:
+    try:
+        from pyxaseco.models import Gameinfo
+        gameinfo = getattr(getattr(aseco, "server", None), "gameinfo", None)
+        return gameinfo is not None and getattr(gameinfo, "mode", -1) == Gameinfo.SCOR
+    except Exception:
+        return False
+
+
 def register(aseco: "Aseco"):
     aseco.register_event("onStartup", OnStartup_bestfinishes)
     aseco.register_event("onNewChallenge", OnNewChallenge_bestfinishes)
+    aseco.register_event("onEndRace", OnEndRace_bestfinishes)
     aseco.register_event("onPlayerFinish", OnPlayerFinish_bestfinishes)
     aseco.register_event("onPlayerConnect", OnPlayerConnect_bestfinishes)
 
@@ -61,7 +71,8 @@ async def OnStartup_bestfinishes(aseco: "Aseco", _empty):
 
 
 async def OnPlayerConnect_bestfinishes(aseco: "Aseco", _player: "Player"):
-    # Keep widget visible / initialized for newly connected players.
+    if _in_score_mode(aseco):
+        return
     await Display_bestfinishes(aseco)
 
 
@@ -69,8 +80,11 @@ async def OnNewChallenge_bestfinishes(aseco: "Aseco", challenge: "Challenge"):
     _state.count = 0
     _state.bestfinishes = []
     await Clear_bestfinishes(aseco, challenge)
-    # Immediately redraw empty state so the widget area exists on the new map.
     await Display_bestfinishes(aseco)
+
+
+async def OnEndRace_bestfinishes(aseco: "Aseco", challenge):
+    await Clear_bestfinishes(aseco, challenge)
 
 
 def _extract_record_from_finish(aseco: "Aseco", payload: Any) -> Any | None:

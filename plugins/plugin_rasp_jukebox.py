@@ -158,6 +158,43 @@ def _is_login_online(aseco: 'Aseco', login: str) -> bool:
     return any(player.login == login for player in aseco.server.players.all())
 
 
+async def _resolve_requester_nick(aseco: 'Aseco', login: str) -> str:
+    target_login = str(login or '').strip()
+    if not target_login:
+        return ''
+
+    try:
+        player = aseco.server.players.get_player(target_login)
+        if player and getattr(player, 'nickname', ''):
+            return str(player.nickname)
+    except Exception:
+        pass
+
+    try:
+        try:
+            from pyxaseco.plugins.plugin_localdatabase import get_pool
+        except ImportError:
+            from pyxaseco_plugins.plugin_localdatabase import get_pool
+
+        pool = await get_pool()
+        if not pool:
+            return ''
+
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    'SELECT NickName FROM players WHERE Login=%s LIMIT 1',
+                    (target_login,),
+                )
+                row = await cur.fetchone()
+        if row and row[0]:
+            return str(row[0])
+    except Exception:
+        pass
+
+    return ''
+
+
 def _prepend_jukebox_track(uid: str, track: dict):
     global jukebox
     jukebox = {uid: track, **jukebox}
@@ -1061,7 +1098,7 @@ async def admin_add_tmx_track(
                     'Name': raw_name,
                     'Env': metadata.get('environment', ''),
                     'Login': login,
-                    'Nick': '',
+                    'Nick': await _resolve_requester_nick(aseco, login),
                     'source': 'TMX',
                     'tmx': True,
                     'uid': uid,
@@ -1315,15 +1352,18 @@ async def _rasp_endrace(aseco: 'Aseco', _data):
         is_tmu_env = (game == 'TMF' and getattr(aseco.server, 'packmask', 'Stadium') != 'Stadium')
         stripped_name = strip_colors(next_track.get('Name', ''))
         stripped_nick = strip_colors(next_track.get('Nick', ''))
+        requester_known = bool(stripped_nick)
 
         if is_tmu_env:
-            if next_track.get('tmx'):
+            if next_track.get('tmx') and not requester_known:
                 logmsg = (
                     f'{{RASP Jukebox}} Setting Next Challenge to [{next_track.get("Env", "")}] '
                     f'{stripped_name}, file downloaded from {next_track.get("source", "")}'
                 )
                 tmxplaying = next_track.get('FileName', '')
             else:
+                if next_track.get('tmx'):
+                    tmxplaying = next_track.get('FileName', '')
                 logmsg = (
                     f'{{RASP Jukebox}} Setting Next Challenge to [{next_track.get("Env", "")}] '
                     f'{stripped_name}, requested by {stripped_nick}'
@@ -1335,13 +1375,15 @@ async def _rasp_endrace(aseco: 'Aseco', _data):
                 stripped_nick,
             )
         else:
-            if next_track.get('tmx'):
+            if next_track.get('tmx') and not requester_known:
                 logmsg = (
                     f'{{RASP Jukebox}} Setting Next Challenge to {stripped_name}, '
                     f'file downloaded from {next_track.get("source", "")}'
                 )
                 tmxplaying = next_track.get('FileName', '')
             else:
+                if next_track.get('tmx'):
+                    tmxplaying = next_track.get('FileName', '')
                 logmsg = (
                     f'{{RASP Jukebox}} Setting Next Challenge to {stripped_name}, '
                     f'requested by {stripped_nick}'
@@ -1615,7 +1657,7 @@ async def chat_list(aseco: 'Aseco', command: dict):
         header = '{#black}/list$g will show tracks in rotation on the server:'
         data = [
             ['...', '{#black}help',           'Displays this help information'],
-            ['...', '{#black}nofinish',        "Shows tracks you haven't completed"],
+            ['...', '{#black}nofinish$g/{#black}nofin', "Shows tracks you haven't completed"],
             ['...', '{#black}norank',          "Shows tracks you don't have a rank on"],
             ['...', '{#black}nogold',          "Shows tracks you didn't beat gold time on"],
             ['...', '{#black}noauthor',        "Shows tracks you didn't beat author time on"],
@@ -1659,9 +1701,9 @@ async def chat_list(aseco: 'Aseco', command: dict):
         _show_or_error(aseco, player, login)
         return
 
-    if p0 in ('nofinish', 'norank', 'nogold', 'noauthor', 'recent', 'norecent'):
+    if p0 in ('nofinish', 'nofin', 'norank', 'nogold', 'noauthor', 'recent', 'norecent'):
         try:
-            if p0 == 'nofinish':
+            if p0 in ('nofinish', 'nofin'):
                 await _get_challenges_no_finish(aseco, player)
             elif p0 == 'norank':
                 await _get_challenges_no_rank(aseco, player)
@@ -2660,7 +2702,7 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
         header = '{#black}/autojuke$g will jukebox a track from /list selection:'
         data = [
             ['...', '{#black}help', 'Displays this help information'],
-            ['...', '{#black}nofinish', "Selects tracks you haven't completed"],
+            ['...', '{#black}nofinish$g/{#black}nofin', "Selects tracks you haven't completed"],
             ['...', '{#black}norank', "Selects tracks you don't have a rank on"],
             ['...', '{#black}nogold', "Selects tracks you didn't beat gold time on"],
             ['...', '{#black}noauthor', "Selects tracks you didn't beat author time on"],
@@ -2684,7 +2726,7 @@ async def chat_autojuke(aseco: 'Aseco', command: dict):
         return
 
     try:
-        if selection == 'nofinish':
+        if selection in ('nofinish', 'nofin'):
             await _get_challenges_no_finish(aseco, player)
         elif selection == 'norank':
             await _get_challenges_no_rank(aseco, player)
@@ -2775,11 +2817,9 @@ async def chat_add(aseco: 'Aseco', command: dict):
         )
         if ok:
             msg = format_text(
-                '{#server}>> {#admin}{1}$z$s {#highlite}{2}$z$s '
-                '{#admin}adds track: {#highlite}{3} {#admin}from TMX',
-                getattr(player, 'title', 'Admin'),
-                player.nickname,
+                '{#server}>> {#highlite}{1}{#admin} was added to the jukebox by {#highlite}{2}',
                 info,
+                player.nickname,
             )
             await _jb_broadcast(aseco, msg)
         else:

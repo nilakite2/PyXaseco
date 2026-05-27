@@ -12,6 +12,7 @@ import time
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import (format_text, format_time_h, strip_colors,
                                display_manialink)
+from pyxaseco.models import Player as RuntimePlayer
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -45,18 +46,123 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onChat_settings', chat_settings)
 
 
+async def _lookup_player_from_db(aseco: 'Aseco', value: str):
+    value = (value or '').strip()
+    if not value:
+        return None
+
+    try:
+        from pyxaseco.plugins.plugin_localdatabase import get_pool
+        pool = await get_pool()
+        if not pool:
+            return None
+
+        value_l = value.lower()
+        like = f'%{value}%'
+
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    'SELECT Id, Login, NickName, Nation, Wins, TimePlayed, TeamName, UpdatedAt '
+                    'FROM players WHERE Login=%s LIMIT 1',
+                    (value,),
+                )
+                row = await cur.fetchone()
+                if row:
+                    rows = [row]
+                else:
+                    await cur.execute(
+                        'SELECT Id, Login, NickName, Nation, Wins, TimePlayed, TeamName, UpdatedAt '
+                        'FROM players '
+                        'WHERE Login LIKE %s OR NickName LIKE %s '
+                        'ORDER BY UpdatedAt DESC, Login ASC LIMIT 50',
+                        (like, like),
+                    )
+                    rows = await cur.fetchall()
+    except Exception:
+        return None
+
+    if not rows:
+        return None
+
+    candidates = []
+    for row in rows:
+        login = str((row[1] if len(row) > 1 else '') or '').strip()
+        nickname = str((row[2] if len(row) > 2 else '') or '').strip()
+        if not login:
+            continue
+        candidates.append({
+            'id': int((row[0] if len(row) > 0 else 0) or 0),
+            'login': login,
+            'nickname': nickname or login,
+            'nation': str((row[3] if len(row) > 3 else '') or '').strip(),
+            'wins': int((row[4] if len(row) > 4 else 0) or 0),
+            'timeplayed': int((row[5] if len(row) > 5 else 0) or 0),
+            'teamname': str((row[6] if len(row) > 6 else '') or '').strip(),
+            'updated_at': str((row[7] if len(row) > 7 else '') or '').strip(),
+        })
+
+    if not candidates:
+        return None
+
+    value_l = value.lower()
+    match = None
+    exact_login = [item for item in candidates if item['login'].lower() == value_l]
+    if len(exact_login) == 1:
+        match = exact_login[0]
+    else:
+        exact_nick = [
+            item for item in candidates
+            if strip_colors(item['nickname']).strip().lower() == value_l
+        ]
+        if len(exact_nick) == 1:
+            match = exact_nick[0]
+        else:
+            partial = [
+                item for item in candidates
+                if value_l in item['login'].lower()
+                or value_l in strip_colors(item['nickname']).lower()
+            ]
+            if len(partial) == 1:
+                match = partial[0]
+
+    if not match:
+        return None
+
+    player = RuntimePlayer()
+    player.id = match['id']
+    player.login = match['login']
+    player.nickname = match['nickname']
+    player.nation = match['nation']
+    player.zone = match['nation']
+    player.wins = match['wins']
+    player.timeplayed = match['timeplayed']
+    player.teamname = match['teamname']
+    setattr(player, 'updated_at', match['updated_at'])
+    setattr(player, 'offline_lookup', True)
+    return player
+
+
 async def chat_stats(aseco: 'Aseco', command: dict):
     player: Player = command['author']
     target = player
 
-    # Resolve login OR numeric player-list index
     if command['params'].strip():
         param = command['params'].strip()
-        # Try online player first (supports numeric index)
         t = aseco.server.players.get_player(param)
         if t:
             target = t
-        # else: leave target as player (offline lookup not available here)
+        else:
+            target = await _lookup_player_from_db(aseco, param)
+            if not target:
+                await aseco.client.query_ignore_result(
+                    'ChatSendServerMessageToLogin',
+                    aseco.format_colors(
+                        f'{{#server}}> {{#error}}Player not found in database: {{#highlite}}{param}'
+                    ),
+                    player.login,
+                )
+                return
 
     # ── Ladder stats from XMLRPC ──────────────────────────────────────────
     try:
@@ -238,9 +344,23 @@ async def chat_settings(aseco: 'Aseco', command: dict):
     target = player
 
     if command['params'].strip() and aseco.allow_ability(player, 'chat_settings'):
-        t = aseco.server.players.get_player(command['params'].strip())
+        param = command['params'].strip()
+        t = aseco.server.players.get_player(param)
         if t:
             target = t
+        else:
+            offline = await _lookup_player_from_db(aseco, param)
+            if offline:
+                target = offline
+            else:
+                await aseco.client.query_ignore_result(
+                    'ChatSendServerMessageToLogin',
+                    aseco.format_colors(
+                        f'{{#server}}> {{#error}}Player not found in database: {{#highlite}}{param}'
+                    ),
+                    player.login,
+                )
+                return
 
     header       = f'Settings for: {target.nickname}$z / {{#login}}{target.login}'
     settings_rows = []

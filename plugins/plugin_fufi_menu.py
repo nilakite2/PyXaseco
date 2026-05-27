@@ -32,6 +32,15 @@ logger = logging.getLogger(__name__)
 _fufi_menu: "FufiMenu | None" = None
 
 
+def _in_score_mode(aseco: "Aseco") -> bool:
+    try:
+        from pyxaseco.models import Gameinfo
+        gameinfo = getattr(getattr(aseco, "server", None), "gameinfo", None)
+        return gameinfo is not None and getattr(gameinfo, "mode", -1) == Gameinfo.SCOR
+    except Exception:
+        return False
+
+
 def _resolve_indicator_func(name: str):
     if not name:
         return None
@@ -99,6 +108,7 @@ def register(aseco: "Aseco"):
     aseco.register_event("onPlayerManialinkPageAnswer", fufiMenu_handleClick)
     aseco.register_event("onStartup", fufiMenu_startup)
     aseco.register_event("onNewChallenge", fufiMenu_newChallenge)
+    aseco.register_event("onEndRace", fufiMenu_endRace)
 
 
 @dataclass
@@ -546,14 +556,24 @@ class FufiMenu:
         if login == "":
             if self.first_challenge:
                 self.first_challenge = False
-                if getattr(self.aseco, "debug", False):
-                    self.aseco.console("[FufiMenu] sending menu button to all")
-                await self.aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+            if getattr(self.aseco, "debug", False):
+                self.aseco.console("[FufiMenu] sending menu button to all")
+            await self.aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
         else:
             if not self.first_challenge:
                 if getattr(self.aseco, "debug", False):
                     self.aseco.console("[FufiMenu] sending menu button to login: {1}", login)
                 await self.aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, 0, False)
+
+    async def hide_menu_for_login(self, login: str):
+        button_xml = f'<?xml version="1.0" encoding="UTF-8"?><manialinks><manialink id="{self.manialink_id}0000"></manialink></manialinks>'
+        menu_xml = f'<?xml version="1.0" encoding="UTF-8"?><manialinks><manialink id="{self.manialink_id}0001"></manialink></manialinks>'
+        if login == "":
+            await self.aseco.client.query_ignore_result("SendDisplayManialinkPage", button_xml, 0, False)
+            await self.aseco.client.query_ignore_result("SendDisplayManialinkPage", menu_xml, 0, False)
+        else:
+            await self.aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, button_xml, 0, False)
+            await self.aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, menu_xml, 0, False)
 
     async def handle_click(self, playerid: int, login: str, action: str):
         action = str(action)
@@ -920,6 +940,8 @@ async def fufiMenu_playerConnect(aseco: "Aseco", player: "Player"):
         return
     if not _fufi_menu.aseco:
         _fufi_menu.aseco = aseco
+    if _in_score_mode(aseco):
+        return
     await _fufi_menu.send_menu_button_to_login(player.login)
 
 
@@ -950,6 +972,13 @@ async def fufiMenu_newChallenge(aseco: "Aseco", _param=None):
     if not _fufi_menu:
         return
     await _fufi_menu.send_menu_button_to_login("")
+
+
+async def fufiMenu_endRace(aseco: "Aseco", _param=None):
+    global _fufi_menu
+    if not _fufi_menu:
+        return
+    await _fufi_menu.hide_menu_for_login("")
 
 
 # ------------------------------------------------------------
