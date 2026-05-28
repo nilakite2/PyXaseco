@@ -543,7 +543,7 @@ background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
 [ui.toplist_widget]
-enabled = true
+enabled = false
 width = 4.6
 height = 6.5
 text_color = "FC0F"
