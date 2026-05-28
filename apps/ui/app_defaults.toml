@@ -10,7 +10,7 @@ mark_online_player_records = true
 illuminate_names = true
 sort_team = true
 number_format = "english"
-shorten_numbers = false
+shorten_numbers = true
 
 [ui.features.karma]
 min_votes = 30
@@ -78,7 +78,7 @@ headline_textcolor = "FFFF"
 window_bgcolor = "001B"
 
 [ui.style.window.lightbox]
-enabled = false
+enabled = true
 bgcolor = "0008"
 
 [ui.custom_ui]
@@ -92,14 +92,14 @@ round_scores = true
 scoretable = true
 
 [ui.welcome_window]
-enabled = false
+enabled = true
 autohide = 10
 icon_style = "Icons128x128_1"
 icon_substyle = "Credits"
 message = "$FF0Welcome {player}!{br}{br}However, we ask you to urgently comply with the rules. They serve the gaming culture on this server and are all participating players have fun together! All violators will be kicked or banned depending on the seriousness of the offense.{br}{br}We think a certain minimum level of decency can be expected of all players. These include for example, a normal tone on this server. When insults, abuse and other non appropriate behavior appropriate action being taken.{br}{br}Play fair on this server! Behave like normal people. We think that the rules above should not be too difficult to follow. They reflect the interests of all players resist on this server.{br}{br}$w$oAnd now have fun at {server}!"
 
 [ui.welcome_window.hide]
-ranked_player = false
+ranked_player = true
 
 [ui.welcome_window.image]
 normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/welcome-records-eyepiece-normal.jpg"
@@ -134,11 +134,11 @@ pos_x = 49.05
 pos_y = 48
 
 [ui.challenge_widget.score]
-pos_x = 48.7
+pos_x = 46.7
 pos_y = 48
 
 [ui.music_widget]
-enabled = false
+enabled = true
 advertise = true
 title = "Current Song"
 width = 15.5
@@ -200,7 +200,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.dedimania_records.gamemode.stunts]
-enabled = false
+enabled = true
 
 [ui.dedimania_records.gamemode.cup]
 enabled = true
@@ -277,7 +277,7 @@ icon_substyle = "Rankings"
 [ui.live_rankings.gamemode]
 
 [ui.live_rankings.gamemode.rounds]
-enabled = true
+enabled = false
 display_type = "scores"
 format = "{score} ({remaining})"
 pos_x = 49.2
@@ -295,7 +295,7 @@ topcount = 0
 row_height = 1.8
 
 [ui.live_rankings.gamemode.team]
-enabled = true
+enabled = false
 pos_x = 49.2
 pos_y = -21.5
 entries = 2
@@ -303,7 +303,7 @@ topcount = 2
 row_height = 1.8
 
 [ui.live_rankings.gamemode.laps]
-enabled = true
+enabled = false
 display_type = "checkpoints"
 pos_x = 49.2
 pos_y = -10.4
@@ -312,7 +312,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.live_rankings.gamemode.stunts]
-enabled = true
+enabled = false
 pos_x = 49.2
 pos_y = -14.8
 entries = 6
@@ -320,7 +320,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.live_rankings.gamemode.cup]
-enabled = true
+enabled = false
 pos_x = 49.2
 pos_y = -14.3
 entries = 7
@@ -360,7 +360,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.round_score.gamemode.time_attack]
-enabled = false
+enabled = true
 
 [ui.round_score.gamemode.team]
 enabled = true
@@ -397,7 +397,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.round_score.gamemode.stunts]
-enabled = false
+enabled = true
 
 [ui.round_score.gamemode.cup]
 enabled = true
@@ -418,7 +418,7 @@ row_height = 1.8
 
 [ui.join_leave_info]
 enabled = true
-messages_in_window = false
+messages_in_window = true
 add_rights = true
 join_message = "{#server}>> {#message}{title}: {#highlite}{nickname}$Z$S{#message} Zone: {#highlite}{zone}{#message} Visits: {#highlite}{visits}{#message} Ladder: {#highlite}{ladderrank}{#message} Rank: {#highlite}{serverrank}{#message}"
 leave_message = "{#server}>> {#highlite}{nickname}$Z$S{#message} from {#highlite}{nation}{#message} has left the game after {#highlite}{playtime}{#message} playtime."
@@ -493,8 +493,8 @@ height = 6.5
 text_color = "FC0F"
 background_color = ""
 roc_server = true
-pos_x = -63.85
-pos_y = 39.8
+pos_x = 39.6
+pos_y = 29
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -504,8 +504,8 @@ width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = -59.05
-pos_y = 39.8
+pos_x = 44.3
+pos_y = 29
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -526,8 +526,8 @@ width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = -49.45
-pos_y = 39.8
+pos_x = 39.6
+pos_y = 35.6
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -537,19 +537,19 @@ width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = 25.1
-pos_y = 39.3
+pos_x = 34.9
+pos_y = 29
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
 [ui.toplist_widget]
-enabled = false
+enabled = true
 width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = 29.9
-pos_y = 39.3
+pos_x = 34.9
+pos_y = 35.6
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -603,7 +603,7 @@ text_color = "FC0F"
 
 [ui.favorite_widget.race]
 pos_x = 44.3
-pos_y = 39.3
+pos_y = 35.6
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -614,7 +614,7 @@ background_style = "BgsPlayerCard"
 background_substyle = "BgRacePlayerName"
 
 [ui.next_environment_widget]
-enabled = true
+enabled = false
 width = 4.6
 height = 6.5
 text_color = "FC0F"
@@ -625,7 +625,7 @@ background_style = "BgsPlayerCard"
 background_substyle = "BgRacePlayerName"
 
 [ui.next_gamemode_widget]
-enabled = true
+enabled = false
 width = 4.6
 height = 6.5
 text_color = "FC0F"
@@ -646,7 +646,7 @@ pos_x = -62
 pos_y = 47
 
 [ui.eyepiece_widget.score]
-enabled = true
+enabled = false
 pos_x = 58.7
 pos_y = -40.9
 background_style = "BgsPlayerCard"
@@ -811,7 +811,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
 [ui.scoretable_lists.top_active_players]
-enabled = false
+enabled = true
 title = "Top Active Players"
 pos_x = 47.8
 pos_y = -14.6
@@ -820,7 +820,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
 [ui.scoretable_lists.top_winning_payouts]
-enabled = false
+enabled = true
 title = "Top Finish Winners"
 pos_x = 47.8
 pos_y = -14.6
@@ -829,7 +829,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Coppers"
 
 [ui.scoretable_lists.top_betwins]
-enabled = false
+enabled = true
 title = "Top Betwins"
 display = "average"
 pos_x = 47.8
@@ -839,7 +839,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Coppers"
 
 [ui.scoretable_lists.top_roundscore]
-enabled = false
+enabled = true
 title = "Top Roundscore"
 pos_x = 47.8
 pos_y = -14.6
@@ -1023,7 +1023,7 @@ show_at_start = "true"
 show_details = "true"
 show_votes = "true"
 show_karma = "true"
-require_finish = "1"
+require_finish = "0"
 remind_to_vote = "score"
 score_mx_window = "true"
 messages_in_window = "true"
@@ -1085,7 +1085,7 @@ pos_x = "-41"
 pos_y = "-26"
 
 [ui.karma.karma_lottery]
-enabled = "false"
+enabled = "true"
 minimum_players = "5"
 coppers_win = "5"
 minimum_server_coppers = "50"

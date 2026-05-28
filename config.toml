@@ -11,3 +11,29 @@ password = "SuperAdmin"
 ip = "127.0.0.1"
 port = 5000
 timeout = 180
+
+[database]
+host = "127.0.0.1"
+port = 3306
+name = "aseco"
+user = "root"
+password = ""
+
+[dedimania]
+login = ""
+password = ""
+nation = ""
+
+[mania_karma]
+nation = ""
+
+[public_stats]
+api_base = "https://tmtrialgy.com"
+api_token = ""
+
+[discord_webhook]
+webhook_url = ""
+admin_webhook_url = ""
+chat_webhook_url = ""
+admin_webhook_name = "PyXaseco Admin"
+chat_webhook_name = "PyXaseco Chat"

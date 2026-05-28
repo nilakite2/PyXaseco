@@ -19,6 +19,7 @@ import tomllib
 from typing import Any
 
 from pyxaseco.app_config import load_app_defaults_catalog
+from pyxaseco.core.config import display_path
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def _get_data(base_dir=None) -> dict:
             try:
                 data = _load_structured_settings(p)
                 total = sum(len(v) if isinstance(v, dict) else 1 for v in data.values())
-                logger.info('[settings_loader] Loaded %d settings from %s', total, p)
+                logger.info('[settings_loader] Loaded %d settings from %s', total, display_path(p))
                 _cache = data
                 return _cache
             except Exception as exc:
@@ -327,15 +328,15 @@ def _get_app_defaults(base_dir=None) -> dict:
         if loaded_paths:
             total = sum(len(v) if isinstance(v, dict) else 1 for v in data.values())
             if len(loaded_paths) == 1 and loaded_paths[0].name == 'plugin_defaults.toml':
-                logger.info('[settings_loader] Loaded %d legacy app defaults from %s', total, loaded_paths[0])
+                logger.info('[settings_loader] Loaded %d legacy app defaults from %s', total, display_path(loaded_paths[0]))
             else:
                 root = pathlib.Path(base_dir).resolve() if base_dir else pathlib.Path('.').resolve()
                 logger.info(
                     '[settings_loader] Loaded %d app defaults from %d app_defaults.toml file(s) under %s',
                     total,
                     len(loaded_paths),
-                    root / 'apps',
-                )
+        display_path(root / 'apps'),
+    )
             _app_defaults_cache = data
             return _app_defaults_cache
     except Exception as exc:

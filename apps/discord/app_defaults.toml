@@ -4,10 +4,6 @@
 
 [discord_webhook.config.discord_webhook]
 enabled = "true"
-admin_webhook_url = "https://discord.com/api/webhooks/"
-chat_webhook_url = "https://discord.com/api/webhooks/"
-admin_webhook_name = "PyXaseco Admin"
-chat_webhook_name = "PyXaseco Chat"
 mirror_player_chat = "true"
 mirror_server_chat = "false"
 mirror_admin_commands = "true"

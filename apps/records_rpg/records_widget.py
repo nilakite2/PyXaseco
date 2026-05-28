@@ -217,7 +217,7 @@ async def _draw_rpg_player(aseco: "Aseco", login: str):
         entries=entries,
         online=online,
         mode=mode,
-        click_action=91804,
+        click_action=91830,
     )
     await _send(aseco, login, xml)
 

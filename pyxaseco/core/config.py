@@ -45,6 +45,173 @@ def _env(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 
 
+def display_path(path: str | Path | None, root: str | Path | None = None) -> str:
+    """Return a concise display path rooted at the PyXaseco runtime folder."""
+    if path is None:
+        return "<none>"
+
+    source = Path(path)
+
+    candidates: list[Path] = []
+    if root is not None:
+        candidates.append(Path(root))
+
+    if source.is_absolute():
+        if source.is_dir():
+            candidates.append(source)
+        else:
+            candidates.append(source.parent)
+
+        current = source.parent if source.is_file() else source
+        candidates.extend(current.parents)
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            continue
+        key = str(resolved).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        if not (resolved / "config.toml").exists():
+            continue
+        try:
+            rel = source.resolve().relative_to(resolved)
+            if str(rel) == ".":
+                return resolved.name
+            return str(Path(resolved.name) / rel).replace("/", "\\")
+        except Exception:
+            continue
+
+    return str(source)
+
+
+def _lookup_path(node: Any, path: str) -> Any:
+    current = node
+    for part in [p for p in str(path or "").split("/") if p]:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(part)
+        if current is None:
+            return None
+    return current
+
+
+def _set_env_default(key: str, value: Any) -> None:
+    if key in os.environ:
+        return
+    if value is None:
+        return
+    if isinstance(value, list):
+        text = ",".join(str(v).strip() for v in value if str(v).strip())
+    else:
+        text = str(value).strip()
+    if text != "":
+        os.environ[key] = text
+
+
+def _overlay_env_from_config(data: dict[str, Any]) -> None:
+    env_map = {
+        "LOCK_PASSWORD": (
+            "aseco/lock_password",
+        ),
+        "TM_LOGIN": (
+            "tmserver/login",
+        ),
+        "TM_PASSWORD": (
+            "tmserver/password",
+        ),
+        "TM_IP": (
+            "tmserver/ip",
+        ),
+        "TM_PORT": (
+            "tmserver/port",
+        ),
+        "TM_TIMEOUT": (
+            "tmserver/timeout",
+        ),
+        "MASTERADMIN_LOGINS": (
+            "masteradmins/tmlogin",
+            "aseco/masteradmins/tmlogin",
+        ),
+        "DB_HOST": (
+            "database/host",
+            "localdb/host",
+        ),
+        "DB_PORT": (
+            "database/port",
+            "localdb/port",
+        ),
+        "DB_NAME": (
+            "database/name",
+            "database/db",
+            "localdb/name",
+            "localdb/db",
+        ),
+        "DB_USER": (
+            "database/user",
+            "localdb/user",
+        ),
+        "DB_PASSWORD": (
+            "database/password",
+            "localdb/password",
+        ),
+        "DEDI_LOGIN": (
+            "dedimania/login",
+            "records_dedimania/login",
+        ),
+        "DEDI_PASSWORD": (
+            "dedimania/password",
+            "records_dedimania/password",
+        ),
+        "DEDI_NATION": (
+            "dedimania/nation",
+            "records_dedimania/nation",
+        ),
+        "MK_NATION": (
+            "mania_karma/nation",
+            "ui/karma/nation",
+        ),
+        "PUBLIC_STATS_API_BASE": (
+            "public_stats/api_base",
+            "server_info/public_stats/api_base",
+        ),
+        "PUBLIC_STATS_API_TOKEN": (
+            "public_stats/api_token",
+            "server_info/public_stats/api_token",
+        ),
+        "DISCORD_ADMIN_WEBHOOK_URL": (
+            "discord_webhook/admin_webhook_url",
+            "discord_webhook/config/discord_webhook/admin_webhook_url",
+            "discord/config/discord_webhook/admin_webhook_url",
+        ),
+        "DISCORD_CHAT_WEBHOOK_URL": (
+            "discord_webhook/chat_webhook_url",
+            "discord_webhook/config/discord_webhook/chat_webhook_url",
+            "discord/config/discord_webhook/chat_webhook_url",
+        ),
+        "DISCORD_ADMIN_WEBHOOK_NAME": (
+            "discord_webhook/admin_webhook_name",
+            "discord_webhook/config/discord_webhook/admin_webhook_name",
+            "discord/config/discord_webhook/admin_webhook_name",
+        ),
+        "DISCORD_CHAT_WEBHOOK_NAME": (
+            "discord_webhook/chat_webhook_name",
+            "discord_webhook/config/discord_webhook/chat_webhook_name",
+            "discord/config/discord_webhook/chat_webhook_name",
+        ),
+    }
+
+    for env_key, candidates in env_map.items():
+        for candidate in candidates:
+            value = _lookup_path(data, candidate)
+            if value is not None:
+                _set_env_default(env_key, value)
+                break
+
+
 def load_toml_file(path: str | Path) -> dict:
     try:
         with Path(path).open('rb') as fh:
@@ -224,6 +391,7 @@ def load_config(config_file: str | Path, settings: Settings) -> bool:
     if not data:
         logger.error('load_config: could not read/parse %s', config_file)
         return False
+    _overlay_env_from_config(data)
     aseco = data.get('aseco', {})
     tmserver = data.get('tmserver', {})
 
@@ -266,7 +434,7 @@ def load_config(config_file: str | Path, settings: Settings) -> bool:
     except Exception as exc:
         logger.warning('load_config: settings config overlay failed: %s', exc)
 
-    logger.info('load_config: loaded %s', config_file)
+    logger.info('load_config: loaded %s', display_path(cfg_path))
     return True
 
 

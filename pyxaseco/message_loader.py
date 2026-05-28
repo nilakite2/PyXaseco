@@ -30,6 +30,8 @@ import pathlib
 import tomllib
 from typing import Any
 
+from pyxaseco.core.config import display_path
+
 logger = logging.getLogger(__name__)
 
 _cache: dict[str, Any] | None = None
@@ -57,7 +59,7 @@ def _get_data(base_dir=None) -> dict[str, Any]:
                 logger.info(
                     '[message_loader] Loaded %d keys from %s',
                     sum(len(v) for v in _cache.values() if isinstance(v, dict)),
-                    p,
+                    display_path(p),
                 )
                 return _cache
             except Exception as exc:

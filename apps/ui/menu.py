@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, bind_app_settings
+from pyxaseco.core.config import display_path
 from pyxaseco.models import Gameinfo
 
 if TYPE_CHECKING:
@@ -1107,7 +1108,7 @@ async def fufiMenu_startup(aseco: "Aseco", _param=None):
         if not isinstance(config, dict) or not config:
             logger.warning("[FufiMenu] No TOML configuration found in app_defaults.toml, menu disabled")
             return
-        logger.info("[FufiMenu] Config loaded from %s", bound.source_path)
+        logger.info("[FufiMenu] Config loaded from %s", display_path(bound.source_path))
         _fufi_menu = FufiMenu(config, bound.source_path)
         _fufi_menu.aseco = aseco
         _fufi_menu.init()

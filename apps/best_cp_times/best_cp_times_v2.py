@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_float,
                                  as_int, bind_app_settings)
+from pyxaseco.core.config import display_path
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -107,7 +108,7 @@ def _load_cfg(aseco: "Aseco"):
     _state.widget.show_spectators = bound.values["config/show_spectators"]
     _state.widget.width = max(14.0, bound.values["config/width"])
     _state.widget.height = max(14.0, bound.values["config/height"])
-    logger.info("[BestCpTimesV2] Config loaded from %s", path)
+    logger.info("[BestCpTimesV2] Config loaded from %s", display_path(path))
 
 
 def _resolve_eyepiece_state():

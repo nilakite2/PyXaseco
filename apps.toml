@@ -26,5 +26,8 @@ enabled = [
 "app/ui"
 ]
 disabled = [
-"app/flexitime"
+"app/flexitime",
+"app/bestsecs",
+"app/bestruns",
+"app/bestcps"
 ]

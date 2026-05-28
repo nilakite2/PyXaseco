@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 import tomllib
 from xml.sax.saxutils import escape
 from datetime import date
+from pyxaseco.core.config import display_path
 from pyxaseco.core.base import Component
 from pyxaseco.models import Gameinfo
 from pyxaseco.helpers import format_time
@@ -91,7 +92,7 @@ def _load_nations_toml(aseco: 'Aseco') -> dict[str, str]:
                 if code and name:
                     result[code] = name
             if result:
-                logger.info('[Records-Eyepiece] Loaded nations.toml from %s', candidate)
+                logger.info('[Records-Eyepiece] Loaded nations.toml from %s', display_path(candidate))
                 break
         except Exception as exc:
             logger.warning('[Records-Eyepiece] Failed to parse nations.toml at %s: %r', candidate, exc)
@@ -931,16 +932,10 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
     # Preserve the expected display order.
     dedi_cfg = _state.dedi.get(_effective_mode(aseco))
     if gamemode != Gameinfo.STNT and getattr(dedi_cfg, 'enabled', False):
-        from .record_views import _is_rpg_track_active, _get_rpg_track, _get_rpg_records, _rpg_title
         from .record_views import _get_dedi_records
         source_rows = []
         title = getattr(dedi_cfg, 'title', 'Dedimania Records')
-        if await _is_rpg_track_active(aseco):
-            source_rows = (await _get_rpg_records(aseco, 25) or [])[:25]
-            track = await _get_rpg_track(aseco)
-            title = _rpg_title(track.get('stars') if isinstance(track, dict) else None)
-        else:
-            source_rows = (_get_dedi_records(aseco) or [])[:25]
+        source_rows = (_get_dedi_records(aseco) or [])[:25]
         dedi_rows = []
 
         for idx, rec in enumerate(source_rows[:25], start=1):
@@ -977,8 +972,48 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             'action_id': 91804,
         })
 
+        from .record_views import _is_rpg_track_active, _get_rpg_track, _get_rpg_records, _rpg_title
+        if await _is_rpg_track_active(aseco):
+            rpg_source_rows = await _get_rpg_records(aseco, 25)
+            rpg_rows = []
+            track = await _get_rpg_track(aseco)
+            rpg_title = _rpg_title(track.get('stars') if isinstance(track, dict) else None)
+            for idx, rec in enumerate(rpg_source_rows[:25], start=1):
+                if not isinstance(rec, dict):
+                    continue
+
+                login_id = str(rec.get('login') or rec.get('Login') or '')
+                raw_score = rec.get('score')
+                if raw_score is None:
+                    raw_score = rec.get('Best') or rec.get('Score')
+
+                score_text = rec.get('score_text')
+                if not score_text:
+                    try:
+                        score_text = format_time(int(raw_score or 0))
+                    except Exception:
+                        score_text = '--'
+
+                rpg_rows.append({
+                    'rank': idx,
+                    'score': str(score_text or '--'),
+                    'nickname': _handle_special_chars(str(rec.get('nickname') or rec.get('NickName') or login_id or '?')),
+                    'login': login_id,
+                    'online': login_id in players,
+                })
+
+            toplists.append({
+                'manialinkid': '07',
+                'icon_style': 'Icons128x128_1',
+                'icon_substyle': 'Rankings',
+                'title': rpg_title,
+                'rows': rpg_rows,
+                'special': False,
+                'action_id': 91830,
+            })
+
         from .record_views import _is_trial_track_active, _get_trial_records
-        if (not await _is_rpg_track_active(aseco)) and await _is_trial_track_active(aseco):
+        if await _is_trial_track_active(aseco):
             trial_source_rows = await _get_trial_records(aseco, 25)
             trial_rows = []
             for idx, rec in enumerate(trial_source_rows[:25], start=1):

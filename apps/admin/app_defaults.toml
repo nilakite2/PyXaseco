@@ -5,7 +5,7 @@ auto_scorepanel = true
 rounds_finishpanel = true
 
 [admin.stalker_actionids]
-enabled = false
+enabled = true
 
 [admin.stalker_tools]
-enabled = false
+enabled = true

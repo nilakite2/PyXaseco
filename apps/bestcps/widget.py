@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.models import Gameinfo
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_float, as_int, bind_app_settings
+from pyxaseco.core.config import display_path
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -109,7 +110,7 @@ def _load_config(aseco: 'Aseco'):
     )
     logger.info(
         '[BestCps] Config loaded from %s (x=%s, y=%s, number=%s, newline=%s, rows=%s, orientation=%s)',
-        path,
+        display_path(path),
         _config.pos_x,
         _config.pos_y,
         _config.number,

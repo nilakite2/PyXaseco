@@ -6,5 +6,5 @@ number_with_cps = "7"
 max_checkpoints = "9"
 
 [bestruns.config.position]
-x = "-55.66"
+x = "-42"
 y = "45.65"

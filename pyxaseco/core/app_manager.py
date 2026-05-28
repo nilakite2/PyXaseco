@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
 from pyxaseco.core.app_metadata import AppMetadata
+from pyxaseco.core.config import display_path
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +167,7 @@ class AppManager:
                 "AppManager: loaded %s via %s (%s)",
                 plan.entry_name,
                 plan.module_name,
-                getattr(module, "__file__", "<alias>"),
+                display_path(getattr(module, "__file__", "<alias>")),
             )
             self._loaded_entries.append(plan.entry_name)
             if plan.app_id not in self._registered_apps:

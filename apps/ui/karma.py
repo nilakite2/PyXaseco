@@ -20,6 +20,7 @@ from pyxaseco.helpers import clean_tm_text, strip_colors
 from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_int,
                                  as_str, bind_app_settings)
 from pyxaseco.app_services import localdb_get_player_id, localdb_get_pool
+from pyxaseco.core.config import display_path
 from apps.tmx.service import (
     build_public_tmx_track_url as _build_public_tmx_track_url,
     normalise_tmx_web_url as _normalise_tmx_web_url,
@@ -1844,7 +1845,7 @@ async def _load_config(aseco: Aseco) -> None:
     _cfg.msg_waste = as_str(messages.get('karma_waste'), _cfg.msg_waste)
     _cfg.msg_show_opinion = as_str(messages.get('karma_show_opinion'), _cfg.msg_show_opinion)
     _cfg.msg_show_undecided = as_str(messages.get('karma_show_undecided'), _cfg.msg_show_undecided)
-    logger.info('[ManiaKarma] Config loaded from %s', bound.source_path if bound.source_path is not None else 'defaults')
+    logger.info('[ManiaKarma] Config loaded from %s', display_path(bound.source_path) if bound.source_path is not None else 'defaults')
 
     _cfg.bg_pos_default = _x(root, 'widget_styles/vote_buttons/positive/bgcolor_default', _cfg.bg_pos_default)
     _cfg.bg_pos_focus = _x(root, 'widget_styles/vote_buttons/positive/bgcolor_focus', _cfg.bg_pos_focus)

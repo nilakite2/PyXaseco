@@ -12,6 +12,7 @@ import pathlib
 from typing import Any
 
 from pyxaseco.app_config import get_app_defaults_path, load_app_defaults_file
+from pyxaseco.core.config import display_path
 
 logger = logging.getLogger(__name__)
 
@@ -58,5 +59,5 @@ def find_and_load(base_dir: pathlib.Path) -> tuple[dict, pathlib.Path | None]:
     root = raw.get('RECORDS_EYEPIECE')
     if not root:
         return {}, path or expected_path
-    logger.info('[Records-Eyepiece] Loaded config from %s', path or expected_path)
+    logger.info('[Records-Eyepiece] Loaded config from %s', display_path(path or expected_path))
     return raw, path or expected_path

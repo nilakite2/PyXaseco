@@ -29,6 +29,7 @@ from pyxaseco.app_config import (
     as_int,
     bind_app_settings,
 )
+from pyxaseco.core.config import display_path
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -164,7 +165,7 @@ async def rasp_startup(aseco: 'Aseco', _param):
     cfg_path = settings.source_path
     aseco.console(
         '[Players] Loading ranking config file [{1}]',
-        str(cfg_path or '<defaults>'),
+        display_path(cfg_path) if cfg_path else '<defaults>',
     )
     _rasp_messages = {}
 

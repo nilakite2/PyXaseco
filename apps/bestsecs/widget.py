@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_float,
                                  as_int, bind_app_settings)
 from pyxaseco.app_services import localdb_get_pool
+from pyxaseco.core.config import display_path
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -28,8 +29,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ML_BUTTON_ID = "0815470000122"
-ACTION_SECRECS = 27008505
-ACTION_MYSECRECS = 27008504
+ACTION_SECRECS = 27008605
+ACTION_MYSECRECS = 27008604
 
 
 @dataclass
@@ -175,7 +176,7 @@ def _load_config(aseco: "Aseco") -> None:
         Gameinfo.STNT: bound.values["config/window_enabled/stunts"],
         Gameinfo.CUP: bound.values["config/window_enabled/cup"],
     }
-    logger.info("[BestSecs] Config loaded from %s", path)
+    logger.info("[BestSecs] Config loaded from %s", display_path(path))
 
 
 async def _ensure_tables(pool) -> None:
@@ -204,8 +205,15 @@ async def _ensure_tables(pool) -> None:
     try:
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(ddl_all)
-                await cur.execute(ddl_own)
+                await cur.execute("SHOW TABLES LIKE 'secrecs_all'")
+                has_all = await cur.fetchone()
+                if not has_all:
+                    await cur.execute(ddl_all)
+
+                await cur.execute("SHOW TABLES LIKE 'secrecs_own'")
+                has_own = await cur.fetchone()
+                if not has_own:
+                    await cur.execute(ddl_own)
     except Exception as exc:
         logger.error("[BestSecs] Table creation failed: %s", exc)
 

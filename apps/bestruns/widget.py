@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from pyxaseco.models import Gameinfo
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_float, as_int, bind_app_settings
+from pyxaseco.core.config import display_path
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-ML_ID = 342312
+ML_ID = 342313
 
 
 @dataclass
@@ -207,7 +208,7 @@ def LoadConfig_bestruns(aseco: "Aseco"):
     _state.config.nb_bestruns = max(1, bound.values["config/nb_bestruns"])
     _state.config.nb_bestruns_with_cp = max(1, bound.values["config/nb_bestruns_with_cp"])
     _state.config.nb_max_checkpoints = max(1, bound.values["config/nb_max_checkpoints"])
-    logger.info("[BestRuns] Config loaded from %s", path)
+    logger.info("[BestRuns] Config loaded from %s", display_path(path))
 
 
 def _format_score(ms: int) -> str:

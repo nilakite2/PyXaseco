@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from pyxaseco.models import Gameinfo
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_float, as_int, bind_app_settings
+from pyxaseco.core.config import display_path
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -183,7 +184,7 @@ def LoadConfig_bestfinishes(aseco: "Aseco"):
     _state.config.y = bound.values["config/y"]
     _state.config.scale = bound.values["config/scale"]
     _state.config.nb_bestfinishes = max(1, bound.values["config/nb_bestfinishes"])
-    logger.info("[BestFinishes] Config loaded from %s", path)
+    logger.info("[BestFinishes] Config loaded from %s", display_path(path))
 
 
 def _format_score(ms: int) -> str:

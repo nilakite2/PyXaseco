@@ -31,7 +31,7 @@ from pyxaseco.core.event_bus import EventBus
 from pyxaseco.core.app_context import AppContext
 from pyxaseco.core.command_registry import CommandRegistry
 from pyxaseco.core.config import (
-    Settings, load_config, load_adminops, load_bannedips, load_apps_list
+    Settings, display_path, load_config, load_adminops, load_bannedips, load_apps_list
 )
 from pyxaseco.core.drivers import DatabaseDriver, GbxDriver, StorageDriver
 from pyxaseco.core.service_registry import ServiceRegistry
@@ -499,7 +499,7 @@ class Aseco:
         self.drivers['storage'] = self.storage
 
         # Load config
-        self.console_text('[PyXaseco] Loading settings [{1}]', str(config_path))
+        self.console_text('[PyXaseco] Loading settings [{1}]', display_path(config_path))
         if not load_config(config_path, self.settings):
             raise RuntimeError(f'Could not read/parse config file {config_path}')
 
@@ -519,17 +519,17 @@ class Aseco:
 
         # Load admin/op lists
         adminops_path = _resolve(self.settings.adminops_file)
-        self.console_text('[PyXaseco] Loading admin/ops lists [{1}]', str(adminops_path))
+        self.console_text('[PyXaseco] Loading admin/ops lists [{1}]', display_path(adminops_path))
         load_adminops(adminops_path, self.settings)
 
         # Load banned IPs
         bannedips_path = _resolve(self.settings.bannedips_file)
-        self.console_text('[PyXaseco] Loading banned IPs [{1}]', str(bannedips_path))
+        self.console_text('[PyXaseco] Loading banned IPs [{1}]', display_path(bannedips_path))
         load_bannedips(bannedips_path, self.settings)
 
         # Load apps
         apps_toml = self._base_dir / 'apps.toml'
-        self.console_text('[PyXaseco] Loading app loadout [{1}]', str(apps_toml))
+        self.console_text('[PyXaseco] Loading app loadout [{1}]', display_path(apps_toml))
         app_entries = load_apps_list(apps_toml)
         apps_dir = self._base_dir / 'apps'
         self._app_manager = AppManager(apps_dir)

@@ -53,7 +53,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         return
 
     # Delayed imports to avoid circular dependencies between split modules.
-    from .chat import chat_togglewidgets
+    from .command_handlers import chat_togglewidgets
     from ..tracklist import (
         _send_tracklist_window,
         _close_tracklist_window,
@@ -219,20 +219,11 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         await _open_challenge_window(aseco, login)
         return
 
-    # 91804 = Show Dedimania/Trial/RPG RecordsWindow
+    # 91804 = Show Dedimania RecordsWindow
     if action == 91804:
-        from ..record_views import _is_rpg_track_active, _get_rpg_records, _build_rpg_records_window
         from ..record_views import _get_dedi_records
-        from ..record_views import _is_trial_track_active, _get_trial_records, _build_trial_records_window
-        if await _is_rpg_track_active(aseco):
-            recs = await _get_rpg_records(aseco)
-            xml = await _build_rpg_records_window(aseco, 0, records=recs) if recs else ""
-        elif await _is_trial_track_active(aseco):
-            recs = await _get_trial_records(aseco)
-            xml = await _build_trial_records_window(aseco, 0, records=recs) if recs else ""
-        else:
-            recs = _get_dedi_records()
-            xml = _build_dedi_records_window(aseco, 0, records=recs) if recs else ""
+        recs = _get_dedi_records()
+        xml = _build_dedi_records_window(aseco, 0, records=recs) if recs else ""
         if xml:
             await _send(aseco, login, xml)
         else:
@@ -264,6 +255,17 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             await _send(aseco, login, xml)
         else:
             await _send_chat(aseco, login, '{#server}> {#error}No Trial records available.')
+        return
+
+    # 91830 = Show RPGRecordsWindow
+    if action == 91830:
+        from ..record_views import _get_rpg_records, _build_rpg_records_window
+        recs = await _get_rpg_records(aseco)
+        xml = await _build_rpg_records_window(aseco, 0, records=recs) if recs else ''
+        if xml:
+            await _send(aseco, login, xml)
+        else:
+            await _send_chat(aseco, login, '{#server}> {#error}No RPG records available.')
         return
 
     # 91808 = Trigger /tmxinfo

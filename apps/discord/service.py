@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 from pyxaseco.helpers import strip_colors
-from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_int,
-                                 as_str, bind_app_settings)
+from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_bool, as_int, bind_app_settings
+from pyxaseco.core.config import _load_dotenv, _env, display_path
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -26,10 +26,6 @@ DISCORD_SETTINGS_SCHEMA = AppSettingsSchema(
     description="Discord webhook settings",
     settings=(
         AppSetting("config/discord_webhook/enabled", False, as_bool),
-        AppSetting("config/discord_webhook/admin_webhook_url", "", as_str),
-        AppSetting("config/discord_webhook/chat_webhook_url", "", as_str),
-        AppSetting("config/discord_webhook/admin_webhook_name", "PyXaseco Admin", as_str),
-        AppSetting("config/discord_webhook/chat_webhook_name", "PyXaseco Chat", as_str),
         AppSetting("config/discord_webhook/mirror_player_chat", True, as_bool),
         AppSetting("config/discord_webhook/mirror_server_chat", False, as_bool),
         AppSetting("config/discord_webhook/mirror_admin_commands", True, as_bool),
@@ -258,6 +254,18 @@ def _parse_bool(text: str | None, default: bool) -> bool:
     return default
 
 
+def _load_env_config(base_dir: Path | None) -> dict[str, str]:
+    if base_dir is not None:
+        _load_dotenv(base_dir / ".env")
+    _load_dotenv(".env")
+    return {
+        "admin_webhook_url": _env("DISCORD_ADMIN_WEBHOOK_URL", "").strip(),
+        "chat_webhook_url": _env("DISCORD_CHAT_WEBHOOK_URL", "").strip(),
+        "admin_webhook_name": _env("DISCORD_ADMIN_WEBHOOK_NAME", "PyXaseco Admin").strip() or "PyXaseco Admin",
+        "chat_webhook_name": _env("DISCORD_CHAT_WEBHOOK_NAME", "PyXaseco Chat").strip() or "PyXaseco Chat",
+    }
+
+
 def _load_config(aseco: "Aseco") -> DiscordWebhookConfig:
     cfg = DiscordWebhookConfig()
     bound = bind_app_settings(DISCORD_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
@@ -266,10 +274,6 @@ def _load_config(aseco: "Aseco") -> DiscordWebhookConfig:
         return cfg
 
     cfg.enabled = bound.values["config/discord_webhook/enabled"]
-    cfg.admin_webhook_url = bound.values["config/discord_webhook/admin_webhook_url"]
-    cfg.chat_webhook_url = bound.values["config/discord_webhook/chat_webhook_url"]
-    cfg.admin_webhook_name = bound.values["config/discord_webhook/admin_webhook_name"]
-    cfg.chat_webhook_name = bound.values["config/discord_webhook/chat_webhook_name"]
     cfg.mirror_player_chat = bound.values["config/discord_webhook/mirror_player_chat"]
     cfg.mirror_server_chat = bound.values["config/discord_webhook/mirror_server_chat"]
     cfg.mirror_admin_commands = bound.values["config/discord_webhook/mirror_admin_commands"]
@@ -281,7 +285,12 @@ def _load_config(aseco: "Aseco") -> DiscordWebhookConfig:
     cfg.chat_throttle_player_threshold = bound.values["config/discord_webhook/chat_throttle_player_threshold"]
     cfg.chat_batch_window_ms = bound.values["config/discord_webhook/chat_batch_window_ms"]
     cfg.chat_batch_max_lines = bound.values["config/discord_webhook/chat_batch_max_lines"]
-    logger.info("[DiscordWebhook] Config loaded from %s", bound.source_path)
+    env_cfg = _load_env_config(getattr(aseco, "_base_dir", None))
+    cfg.admin_webhook_url = env_cfg["admin_webhook_url"]
+    cfg.chat_webhook_url = env_cfg["chat_webhook_url"]
+    cfg.admin_webhook_name = env_cfg["admin_webhook_name"]
+    cfg.chat_webhook_name = env_cfg["chat_webhook_name"]
+    logger.info("[DiscordWebhook] Config loaded from %s", display_path(bound.source_path))
     return cfg
 
 
