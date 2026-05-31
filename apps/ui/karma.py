@@ -289,6 +289,7 @@ MANIA_KARMA_SETTINGS_SCHEMA = AppSettingsSchema(
     description="ManiaKarma settings",
     settings=(
         AppSetting("config", {}, _as_dict, aliases=("karma",)),
+        AppSetting("config/enabled", True, as_bool, aliases=("karma/enabled",)),
         AppSetting("config/number_format", "english", as_str, aliases=("karma/number_format",)),
         AppSetting("config/show_welcome", True, as_bool, aliases=("karma/show_welcome",)),
         AppSetting("config/allow_public_vote", True, as_bool, aliases=("karma/allow_public_vote",)),
@@ -325,6 +326,16 @@ _current_map: dict[str, Any] = {}
 
 
 _karma: dict[str, Any] = {}
+
+
+def _apply_enabled_flag(aseco: Aseco) -> bool:
+    global _cfg
+
+    bound = bind_app_settings(MANIA_KARMA_SETTINGS_SCHEMA, getattr(aseco, '_base_dir', None))
+    _cfg.enabled = bool(bound.values["config/enabled"])
+    setattr(aseco, 'feature_karma', _cfg.enabled)
+    setattr(aseco.server, 'feature_karma', _cfg.enabled)
+    return _cfg.enabled
 
 
 def _set_empty_karma(reset_locals: bool = False) -> dict[str, Any]:
@@ -1779,6 +1790,7 @@ async def _load_config(aseco: Aseco) -> None:
     root = bound.values["config"] if isinstance(bound.values["config"], dict) else {}
     urls = bound.values["config/urls"] if isinstance(bound.values["config/urls"], dict) else {}
 
+    _cfg.enabled = bool(bound.values["config/enabled"])
     _cfg.api_auth_url = as_str(urls.get('api_auth'), _cfg.api_auth_url)
     _cfg.website = as_str(urls.get('website'), _cfg.website)
     _cfg.nation = as_str(_env('MK_NATION'), '').upper()
@@ -2390,6 +2402,8 @@ async def _store_karma_votes(aseco: Aseco) -> None:
 
 def register(aseco: Aseco) -> None:
     global _karma
+    if not _apply_enabled_flag(aseco):
+        return
     _karma = _set_empty_karma(True)
     aseco.register_event('onSync', _mk_onSync)
     aseco.register_event('onEverySecond', _mk_onEverySecond)

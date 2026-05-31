@@ -59,8 +59,8 @@ ML_CLOCK            = 91806
 ML_NEXT_ENV         = 91841
 ML_NEXT_GAMEMODE    = 91836
 ML_EYEPIECE_SCORE   = 91833
-ML_RAMPAGE_DISCORD  = 5834287
-ML_RAMPAGE_FORCE    = 5834288
+ML_DISCORD          = 5834287
+ML_FORCE_PLAY       = 5834288
 
 # Action IDs
 ACT_SHOW_TRACKLIST      = 91820    # action 91820 - open TracklistWindow
@@ -69,8 +69,8 @@ ACT_SHOW_TOPLIST        = 918153   # action 918153 - ToplistWindow
 ACT_SHOW_CURRENTRANKING = 91806    # action 91806 - LiveRankingsWindow
 ACT_CLOCK_DETAILS       = 91803    # ManialinkId.'03' = '918'+'03' = 91803
 ACT_SHOW_TMXINFO        = 91808    # action 91808 - trigger /tmxinfo
-ACT_RAMPAGE_DISCORD     = 5834287
-ACT_RAMPAGE_FORCE       = 5834288
+ACT_DISCORD             = 5834287
+ACT_FORCE_PLAY          = 5834288
 
 # Image URL for the "open small" chevron arrow
 _OPEN_SMALL = 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/edge-open-ld-light.png'
@@ -994,49 +994,77 @@ async def _hide_eyepiece_score(aseco: 'Aseco') -> None:
 
 
 # ---------------------------------------------------------------------------
-# Rampage buttons  (ML 5834287 / 5834288)
+# Discord and Force Play widgets  (ML 5834287 / 5834288)
 # ---------------------------------------------------------------------------
 
-async def _draw_rampage_buttons_all(aseco: 'Aseco') -> None:
+async def _draw_discord_widget_all(aseco: 'Aseco') -> None:
     if _state.challenge_show_next:
         return
+    cfg = _state.discord_widget
+    if not cfg.enabled:
+        return
+
     discord_url = (_state.links.get('discord') or 'discord.gg/CwFNmzKX8G').replace('&', '&amp;')
+    w = _bar_width(cfg)
+    h = _bar_height(cfg)
+    cx = w / 2.0
+
     xml = (
-        f'<manialink id="{ML_RAMPAGE_DISCORD}">'
-        f'<frame posn="-59.2 41.1 0" action="{ACT_RAMPAGE_DISCORD}">'
+        f'<manialink id="{ML_DISCORD}">'
+        f'<frame posn="{cfg.pos_x} {cfg.pos_y} 0" action="{ACT_DISCORD}">'
         f'<format textsize="1"/>'
-        f'<quad posn="0 0 0.001" sizen="4.6 6.5"'
-        f' action="{ACT_RAMPAGE_DISCORD}"'
-        f' style="BgsPlayerCard" substyle="ProgressBar"'
+        f'<quad posn="0 0 0.001" sizen="{w:.4f} {h:.4f}"'
+        f' action="{ACT_DISCORD}"'
+        f' {_bg_attrs(cfg.bg_style, cfg.bg_substyle, getattr(cfg, "bg_color", ""))}'
         f' url="{discord_url}"/>'
-        f'<quad posn="0.7 -0.2 0.002" sizen="3.2 3.2"'
-        f' action="{ACT_RAMPAGE_DISCORD}"'
+        f'<quad posn="{_bar_x(cfg, 0.7):.4f} {_bar_y(cfg, -0.2):.4f} 0.002" sizen="{_bar_w(cfg, 3.2):.4f} {_bar_h(cfg, 3.2):.4f}"'
+        f' action="{ACT_DISCORD}"'
         f' style="Icons128x128_1" substyle="Buddies"'
         f' url="{discord_url}"/>'
-        f'<label posn="2.3 -3.4 0.1" sizen="3.65 2" halign="center" text="$zJoin"/>'
-        f'<label posn="2.3 -4.9 0.1" sizen="6.35 2" halign="center" textcolor="fc0f" scale="0.6" text="$zDiscord"/>'
-        f'</frame>'
-        f'</manialink>'
-        f'<manialink id="{ML_RAMPAGE_FORCE}">'
-        f'<frame posn="-63.9 41.1 0" action="{ACT_RAMPAGE_FORCE}">'
-        f'<format textsize="1"/>'
-        f'<quad posn="0 0 0.001" sizen="4.6 6.5"'
-        f' action="{ACT_RAMPAGE_FORCE}"'
-        f' style="BgsPlayerCard" substyle="ProgressBar"/>'
-        f'<quad posn="0.7 -0.2 0.002" sizen="3.2 3.2"'
-        f' style="Icons128x128_1" substyle="Vehicles"/>'
-        f'<label posn="2.3 -3.4 0.1" sizen="3.65 2" halign="center" text="$zForce"/>'
-        f'<label posn="2.3 -4.9 0.1" sizen="6.35 2" halign="center" textcolor="fc0f" scale="0.6" text="$zPlay"/>'
+        f'<label posn="{cx:.4f} {_bar_y(cfg, -3.4):.4f} 0.1" sizen="{_bar_w(cfg, 3.65):.4f} {_bar_h(cfg, 2):.4f}" halign="center" text="$zJoin"/>'
+        f'<label posn="{cx:.4f} {_bar_y(cfg, -4.9):.4f} 0.1" sizen="{_bar_w(cfg, 6.35):.4f} {_bar_h(cfg, 2):.4f}" halign="center" textcolor="{cfg.text_color}" scale="{_bar_text_scale(cfg, 0.6)}" text="$zDiscord"/>'
         f'</frame>'
         f'</manialink>'
     )
     await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_RAMPAGE_DISCORD, ML_RAMPAGE_FORCE)
+    await _rehide_hidden_logins(aseco, ML_DISCORD)
 
 
-async def _hide_rampage_buttons(aseco: 'Aseco') -> None:
-    await _broadcast(aseco, _empty(ML_RAMPAGE_DISCORD))
-    await _broadcast(aseco, _empty(ML_RAMPAGE_FORCE))
+async def _draw_force_play_widget_all(aseco: 'Aseco') -> None:
+    if _state.challenge_show_next:
+        return
+    cfg = _state.force_play_widget
+    if not cfg.enabled:
+        return
+
+    w = _bar_width(cfg)
+    h = _bar_height(cfg)
+    cx = w / 2.0
+
+    xml = (
+        f'<manialink id="{ML_FORCE_PLAY}">'
+        f'<frame posn="{cfg.pos_x} {cfg.pos_y} 0" action="{ACT_FORCE_PLAY}">'
+        f'<format textsize="1"/>'
+        f'<quad posn="0 0 0.001" sizen="{w:.4f} {h:.4f}"'
+        f' action="{ACT_FORCE_PLAY}"'
+        f' {_bg_attrs(cfg.bg_style, cfg.bg_substyle, getattr(cfg, "bg_color", ""))}/>'
+        f'<quad posn="{_bar_x(cfg, 0.7):.4f} {_bar_y(cfg, -0.2):.4f} 0.002" sizen="{_bar_w(cfg, 3.2):.4f} {_bar_h(cfg, 3.2):.4f}"'
+        f' style="Icons128x128_1" substyle="Vehicles"/>'
+        f'<label posn="{cx:.4f} {_bar_y(cfg, -3.4):.4f} 0.1" sizen="{_bar_w(cfg, 3.65):.4f} {_bar_h(cfg, 2):.4f}" halign="center" text="$zForce"/>'
+        f'<label posn="{cx:.4f} {_bar_y(cfg, -4.9):.4f} 0.1" sizen="{_bar_w(cfg, 6.35):.4f} {_bar_h(cfg, 2):.4f}" halign="center" textcolor="{cfg.text_color}" scale="{_bar_text_scale(cfg, 0.6)}" text="$zPlay"/>'
+        f'</frame>'
+        f'</manialink>'
+    )
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_FORCE_PLAY)
+
+
+async def _hide_discord_widget(aseco: 'Aseco') -> None:
+    await _broadcast(aseco, _empty(ML_DISCORD))
+
+
+async def _hide_force_play_widget(aseco: 'Aseco') -> None:
+    await _broadcast(aseco, _empty(ML_FORCE_PLAY))
 
 
 # ---------------------------------------------------------------------------
@@ -1054,7 +1082,8 @@ async def draw_all_race_bars(aseco: 'Aseco') -> None:
     await _draw_tmexchange_all(aseco)
     await _draw_toplist_all(aseco)
     await _draw_favorite_all(aseco, score=False)
-    await _draw_rampage_buttons_all(aseco)
+    await _draw_discord_widget_all(aseco)
+    await _draw_force_play_widget_all(aseco)
     await _draw_clock_all(aseco)
 
 
@@ -1071,7 +1100,7 @@ async def hide_all_race_bars(aseco: 'Aseco') -> None:
     """Broadcast empty MLs for all race-state bar widgets (at score)."""
     for ml_id in (ML_TRACKCOUNT, ML_GAMEMODE, ML_VISITORS, ML_PLAYERSPECTATOR,
                   ML_LADDERLIMIT, ML_CURRENTRANKING, ML_TMEXCHANGE, ML_TOPLIST,
-                  ML_FAVORITE, ML_CLOCK, ML_RAMPAGE_DISCORD, ML_RAMPAGE_FORCE):
+                  ML_FAVORITE, ML_CLOCK, ML_DISCORD, ML_FORCE_PLAY):
         await _broadcast(aseco, _empty(ml_id))
 
 

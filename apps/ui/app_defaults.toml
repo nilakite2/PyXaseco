@@ -575,6 +575,28 @@ pos_y = 47.8
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
+[ui.discord_widget]
+enabled = true
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = -59.2
+pos_y = 41.1
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
+[ui.force_play_widget]
+enabled = true
+width = 4.6
+height = 6.5
+text_color = "FC0F"
+background_color = ""
+pos_x = -63.9
+pos_y = 41.1
+background_style = "BgsPlayerCard"
+background_substyle = "ProgressBar"
+
 [ui.clock_widget]
 enabled = true
 width = 4.6
@@ -1016,6 +1038,7 @@ submenu_pos_y = -28.2
 
 
 [ui.karma]
+enabled = true
 number_format = "english"
 show_welcome = "true"
 allow_public_vote = "true"

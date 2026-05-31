@@ -279,7 +279,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             logger.debug('[Eyepiece] TMX info click: %s', e)
         return
 
-    # 5834288 = Force spectator back into play mode
+    # 5834288 = Force Play widget: force spectator back into play mode
     if action == 5834288:
         try:
             await aseco.client.query('ForceSpectator', login, 2)

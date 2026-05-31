@@ -17,6 +17,7 @@ from .internal.helpers import (
     _enrich_track_with_challenge_info,
     _enrich_track_with_tmx,
     _fmt_track_value,
+    _get_tmx_trackinfo_for_uid,
     _no_screenshot_image,
 )
 from .hud import append_window_start, append_window_end
@@ -35,7 +36,7 @@ ML_TOGGLE = 91802
 
 async def _open_challenge_window(aseco: 'Aseco', login: str):
     from .widgets.common import _send
-    xml = await _build_last_current_next_window(aseco)
+    xml = await _build_last_current_next_window(aseco, login)
     await _send(aseco, login, xml)
 
 
@@ -62,7 +63,6 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
         nxt_gold = str(nxt.get('goldtime', '-') or '-')
         nxt_silver = str(nxt.get('silvertime', '-') or '-')
         nxt_bronze = str(nxt.get('bronzetime', '-') or '-')
-
         icon_style = _state.challenge_next.icon_style
         icon_substyle = _state.challenge_next.icon_substyle
         title_text = _state.challenge_next.title or 'Next Track'
@@ -128,9 +128,22 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
         mode = _effective_mode(aseco)
         cur_data = _challenge_dict_from_obj(cur, mode)
         await _enrich_track_with_challenge_info(aseco, cur_data, mode, need_times=True)
+        try:
+            await _enrich_track_with_tmx(
+                aseco,
+                cur_data,
+                mode,
+                need_times=True,
+                need_env=False,
+                need_mood=False,
+                need_meta=True,
+            )
+        except Exception as e:
+            logger.debug('[Eyepiece/Challenge] current small widget TMX info failed: %r', e)
         cur_name = str(cur_data.get('name', '') or '')
         cur_author = str(cur_data.get('author', '') or '')
         cur_atime = str(cur_data.get('authortime', '?') or '?')
+        cur_date = _track_short_date_text(cur_data)
 
         side = 'right' if cfg.pos_x < 0 else 'left'
         w_off = cfg.width - 15.5
@@ -165,8 +178,12 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
             f' text="{_safe_ml_text(f"by {_clip(cur_author, 80)}")}"/>'
             f'<quad posn="0.7 -6.25 0.04" sizen="1.7 1.7"'
             f' style="BgRaceScore2" substyle="ScoreReplay"/>'
-            f'<label posn="2.7 -6.55 0.04" sizen="6 2" scale="0.75"'
+            f'<label posn="2.7 -6.55 0.04" sizen="6.2 2" scale="0.8"'
             f' text="{_safe_ml_text(cur_atime)}"/>'
+            f'<quad posn="9 -6.25 0.04" sizen="2.0 2.0"'
+            f' style="Icons128x128_1" substyle="Advanced"/>'
+            f'<label posn="11.0 -6.55 0.04" sizen="6.2 2" scale="1"'
+            f' text="{_safe_ml_text(cur_date)}"/>'
             f'</frame></manialink>'
         )
 
@@ -330,19 +347,120 @@ async def _get_next_track_info(aseco: 'Aseco', mode: int) -> dict:
     }
 
 
+def _track_date_text(data: dict) -> str:
+    for key in ('updated', 'uploaded', 'builddate', 'date'):
+        value = str(data.get(key, '') or '').strip()
+        if value:
+            value = value.replace('T', ' ').replace('Z', '').strip()
+            return value[:16] if len(value) > 16 else value
+    return 'N/A'
+
+
+def _track_short_date_text(data: dict) -> str:
+    value = _track_date_text(data)
+    if not value or value == 'N/A':
+        return ''
+    year = value[0:4]
+    month = value[5:7]
+    if year.isdigit() and month.isdigit():
+        return f'{year[2:4]}/{month}'
+    return ''
+
+
+def _track_time_or_score_text(data: dict) -> str:
+    for key in ('authortime', 'author_score', 'goldtime'):
+        value = str(data.get(key, '') or '').strip()
+        if value and value != '-':
+            return value
+    return '-'
+
+
+async def _get_local_record_summary(aseco: 'Aseco', data: dict, mode: int, login: str) -> dict:
+    summary = {'top': [], 'pb': None}
+    uid = str(data.get('uid', '') or '').strip()
+    if not uid:
+        return summary
+
+    try:
+        pool = await localdb_get_pool(aseco)
+    except Exception as e:
+        logger.debug('[Eyepiece/Challenge] local record pool unavailable for uid=%s: %r', uid, e)
+        return summary
+
+    if not pool:
+        return summary
+
+    order = 'DESC' if mode == Gameinfo.STNT else 'ASC'
+
+    def score_text(score) -> str:
+        try:
+            value = int(score or 0)
+        except Exception:
+            return '-'
+        if mode == Gameinfo.STNT:
+            return str(value)
+        if value <= 0:
+            return '-'
+        return format_time(value)
+
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    f"""
+                    SELECT p.NickName, p.Login, r.Score
+                    FROM records r
+                    INNER JOIN challenges c ON c.Id = r.ChallengeId
+                    INNER JOIN players p ON p.Id = r.PlayerId
+                    WHERE c.Uid = %s
+                    ORDER BY r.Score {order}, r.Date ASC
+                    LIMIT 3
+                    """,
+                    (uid,),
+                )
+                rows = await cur.fetchall() or []
+
+                for idx, row in enumerate(rows, start=1):
+                    nickname = str(row[0] or row[1] or '-')
+                    summary['top'].append({
+                        'rank': idx,
+                        'nickname': nickname,
+                        'score': score_text(row[2]),
+                    })
+
+                if login:
+                    await cur.execute(
+                        f"""
+                        SELECT p.NickName, p.Login, r.Score
+                        FROM records r
+                        INNER JOIN challenges c ON c.Id = r.ChallengeId
+                        INNER JOIN players p ON p.Id = r.PlayerId
+                        WHERE c.Uid = %s AND p.Login = %s
+                        ORDER BY r.Score {order}, r.Date ASC
+                        LIMIT 1
+                        """,
+                        (uid, login),
+                    )
+                    row = await cur.fetchone()
+                    if row:
+                        summary['pb'] = {
+                            'nickname': str(row[0] or row[1] or login),
+                            'score': score_text(row[2]),
+                        }
+    except Exception as e:
+        logger.debug('[Eyepiece/Challenge] local records query failed for uid=%s: %r', uid, e)
+
+    return summary
+
+
 def _track_panel(x_off: float, panel_title: str, data: dict, icon_style: str, icon_substyle: str) -> str:
     raw_name = str(data.get('name', '-') or '-')
     raw_author = str(data.get('author', '-') or '-')
 
     name = _clip(raw_name, 80)
     author = _clip(raw_author, 80)
-
-    authortime = str(data.get('authortime', '-') or '-')
-    goldtime = str(data.get('goldtime', '-') or '-')
-    silvertime = str(data.get('silvertime', '-') or '-')
-    bronzetime = str(data.get('bronzetime', '-') or '-')
-    env = str(data.get('env', '') or '')
-    mood = str(data.get('mood', '') or '')
+    time_or_score = _track_time_or_score_text(data)
+    build_date = _track_date_text(data)
     ttype = str(data.get('type', '') or '')
     style = str(data.get('style', '') or '')
     diffic = str(data.get('diffic', '') or '')
@@ -353,6 +471,9 @@ def _track_panel(x_off: float, panel_title: str, data: dict, icon_style: str, ic
     pageurl = escape(str(data.get('pageurl', '') or ''))
     dloadurl = escape(str(data.get('dloadurl', '') or ''))
     replayurl = escape(str(data.get('replayurl', '') or ''))
+    records = data.get('_local_records') or {}
+    top_records = list(records.get('top') or [])
+    personal_best = records.get('pb')
 
     xml = f'<frame posn="{x_off:.2f} 0 1">'
     xml += '<format textsize="1" textcolor="FFFF"/>'
@@ -368,47 +489,64 @@ def _track_panel(x_off: float, panel_title: str, data: dict, icon_style: str, ic
     xml += f'<label posn="1.4 -21 0.02" sizen="21 3" textsize="2" text="{_safe_ml_text(f"$S{name}")}"/>'
     xml += f'<label posn="1.4 -23.3 0.02" sizen="21 3" textsize="1" text="{_safe_ml_text(f"by {author}")}"/>'
 
-    xml += '<frame posn="3.2 -33 0">'
+    xml += '<frame posn="1.4 -27.4 0">'
     xml += f'<format textsize="1" textcolor="{_state.style.col_default}"/>'
-    xml += '<quad posn="0.1 7.2 0.1" sizen="2.2 2.2" halign="right" style="BgRaceScore2" substyle="ScoreReplay"/>'
-    xml += '<quad posn="0 4.8 0.1" sizen="2 2" halign="right" style="MedalsBig" substyle="MedalGold"/>'
-    xml += '<quad posn="0 2.5 0.1" sizen="2 2" halign="right" style="MedalsBig" substyle="MedalSilver"/>'
-    xml += '<quad posn="0 0.2 0.1" sizen="2 2" halign="right" style="MedalsBig" substyle="MedalBronze"/>'
-    xml += '<quad posn="0.2 -1.8 0.1" sizen="2.6 2.6" halign="right" style="Icons128x128_1" substyle="Advanced"/>'
-    xml += '<quad posn="0.2 -4.1 0.1" sizen="2.6 2.6" halign="right" style="Icons128x128_1" substyle="Manialink"/>'
-    xml += f'<label posn="0.5 6.9 0.1" sizen="8 2" text="{_safe_ml_text(authortime)}"/>'
-    xml += f'<label posn="0.5 4.6 0.1" sizen="8 2" text="{_safe_ml_text(goldtime)}"/>'
-    xml += f'<label posn="0.5 2.3 0.1" sizen="8 2" text="{_safe_ml_text(silvertime)}"/>'
-    xml += f'<label posn="0.5 0 0.1" sizen="8 2" text="{_safe_ml_text(bronzetime)}"/>'
-    xml += f'<label posn="0.5 -2.3 0.1" sizen="8 2" text="{_safe_ml_text(env)}"/>'
-    xml += f'<label posn="0.5 -4.6 0.1" sizen="8 2" text="{_safe_ml_text(mood)}"/>'
+    xml += '<quad posn="2.15 -4.30 0.1" sizen="2.2 2.2" halign="right" style="BgRaceScore2" substyle="ScoreReplay"/>'
+    xml += f'<label posn="2.65 -4.45 0.1" sizen="7.6 2" text="{_safe_ml_text(time_or_score)}"/>'
+    xml += '<quad posn="12.7 -4.30 0.1" sizen="2.2 2.2" halign="right" style="Icons128x128_1" substyle="Advanced"/>'
+    xml += f'<label posn="13.2 -4.45 0.1" sizen="8.2 2" text="{_safe_ml_text(build_date)}"/>'
+    xml += '</frame>'
+
+    xml += '<frame posn="1.4 -34.2 0">'
+    xml += f'<format textsize="1" textcolor="{_state.style.col_default}"/>'
+    if top_records:
+        for idx, rec in enumerate(top_records[:3]):
+            row_y = -idx * 1.85
+            rank = int(rec.get('rank') or (idx + 1))
+            nickname = _clip(str(rec.get('nickname', '-') or '-'), 24)
+            score = str(rec.get('score', '-') or '-')
+            xml += f'<label posn="0 {row_y:.2f} 0.1" sizen="2.2 1.2" scale="1" text="$FFF{rank}."/>'
+            xml += f'<label posn="2.3 {row_y:.2f} 0.1" sizen="13.2 1.2" scale="1" text="{_safe_ml_text(nickname)}"/>'
+            xml += f'<label posn="21.0 {row_y:.2f} 0.1" sizen="5.0 1.2" halign="right" scale="1" text="{_safe_ml_text(score)}"/>'
+    else:
+        xml += '<label posn="0 0 0.1" sizen="21 1.2" scale="1" text="$FFF$i#  No Records"/>'
+
+    pb_y = -5.5
+    if personal_best:
+        pb_nick = _clip(str(personal_best.get('nickname', 'PB') or 'PB'), 24)
+        pb_score = str(personal_best.get('score', '-') or '-')
+        xml += f'<label posn="0 {pb_y:.2f} 0.1" sizen="2.2 1.2" scale="1" text="$0F0PB"/>'
+        xml += f'<label posn="2.3 {pb_y:.2f} 0.1" sizen="13.2 1.2" scale="1" text="{_safe_ml_text(pb_nick)}"/>'
+        xml += f'<label posn="21.0 {pb_y:.2f} 0.1" sizen="5.0 1.2" halign="right" scale="1" text="{_safe_ml_text(pb_score)}"/>'
+    else:
+        xml += f'<label posn="0 {pb_y:.2f} 0.1" sizen="21 1.2" scale="1" text="$0F0PB  $FFFNo Record"/>'
     xml += '</frame>'
 
     if pageurl:
-        xml += '<frame posn="10.6 -33 0">'
+        xml += '<frame posn="1.4 -32 0">'
         xml += f'<format textsize="1" textcolor="{_state.style.col_default}"/>'
-        xml += '<label posn="0 6.9 0.1" sizen="5 2.2" text="Type:"/>'
-        xml += '<label posn="0 4.6 0.1" sizen="5 2" text="Style:"/>'
-        xml += '<label posn="0 2.3 0.1" sizen="5 2" text="Difficult:"/>'
-        xml += '<label posn="0 0 0.1" sizen="5 2" text="Routes:"/>'
-        xml += '<label posn="0 -2.3 0.1" sizen="5 2.6" text="Awards:"/>'
-        xml += '<label posn="0 -4.6 0.1" sizen="5 2.6" text="Section:"/>'
-        xml += f'<label posn="5.1 6.9 0.1" sizen="10.5 2" text="{_safe_ml_text(f" {ttype}")}"/>'
-        xml += f'<label posn="5.1 4.6 0.1" sizen="10.5 2" text="{_safe_ml_text(f" {style}")}"/>'
-        xml += f'<label posn="5.1 2.3 0.1" sizen="10.5 2" text="{_safe_ml_text(f" {diffic}")}"/>'
-        xml += f'<label posn="5.1 0 0.1" sizen="10.5 2" text="{_safe_ml_text(f" {routes}")}"/>'
-        xml += f'<label posn="5.1 -2.3 0.1" sizen="10.5 2" text="{_safe_ml_text(f" {awards}")}"/>'
-        xml += f'<label posn="5.1 -4.6 0.1" sizen="10.5 2" text="{_safe_ml_text(f" {section}")}"/>'
+        xml += '<label posn="0 6.9 0.1" sizen="4 2.2" text="Type:"/>'
+        xml += '<label posn="0 4.6 0.1" sizen="4 2" text="Style:"/>'
+        xml += '<label posn="0 2.3 0.1" sizen="4 2" text="Difficult:"/>'
+        xml += '<label posn="11 6.9 0.1" sizen="4 2" text="Routes:"/>'
+        xml += '<label posn="11 4.6 0.1" sizen="4 2.6" text="Awards:"/>'
+        xml += '<label posn="11 2.3 0.1" sizen="4 2.6" text="Section:"/>'
+        xml += f'<label posn="4.1 6.9 0.1" sizen="6.8 2" text="{_safe_ml_text(f" {ttype}")}"/>'
+        xml += f'<label posn="4.1 4.6 0.1" sizen="6.8 2" text="{_safe_ml_text(f" {style}")}"/>'
+        xml += f'<label posn="4.1 2.3 0.1" sizen="6.8 2" text="{_safe_ml_text(f" {diffic}")}"/>'
+        xml += f'<label posn="15.1 6.9 0.1" sizen="6.3 2" text="{_safe_ml_text(f" {routes}")}"/>'
+        xml += f'<label posn="15.1 4.6 0.1" sizen="6.3 2" text="{_safe_ml_text(f" {awards}")}"/>'
+        xml += f'<label posn="15.1 2.3 0.1" sizen="6.3 2" text="{_safe_ml_text(f" {section}")}"/>'
         xml += '</frame>'
 
-        xml += '<frame posn="1.6 -40.5 0">'
+        xml += '<frame posn="1.6 -41 0">'
         xml += '<format textsize="1" style="TextCardScores2"/>'
         if pageurl:
-            xml += f'<label posn="0 -0.3 0.04" sizen="24 2" scale="0.5" text="$FFF&#0187; Visit Track Page" url="{pageurl}"/>'
+            xml += f'<label posn="0 -2.2 0.04" sizen="24 2" scale="0.5" text="$FFF&#0187; Visit Track Page" url="{pageurl}"/>'
         if dloadurl:
-            xml += f'<label posn="0 -2.2 0.04" sizen="24 2" scale="0.5" text="$FFF&#0187; Download Track" url="{dloadurl}"/>'
+            xml += f'<label posn="-0.15 -4.1 0.04" sizen="24 2" scale="0.5" text="$FFF&#0187; Download Track" url="{dloadurl}"/>'
         if replayurl:
-            xml += f'<label posn="0 -4.1 0.04" sizen="24 2" scale="0.5" text="$FFF&#0187; Download Replay" url="{replayurl}"/>'
+            xml += f'<label posn="10.5 -4.1 0.04" sizen="24 2" scale="0.5" text="$FFF&#0187; Download Replay" url="{replayurl}"/>'
         xml += '</frame>'
 
     xml += '</frame>'
@@ -535,7 +673,7 @@ async def _last_track_from_history(aseco: 'Aseco') -> dict:
     except Exception:
         return {}
 
-async def _build_last_current_next_window(aseco: 'Aseco') -> str:
+async def _build_last_current_next_window(aseco: 'Aseco', login: str) -> str:
     cur = getattr(aseco.server, 'challenge', None)
     mode = _effective_mode(aseco)
 
@@ -591,6 +729,9 @@ async def _build_last_current_next_window(aseco: 'Aseco') -> str:
         await _enrich_track_with_tmx(aseco, next_data, mode, need_times=True, need_env=True, need_mood=True, need_meta=True)
     except Exception as e:
         logger.debug('[Eyepiece/Challenge] next track TMX info failed: %r', e)
+
+    for item in (last_data, current_data, next_data):
+        item['_local_records'] = await _get_local_record_summary(aseco, item, mode, login)
 
     logger.debug('[Eyepiece/Challenge] last_data=%r', last_data)
     logger.debug('[Eyepiece/Challenge] current_data=%r', current_data)

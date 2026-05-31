@@ -274,6 +274,8 @@ class EyepieceState:
     visitors: BarWidgetCfg = field(default_factory=BarWidgetCfg)
     tmexchange: BarWidgetCfg = field(default_factory=BarWidgetCfg)
     toplist: BarWidgetCfg = field(default_factory=BarWidgetCfg)
+    discord_widget: BarWidgetCfg = field(default_factory=BarWidgetCfg)
+    force_play_widget: BarWidgetCfg = field(default_factory=BarWidgetCfg)
     favorite: FavoriteWidgetCfg = field(default_factory=FavoriteWidgetCfg)
     clock: ClockWidgetCfg = field(default_factory=ClockWidgetCfg)
 
@@ -618,6 +620,10 @@ def _load_config(aseco: 'Aseco') -> None:
         'pos_x': 25.1, 'pos_y': 39.3})
     _state.toplist = _bar('TOPLIST_WIDGET', {
         'pos_x': 29.9, 'pos_y': 39.3})
+    _state.discord_widget = _bar('DISCORD_WIDGET', {
+        'enabled': True, 'pos_x': -59.2, 'pos_y': 41.1})
+    _state.force_play_widget = _bar('FORCE_PLAY_WIDGET', {
+        'enabled': True, 'pos_x': -63.9, 'pos_y': 41.1})
 
     # Favorite widget (has race + score positions)
     fav_blk = _get_node_value(root, 'FAVORITE_WIDGET', {})
