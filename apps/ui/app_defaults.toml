@@ -133,12 +133,13 @@ next_track = "Next Track"
 pos_x = 49.05
 pos_y = 48
 
+enabled = true
 [ui.challenge_widget.score]
 pos_x = 46.7
 pos_y = 48
 
 [ui.music_widget]
-enabled = true
+enabled = false
 advertise = true
 title = "Current Song"
 width = 15.5
@@ -870,10 +871,10 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
 [ui.placement_widget]
-enabled = true
+enabled = false
 
 [ui.nicemode]
-enabled = true
+enabled = false
 force = false
 refresh_interval = 10
 
@@ -968,6 +969,7 @@ night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-disabl
 
 
 [ui.menu]
+enabled = "true"
 menu_caption = "   Menu"
 size = "8 2.2"
 separatorheight = "0.75"
@@ -1029,16 +1031,30 @@ style = "Icons64x64_1"
 substyle = "LvlYellow"
 
 [ui.allbutton]
-enabled = false
+enabled = "false"
 main_pos_x = -61
 main_pos_y = -45.1
 submenu_pos_x = -39
 submenu_pos_y = -28.2
 
+[ui.banner]
+enabled = "true"
+pos_x = -64.4
+pos_y = 22.7
+width = 21
+min_width = 7
+char_width = 0.82
+height = 2.7
+text_size = 1
+text_x = 0.6
+text_y = -0.35
+background_style = "Bgs1InRace"
+background_substyle = "NavButton"
+
 
 
 [ui.karma]
-enabled = true
+enabled = "true"
 number_format = "english"
 show_welcome = "true"
 allow_public_vote = "true"

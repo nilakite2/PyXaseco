@@ -1297,6 +1297,8 @@ async def _event_admin(aseco: 'Aseco', answer: list):
             return
 
         action_id = int(answer[2])
+        if await admin_server.handle_apps_action(aseco, player, answer):
+            return
         command_login: str | None = None
         subcmd: str | None = None
 

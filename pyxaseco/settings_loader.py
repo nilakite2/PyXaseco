@@ -345,6 +345,11 @@ def _get_app_defaults(base_dir=None) -> dict:
     return _app_defaults_cache
 
 
+def clear_app_defaults_cache() -> None:
+    global _app_defaults_cache
+    _app_defaults_cache = None
+
+
 def _adef(section: str, key: str, base_dir=None):
     """Read a single value from app defaults config[section][key]."""
     return _get_app_defaults(base_dir).get(section, {}).get(key)

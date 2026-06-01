@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
@@ -63,6 +63,8 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
         nxt_gold = str(nxt.get('goldtime', '-') or '-')
         nxt_silver = str(nxt.get('silvertime', '-') or '-')
         nxt_bronze = str(nxt.get('bronzetime', '-') or '-')
+        #nxt_meta = ' / '.join(part for part in (nxt_env, nxt_mood) if part) or '-'
+
         icon_style = _state.challenge_next.icon_style
         icon_substyle = _state.challenge_next.icon_substyle
         title_text = _state.challenge_next.title or 'Next Track'
@@ -99,6 +101,7 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
             f'<quad posn="2.95 -0.62 0.11" sizen="2.5 2.5" halign="right"'
             f' style="Icons128x128_1" substyle="Advanced"/>'
             f'<label posn="3.3 -1.1 0.11" sizen="{widget_w - 4:.4f} 2" scale="0.9"'
+            #f' text="{_safe_ml_text(_clip(nxt_meta, 80))}"/>'
             f' text="{_safe_ml_text(nxt_env)}"/>'
             f'</frame>'
             # Times grid
@@ -127,7 +130,10 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
         cur = getattr(aseco.server, 'challenge', None)
         mode = _effective_mode(aseco)
         cur_data = _challenge_dict_from_obj(cur, mode)
+        #await _enrich_track_with_challenge_info(aseco, cur_data, mode, need_times=True, need_env=True)
+        #await _enrich_track_with_tmx(aseco, cur_data, mode, need_times=True, need_env=True, need_mood=True)
         await _enrich_track_with_challenge_info(aseco, cur_data, mode, need_times=True)
+        
         try:
             await _enrich_track_with_tmx(
                 aseco,
@@ -140,10 +146,14 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
             )
         except Exception as e:
             logger.debug('[Eyepiece/Challenge] current small widget TMX info failed: %r', e)
+        
         cur_name = str(cur_data.get('name', '') or '')
         cur_author = str(cur_data.get('author', '') or '')
         cur_atime = str(cur_data.get('authortime', '?') or '?')
         cur_date = _track_short_date_text(cur_data)
+#        cur_env = str(cur_data.get('env', '') or '')
+#        cur_mood = str(cur_data.get('mood', '') or '')
+#        cur_meta = ' / '.join(part for part in (cur_env, cur_mood) if part) or '-'
 
         side = 'right' if cfg.pos_x < 0 else 'left'
         w_off = cfg.width - 15.5
@@ -176,6 +186,10 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
             f' text="{_safe_ml_text(_clip(cur_name, 80))}"/>'
             f'<label posn="1 -4.5 0.04" sizen="14.85 2" scale="0.9"'
             f' text="{_safe_ml_text(f"by {_clip(cur_author, 80)}")}"/>'
+            #f' style="Icons128x128_1" substyle="Advanced"/>'
+            #f'<label posn="2.7 -6.2 0.04" sizen="11.8 2" scale="0.7"'
+            #f' text="{_safe_ml_text(_clip(cur_meta, 80))}"/>'
+            #f'<quad posn="0.7 -7.35 0.04" sizen="1.7 1.7"'
             f'<quad posn="0.7 -6.25 0.04" sizen="1.7 1.7"'
             f' style="BgRaceScore2" substyle="ScoreReplay"/>'
             f'<label posn="2.7 -6.55 0.04" sizen="6.2 2" scale="0.8"'
@@ -348,6 +362,11 @@ async def _get_next_track_info(aseco: 'Aseco', mode: int) -> dict:
 
 
 def _track_date_text(data: dict) -> str:
+    """Return the MapWidget-style build/update date text.
+
+    Trakman's MapWidget uses the TMX last update date and falls back to "N/A".
+    PyXaseco may only have this after TMX enrichment, so keep the fallback safe.
+    """
     for key in ('updated', 'uploaded', 'builddate', 'date'):
         value = str(data.get(key, '') or '').strip()
         if value:
@@ -357,17 +376,26 @@ def _track_date_text(data: dict) -> str:
 
 
 def _track_short_date_text(data: dict) -> str:
+    """Return compact MapWidget-style date as YY/MM."""
     value = _track_date_text(data)
     if not value or value == 'N/A':
         return ''
+
+    # Expected examples:
+    # 2025-04-18 12:30
+    # 2025-04-18
+    # 2025/04/18
     year = value[0:4]
     month = value[5:7]
+
     if year.isdigit() and month.isdigit():
         return f'{year[2:4]}/{month}'
+
     return ''
 
 
 def _track_time_or_score_text(data: dict) -> str:
+    """Return the MapWidget-style author time / stunt score value."""
     for key in ('authortime', 'author_score', 'goldtime'):
         value = str(data.get(key, '') or '').strip()
         if value and value != '-':
@@ -375,7 +403,10 @@ def _track_time_or_score_text(data: dict) -> str:
     return '-'
 
 
+
+
 async def _get_local_record_summary(aseco: 'Aseco', data: dict, mode: int, login: str) -> dict:
+    """Return Top 3 local records plus the viewer's PB for one challenge UID."""
     summary = {'top': [], 'pb': None}
     uid = str(data.get('uid', '') or '').strip()
     if not uid:
@@ -499,6 +530,7 @@ def _track_panel(x_off: float, panel_title: str, data: dict, icon_style: str, ic
 
     xml += '<frame posn="1.4 -34.2 0">'
     xml += f'<format textsize="1" textcolor="{_state.style.col_default}"/>'
+
     if top_records:
         for idx, rec in enumerate(top_records[:3]):
             row_y = -idx * 1.85
@@ -520,6 +552,7 @@ def _track_panel(x_off: float, panel_title: str, data: dict, icon_style: str, ic
         xml += f'<label posn="21.0 {pb_y:.2f} 0.1" sizen="5.0 1.2" halign="right" scale="1" text="{_safe_ml_text(pb_score)}"/>'
     else:
         xml += f'<label posn="0 {pb_y:.2f} 0.1" sizen="21 1.2" scale="1" text="$0F0PB  $FFFNo Record"/>'
+
     xml += '</frame>'
 
     if pageurl:
@@ -551,7 +584,6 @@ def _track_panel(x_off: float, panel_title: str, data: dict, icon_style: str, ic
 
     xml += '</frame>'
     return xml
-
 
 async def _last_track_from_history(aseco: 'Aseco') -> dict:
     mode = _effective_mode(aseco)

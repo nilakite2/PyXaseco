@@ -355,3 +355,11 @@ async def Display_bestruns(aseco: "Aseco"):
 async def Clear_bestruns(aseco: "Aseco", _challenge):
     xml = f'<manialink id="{ML_ID}"></manialink>'
     await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 1, False)
+
+
+async def reload_bestruns_runtime(aseco: "Aseco") -> None:
+    LoadConfig_bestruns(aseco)
+    if _is_score_mode(aseco):
+        await Clear_bestruns(aseco, None)
+        return
+    await Display_bestruns(aseco)

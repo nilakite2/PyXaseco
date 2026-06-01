@@ -78,8 +78,6 @@ def _apply_app_defaults(aseco: 'Aseco') -> None:
 
 def register(aseco: 'Aseco'):
     _apply_app_defaults(aseco)
-    if not feature_allbutton:
-        return
     aseco.register_event('onPlayerConnect', _allbutton_player_connect)
     aseco.register_event('onNewChallenge', _send_main_buttons)
     aseco.register_event('onEndRace', _send_main_buttons)
@@ -88,6 +86,9 @@ def register(aseco: 'Aseco'):
 
 async def _allbutton_player_connect(aseco: 'Aseco', player: 'Player'):
     global _last_nick
+    if not feature_allbutton:
+        await _hide_allbutton_runtime(aseco, player.login)
+        return
     _last_nick = getattr(player, 'nickname', '') or getattr(player, 'login', '')
     await _send_main_buttons(aseco)
 
@@ -193,6 +194,9 @@ def _submenu_xml() -> str:
 
 
 async def _send_main_buttons(aseco: 'Aseco', _param=None):
+    if not feature_allbutton:
+        await _hide_allbutton_runtime(aseco)
+        return
     xml = _main_xml()
     for player in aseco.server.players.all():
         await aseco.client.query_ignore_result(
@@ -205,6 +209,9 @@ async def _send_main_buttons(aseco: 'Aseco', _param=None):
 
 
 async def _send_submenu(aseco: 'Aseco', login: str):
+    if not feature_allbutton:
+        await _hide_allbutton_runtime(aseco, login)
+        return
     await aseco.client.query_ignore_result(
         'SendDisplayManialinkPageToLogin',
         login,
@@ -216,6 +223,8 @@ async def _send_submenu(aseco: 'Aseco', login: str):
 
 async def _allbutton_click(aseco: 'Aseco', answer: list):
     global _last_nick
+    if not feature_allbutton:
+        return
     if len(answer) < 3:
         return
     try:
@@ -255,3 +264,19 @@ async def _allbutton_click(aseco: 'Aseco', answer: list):
 
     if action in SUB_ACTIONS:
         await _send_colored_chat(aseco, player, SUB_ACTIONS[action])
+
+
+async def _hide_allbutton_runtime(aseco: 'Aseco', login: str | None = None) -> None:
+    xml = f"<manialinks><manialink id='{MAIN_ML_ID}'></manialink><manialink id='{SUB_ML_ID}'></manialink></manialinks>"
+    if login:
+        await aseco.client.query_ignore_result('SendDisplayManialinkPageToLogin', login, xml, 0, False)
+        return
+    await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
+
+
+async def reload_allbutton_runtime(aseco: 'Aseco') -> None:
+    _apply_app_defaults(aseco)
+    await _hide_allbutton_runtime(aseco)
+    if not feature_allbutton:
+        return
+    await _send_main_buttons(aseco)

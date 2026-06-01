@@ -1204,6 +1204,10 @@ async def _send_widget_combination(aseco: Aseco, widgets: list[str], player: Any
         if widget == 'hide_window':
             xml.append(f'<manialink id="{ML_WINDOWS}"></manialink>')
             continue
+        if not _cfg.enabled:
+            for ml in (ML_SKELETON, ML_MARKER, ML_CUPS, ML_CONNECTION, ML_LOADING):
+                xml.append(f'<manialink id="{ml}"></manialink>')
+            continue
         gm_enabled = _cfg.gm_cfg(_cfg.current_state).enabled
         if not gm_enabled:
             for ml in (ML_SKELETON, ML_MARKER, ML_CUPS):
@@ -1227,6 +1231,10 @@ async def _send_widget_combination(aseco: Aseco, widgets: list[str], player: Any
 
 async def _send_connection_status(aseco: Aseco, status: bool, mode: int) -> None:
     xml = [f'<manialink id="{ML_CONNECTION}">']
+    if not _cfg.enabled:
+        xml.append('</manialink>')
+        await aseco.client.query_ignore_result('SendDisplayManialinkPage', ''.join(xml), 0, False)
+        return
     if status is False:
         await _send_loading_indicator(aseco, False, mode)
         gm = _cfg.gm_cfg(mode)
@@ -1237,7 +1245,7 @@ async def _send_connection_status(aseco: Aseco, status: bool, mode: int) -> None
 
 async def _send_loading_indicator(aseco: Aseco, status: bool, mode: int) -> None:
     xml = [f'<manialink id="{ML_LOADING}">']
-    if status and _cfg.img_progress_indicator:
+    if status and _cfg.enabled and _cfg.img_progress_indicator:
         gm = _cfg.gm_cfg(mode)
         xml.append(f'<frame posn="{gm.pos_x} {gm.pos_y} 20"><quad posn="0.5 -5.2 0.9" sizen="1.4 1.4" image="{_cfg.img_progress_indicator}"/></frame>')
     xml.append('</manialink>')
@@ -2434,3 +2442,48 @@ def register(aseco: Aseco) -> None:
     aseco.register_event('onChat_-', chat_dash)
     aseco.register_event('onChat_--', chat_dashdash)
     aseco.register_event('onChat_---', chat_dashdashdash)
+
+
+async def reload_karma_runtime(aseco: Aseco) -> None:
+    global _runtime_aseco, _karma, _current_map
+
+    _runtime_aseco = aseco
+    await _load_config(aseco)
+    _cfg.current_state = _get_mode(aseco)
+    _current_map = await _get_current_map_info(aseco)
+
+    if not _karma or not isinstance(_karma.get('global'), dict) or not isinstance(_karma.get('local'), dict):
+        _karma = _set_empty_karma(True)
+
+    _karma['data'].update({
+        'uid': _current_map.get('uid', ''),
+        'id': _current_map.get('id', False),
+        'name': _current_map.get('name', ''),
+        'author': _current_map.get('author', ''),
+        'env': _current_map.get('environment', ''),
+        'tmx': (_current_map.get('mx') or {}).get('id', ''),
+    })
+
+    await _send_widget_combination(aseco, ['hide_all'], None)
+
+    if not _cfg.enabled:
+        return
+
+    if not _cfg.gm_cfg(_cfg.current_state).enabled:
+        return
+
+    try:
+        await _load_local_karma()
+        _calculate_karma(['global', 'local'])
+    except Exception as exc:
+        logger.debug('[ManiaKarma] reload_karma_runtime skipped karma refresh: %s', exc)
+
+    if _cfg.current_state == 7:
+        await _send_widget_combination(aseco, ['skeleton_score', 'cups_values'], None)
+    else:
+        await _send_widget_combination(aseco, ['skeleton_race', 'cups_values'], None)
+
+    for player in _players_all(aseco):
+        await _send_widget_combination(aseco, ['player_marker'], player)
+
+    await _send_connection_status(aseco, _api_connected, _cfg.current_state)

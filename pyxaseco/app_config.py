@@ -119,6 +119,11 @@ def load_app_defaults_catalog(
     return _app_defaults_cache[root]
 
 
+def clear_app_defaults_cache(base_dir=None) -> None:
+    root = _runtime_root(base_dir)
+    _app_defaults_cache.pop(root, None)
+
+
 def load_app_defaults(base_dir=None) -> tuple[dict[str, Any], pathlib.Path | None]:
     data, _sources, loaded_paths = load_app_defaults_catalog(base_dir)
     if not loaded_paths:

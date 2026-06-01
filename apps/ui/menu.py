@@ -134,6 +134,13 @@ def register(aseco: "Aseco"):
     aseco.register_event("onNewChallenge", fufiMenu_newChallenge)
 
 
+def _menu_enabled(config: dict[str, Any]) -> bool:
+    raw = config.get("enabled", True)
+    if isinstance(raw, str):
+        return raw.strip().lower() not in {"0", "false", "off", "no"}
+    return bool(raw)
+
+
 @dataclass
 class FufiMenuEntry:
     caption: str = ""
@@ -1102,12 +1109,22 @@ async def fufiMenu_handleClick(aseco: "Aseco", command: list):
 
 async def fufiMenu_startup(aseco: "Aseco", _param=None):
     global _fufi_menu
+    bound = bind_app_settings(FUFI_MENU_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
+    config = bound.values["config"] if isinstance(bound.values["config"], dict) else {}
+    if not isinstance(config, dict) or not config:
+        logger.warning("[FufiMenu] No TOML configuration found in app_defaults.toml, menu disabled")
+        if _fufi_menu:
+            await _fufi_menu.hide_menu_everywhere()
+            _fufi_menu = None
+        return
+    if not _menu_enabled(config):
+        logger.info("[FufiMenu] Disabled in %s", display_path(bound.source_path))
+        if _fufi_menu:
+            await _fufi_menu.hide_menu_everywhere()
+            _fufi_menu = None
+        return
+
     if not _fufi_menu:
-        bound = bind_app_settings(FUFI_MENU_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
-        config = bound.values["config"] if isinstance(bound.values["config"], dict) else {}
-        if not isinstance(config, dict) or not config:
-            logger.warning("[FufiMenu] No TOML configuration found in app_defaults.toml, menu disabled")
-            return
         logger.info("[FufiMenu] Config loaded from %s", display_path(bound.source_path))
         _fufi_menu = FufiMenu(config, bound.source_path)
         _fufi_menu.aseco = aseco
@@ -1130,6 +1147,27 @@ async def fufiMenu_endRace(aseco: "Aseco", _param=None):
     if not _fufi_menu:
         return
     await _fufi_menu.hide_menu_everywhere()
+
+
+async def reload_menu_runtime(aseco: "Aseco") -> None:
+    global _fufi_menu
+
+    if _fufi_menu:
+        try:
+            await _fufi_menu.hide_menu_everywhere()
+        except Exception:
+            pass
+        _fufi_menu = None
+
+    await fufiMenu_startup(aseco)
+
+    if not _fufi_menu:
+        return
+
+    if getattr(getattr(aseco.server, "gameinfo", None), "state", None) == Gameinfo.SCOR:
+        return
+
+    await _fufi_menu.send_menu_button_to_login("")
 
 
 # ------------------------------------------------------------

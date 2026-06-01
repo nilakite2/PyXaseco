@@ -334,6 +334,19 @@ async def _bestcps_refresh(aseco: 'Aseco', _record):
         await _broadcast_widget(aseco)
 
 
+async def reload_bestcps_runtime(aseco: 'Aseco') -> None:
+    _load_config(aseco)
+    if _is_score_mode(aseco) or not _tab_cp_time:
+        await aseco.client.query_ignore_result(
+            'SendDisplayManialinkPage',
+            f'<manialink id="{WIDGET_ID}"></manialink>',
+            0,
+            False,
+        )
+        return
+    await _broadcast_widget(aseco)
+
+
 async def chat_bestcps(aseco: 'Aseco', command: dict):
     player = command['author']
     login = player.login

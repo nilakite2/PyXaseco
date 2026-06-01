@@ -193,29 +193,7 @@ async def _elist_redirect(aseco: 'Aseco', command: dict):
 async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
     from ..internal.utils import _loop_time
     from ..widgets.common import _send_chat
-    from .events import (
-        _on_new_challenge,
-        _on_new_challenge2,
-        _apply_custom_ui_all,
-        _redraw_all,
-        _draw_local_all,
-        _draw_dedi_all,
-    )
-    from ..hud_views import (
-        draw_all_race_bars,
-        draw_all_score_bars,
-        hide_all_race_bars,
-        hide_all_score_bars,
-        _refresh_server_limits,
-        _refresh_visitor_count,
-    )
-    from ..widgets.score_widgets import (
-        draw_all_score_lists,
-        hide_all_score_lists,
-        draw_round_score,
-        hide_round_score,
-    )
-    from ..toplists import draw_all_score_columns, hide_all_score_columns
+    from .events import _draw_local_all, _draw_dedi_all
 
     player = command['author']
     login = player.login
@@ -229,37 +207,7 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
 
     if p_up == 'RELOAD':
         aseco.console('[Records-Eyepiece] MasterAdmin %s reloads the configuration.', login)
-
-        _state.player_local_digest.clear()
-        _state.player_dedi_digest.clear()
-        _state.player_live_digest.clear()
-
-        _load_config(aseco)
-        validate_phase1_runtime(aseco)
-        apply_phase1_defaults(aseco)
-        validate_phase1_dependencies(aseco)
-
-        await _on_new_challenge(aseco, aseco.server.challenge)
-        await _on_new_challenge2(aseco, aseco.server.challenge)
-        await _apply_custom_ui_all(aseco)
-        await hide_all_race_bars(aseco)
-        await hide_all_score_bars(aseco)
-        await hide_all_score_lists(aseco)
-        await hide_all_score_columns(aseco)
-        await hide_round_score(aseco)
-        await _redraw_all(aseco)
-
-        if _state.challenge_show_next:
-            await draw_all_score_bars(aseco)
-            await draw_all_score_lists(aseco)
-            await draw_all_score_columns(aseco)
-            if getattr(_state, 'round_scores', None):
-                await draw_round_score(aseco)
-        else:
-            await _refresh_server_limits(aseco)
-            await _refresh_visitor_count(aseco)
-            await draw_all_race_bars(aseco)
-
+        await reload_ui_runtime(aseco)
         await _send_chat(aseco, login, '{#server}>> Reload of app_defaults.toml Eyepiece config done.')
         return
 
@@ -305,6 +253,135 @@ async def chat_eyeset(aseco: 'Aseco', command: dict) -> None:
         [1.15, 0.32, 0.83],
         'OK',
     )
+
+
+async def reload_ui_runtime(aseco: 'Aseco') -> None:
+    from pyxaseco.app_config import clear_app_defaults_cache as clear_app_catalog_cache
+    from pyxaseco.settings_loader import clear_app_defaults_cache as clear_settings_defaults_cache
+    from .events import (
+        _on_new_challenge,
+        _on_new_challenge2,
+        _apply_custom_ui_all,
+        _redraw_all,
+    )
+    from ..hud_views import (
+        draw_all_race_bars,
+        draw_all_score_bars,
+        hide_all_race_bars,
+        hide_all_score_bars,
+        _refresh_server_limits,
+        _refresh_visitor_count,
+    )
+    from ..widgets.score_widgets import (
+        draw_all_score_lists,
+        hide_all_score_lists,
+        draw_round_score,
+        hide_round_score,
+    )
+    from ..toplists import draw_all_score_columns, hide_all_score_columns
+    from ..menu import reload_menu_runtime
+    from ..karma import reload_karma_runtime
+    from ..banner import reload_banner_runtime
+    from ..allbutton import reload_allbutton_runtime
+
+    _state.player_local_digest.clear()
+    _state.player_dedi_digest.clear()
+    _state.player_live_digest.clear()
+
+    clear_app_catalog_cache(getattr(aseco, '_base_dir', None))
+    clear_settings_defaults_cache()
+
+    _load_config(aseco)
+    validate_phase1_runtime(aseco)
+    apply_phase1_defaults(aseco)
+    validate_phase1_dependencies(aseco)
+
+    await _on_new_challenge(aseco, aseco.server.challenge)
+    await _on_new_challenge2(aseco, aseco.server.challenge)
+    await _apply_custom_ui_all(aseco)
+    await hide_all_race_bars(aseco)
+    await hide_all_score_bars(aseco)
+    await hide_all_score_lists(aseco)
+    await hide_all_score_columns(aseco)
+    await hide_round_score(aseco)
+    await _redraw_all(aseco)
+
+    if _state.challenge_show_next:
+        await draw_all_score_bars(aseco)
+        await draw_all_score_lists(aseco)
+        await draw_all_score_columns(aseco)
+        if getattr(_state, 'round_scores', None):
+            await draw_round_score(aseco)
+    else:
+        await _refresh_server_limits(aseco)
+        await _refresh_visitor_count(aseco)
+        await draw_all_race_bars(aseco)
+
+    await reload_menu_runtime(aseco)
+    await reload_karma_runtime(aseco)
+    await reload_banner_runtime(aseco)
+    await reload_allbutton_runtime(aseco)
+
+
+async def reload_ui_layout_runtime(aseco: 'Aseco') -> None:
+    from pyxaseco.app_config import clear_app_defaults_cache as clear_app_catalog_cache
+    from pyxaseco.settings_loader import clear_app_defaults_cache as clear_settings_defaults_cache
+    from .events import _apply_custom_ui_all, _redraw_all
+    from ..hud_views import (
+        draw_all_race_bars,
+        draw_all_score_bars,
+        hide_all_race_bars,
+        hide_all_score_bars,
+        _refresh_server_limits,
+        _refresh_visitor_count,
+    )
+    from ..widgets.score_widgets import (
+        draw_all_score_lists,
+        hide_all_score_lists,
+        draw_round_score,
+        hide_round_score,
+    )
+    from ..toplists import draw_all_score_columns, hide_all_score_columns
+    from ..menu import reload_menu_runtime
+    from ..karma import reload_karma_runtime
+    from ..banner import reload_banner_runtime
+    from ..allbutton import reload_allbutton_runtime
+
+    _state.player_local_digest.clear()
+    _state.player_dedi_digest.clear()
+    _state.player_live_digest.clear()
+
+    clear_app_catalog_cache(getattr(aseco, '_base_dir', None))
+    clear_settings_defaults_cache()
+
+    _load_config(aseco)
+    validate_phase1_runtime(aseco)
+    apply_phase1_defaults(aseco)
+    validate_phase1_dependencies(aseco)
+
+    await _apply_custom_ui_all(aseco)
+    await hide_all_race_bars(aseco)
+    await hide_all_score_bars(aseco)
+    await hide_all_score_lists(aseco)
+    await hide_all_score_columns(aseco)
+    await hide_round_score(aseco)
+    await _redraw_all(aseco)
+
+    if _state.challenge_show_next:
+        await draw_all_score_bars(aseco)
+        await draw_all_score_lists(aseco)
+        await draw_all_score_columns(aseco)
+        if getattr(_state, 'round_scores', None):
+            await draw_round_score(aseco)
+    else:
+        await _refresh_server_limits(aseco)
+        await _refresh_visitor_count(aseco)
+        await draw_all_race_bars(aseco)
+
+    await reload_menu_runtime(aseco)
+    await reload_karma_runtime(aseco)
+    await reload_banner_runtime(aseco)
+    await reload_allbutton_runtime(aseco)
 
 
 async def chat_estat(aseco: 'Aseco', command: dict) -> None:

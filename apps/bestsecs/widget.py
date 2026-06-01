@@ -578,6 +578,17 @@ async def bestsecs_player_connect(aseco: "Aseco", player: "Player") -> None:
     if _challenge_id > 0:
         await _load_own_from_db(_challenge_id, player)
     await _send_button(aseco, player.login)
+
+
+async def reload_bestsecs_runtime(aseco: "Aseco") -> None:
+    global _runtime_aseco
+    _runtime_aseco = aseco
+    _load_config(aseco)
+    _update_show_secrecs(aseco)
+    if _show_secrecs:
+        await _send_button(aseco)
+    else:
+        await _hide_button(aseco)
     await aseco.client.query_ignore_result(
         "ChatSendServerMessageToLogin",
         aseco.format_colors(

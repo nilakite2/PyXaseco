@@ -8,7 +8,7 @@ import time
 from typing import TYPE_CHECKING
 
 from pyxaseco.helpers import (display_manialink, display_manialink_multi,
-                              format_time, format_time_h)
+                              format_text, format_time, format_time_h, strip_colors)
 from pyxaseco.app_services import localdb_get_pool
 from pyxaseco.core.aseco import PYXASECO_VERSION
 
@@ -176,8 +176,32 @@ async def chat_xaseco(aseco: 'Aseco', command: dict):
     except Exception:
         pass
 
-    welcome_raw = aseco.get_chat_message('WELCOME')
-    welcome_lines = str(welcome_raw or '').split('{br}')
+    display_name = strip_colors(getattr(player, 'nickname', '') or '').strip()
+    if not display_name:
+        try:
+            pool = await localdb_get_pool(aseco)
+            if pool:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute('SELECT NickName FROM players WHERE Login=%s LIMIT 1', (login,))
+                        row = await cur.fetchone()
+                if isinstance(row, dict):
+                    display_name = strip_colors(str(row.get('NickName') or '')).strip()
+                elif row:
+                    display_name = strip_colors(str(row[0] or '')).strip()
+        except Exception:
+            display_name = ''
+    if not display_name:
+        display_name = login
+
+    welcome_raw = str(aseco.settings.chat_messages.get('WELCOME', [''])[0] or '')
+    welcome_text = format_text(
+        welcome_raw,
+        display_name,
+        aseco.server.name,
+        PYXASECO_VERSION,
+    )
+    welcome_lines = str(aseco.format_colors(welcome_text) or '').split('{br}')
 
     header = f'PyXaseco info: {aseco.server.name}'
     info = [['Version', '{#black}' + PYXASECO_VERSION]]

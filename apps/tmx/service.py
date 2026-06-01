@@ -609,6 +609,8 @@ async def get_tmx_trackinfo_for_uid(aseco: "Aseco", uid: str, mode: int) -> dict
         "pageurl": str(data.get("pageurl", "") or ""),
         "dloadurl": str(data.get("dloadurl", "") or ""),
         "replayurl": str(data.get("replayurl", "") or ""),
+        "uploaded": str(data.get("uploaded", "") or ""),
+        "updated": str(data.get("updated", "") or ""),
     }
     _tmx_helper_cache["trackinfo"][key] = dict(out)
     return out

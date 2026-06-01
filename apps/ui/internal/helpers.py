@@ -230,6 +230,7 @@ async def _enrich_track_with_tmx(aseco, track: dict[str, Any], mode: int, *, nee
     missing_times = need_times and not _safe_int(track.get('authortime_ms'), 0)
     missing_meta = need_meta and any(
         not str(track.get(key) or '').strip()
+        #for key in ('type', 'style', 'diffic', 'routes', 'awards', 'section', 'imageurl', 'pageurl', 'dloadurl')
         for key in (
             'type', 'style', 'diffic', 'routes', 'awards', 'section',
             'imageurl', 'pageurl', 'dloadurl', 'uploaded', 'updated'
@@ -257,6 +258,8 @@ async def _enrich_track_with_tmx(aseco, track: dict[str, Any], mode: int, *, nee
         if info.get('bronzetime_ms'):
             track['bronzetime_ms'] = info.get('bronzetime_ms')
     if missing_meta:
+        #for key in ('type', 'style', 'diffic', 'routes', 'awards', 'section',
+        #            'imageurl', 'pageurl', 'dloadurl', 'replayurl'):
         for key in (
             'type', 'style', 'diffic', 'routes', 'awards', 'section',
             'imageurl', 'pageurl', 'dloadurl', 'replayurl', 'uploaded', 'updated'

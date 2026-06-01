@@ -281,3 +281,11 @@ async def Display_bestfinishes(aseco: "Aseco"):
 async def Clear_bestfinishes(aseco: "Aseco", _challenge):
     xml = f'<manialink id="{ML_ID}"></manialink>'
     await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 1, False)
+
+
+async def reload_bestfinishes_runtime(aseco: "Aseco") -> None:
+    LoadConfig_bestfinishes(aseco)
+    if getattr(getattr(aseco.server, "gameinfo", None), "mode", -1) == getattr(Gameinfo, "SCOR", 7):
+        await Clear_bestfinishes(aseco, None)
+        return
+    await Display_bestfinishes(aseco)

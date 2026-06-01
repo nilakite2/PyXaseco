@@ -663,6 +663,28 @@ async def chat_bcps(aseco: "Aseco", command: dict):
     await bct_buildCheckpointsTimeInlay(aseco, login=login)
 
 
+async def reload_best_cp_times_runtime(aseco: "Aseco") -> None:
+    _load_cfg(aseco)
+    if _state.current_state == STATE_SCORE:
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<manialinks>"
+            f'<manialink id="{ML_WIDGET}"></manialink>'
+            f'<manialink id="{ML_INLAY}"></manialink>'
+            "</manialinks>"
+        )
+        await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+        return
+
+    if _state.widget.custom_ui:
+        await bct_set_checkpoint_list_visible(aseco, False)
+    else:
+        await bct_apply_custom_ui_all(aseco, True)
+
+    await bct_buildWidget(aseco, None)
+    await bct_buildCheckpointsTimeInlay(aseco)
+
+
 def bct_formatTime(mw_time: int, hsec: bool = True) -> str:
     if mw_time == -1:
         return "???"
