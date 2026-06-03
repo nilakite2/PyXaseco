@@ -589,15 +589,6 @@ async def reload_bestsecs_runtime(aseco: "Aseco") -> None:
         await _send_button(aseco)
     else:
         await _hide_button(aseco)
-    await aseco.client.query_ignore_result(
-        "ChatSendServerMessageToLogin",
-        aseco.format_colors(
-            "{#server}>> {#message}This server runs BestSecs. "
-            "Type {#highlite}/secrecs {#message}or {#highlite}/mysecrecs "
-            "{#message}to view sector records."
-        ),
-        player.login,
-    )
 
 
 async def bestsecs_button_click(aseco: "Aseco", answer: list) -> None:

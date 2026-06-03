@@ -89,3 +89,7 @@ APP_INSTANCE = BestSecsApp()
 
 def register(aseco: "Aseco"):
     APP_INSTANCE.register_runtime(aseco)
+
+
+async def reload_runtime(aseco: "Aseco") -> None:
+    await widget.reload_bestsecs_runtime(aseco)

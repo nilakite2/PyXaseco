@@ -156,7 +156,7 @@ UI_CONFIG_ITEMS: list[dict[str, Any]] = [
     _ui_item('allbutton', 'AllButton'),
     {
         'key': 'karma_widget',
-        'label': 'ManiaKarma',
+        'label': 'Karma',
         'file': 'apps/ui/app_defaults.toml',
         'table_path': ('ui', 'karma', 'karma_widget'),
     },
@@ -1509,121 +1509,12 @@ async def _apply_config_toggle(
 
 
 async def handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
-    if not answer or len(answer) < 3:
+    from apps.apps_manager.service import get_service as get_apps_manager_service
+
+    service = get_apps_manager_service(aseco)
+    if service is None:
         return False
-    action_id = int(answer[2])
-    payload = _apps_action_map(admin).get(int(action_id))
-    if not payload:
-        return False
-
-    from . import command_router as admin_chat
-
-    login = getattr(admin, 'login', '')
-    if not _is_masteradmin(aseco, admin, login):
-        await admin_chat._reply(aseco, login, '{#server}> {#error}Only MasterAdmins may use the apps manager.')
-        return True
-
-    kind = payload[0]
-
-    if kind == 'open_config':
-        _show_app_config_window(aseco, admin, admin_chat, str(payload[1]))
-        return True
-
-    if kind == 'open_edit':
-        _show_item_edit_window(aseco, admin, admin_chat, str(payload[1]), str(payload[2]))
-        return True
-
-    if kind == 'toggle_app':
-        action, name = str(payload[1]), str(payload[2])
-        move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', action == 'enable')
-        await admin_chat._reply(
-            aseco,
-            login,
-            _restart_required_message(f"app/{name} {action}d in apps.toml"),
-        )
-        _show_apps_manager_window(aseco, admin, admin_chat)
-        return True
-
-    if kind == 'archive_app':
-        name = str(payload[1])
-        app_dir, _archived = _standalone_paths(aseco, name)
-        if app_dir.exists():
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', False)
-            shutil.move(str(app_dir), str(_archive_destination(aseco, name)))
-            await admin_chat._reply(
-                aseco, login,
-                _restart_required_message(f'app/{name} moved to apps/00removed and disabled'),
-            )
-        _show_apps_manager_window(aseco, admin, admin_chat)
-        return True
-
-    if kind == 'restore_app':
-        name = str(payload[1])
-        app_dir, archived = _standalone_paths(aseco, name)
-        if archived is not None:
-            _apps_dir(aseco).mkdir(parents=True, exist_ok=True)
-            shutil.move(str(archived), str(app_dir))
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', True)
-            await admin_chat._reply(
-                aseco, login,
-                _restart_required_message(f'app/{name} restored from apps/00removed and enabled'),
-            )
-        _show_apps_manager_window(aseco, admin, admin_chat)
-        return True
-
-    if kind == 'toggle_config':
-        app_key, item_key, enabled = str(payload[1]), str(payload[2]), bool(payload[3])
-        msg = await _apply_config_toggle(aseco, admin, admin_chat, app_key, item_key, enabled)
-        await admin_chat._reply(aseco, login, msg)
-        _show_app_config_window(aseco, admin, admin_chat, app_key)
-        return True
-
-    if kind == 'adjust_field':
-        app_key = str(payload[1])
-        item_key = str(payload[2])
-        field_key = str(payload[3])
-        delta = float(payload[4])
-        item = _find_config_item(aseco, app_key, item_key)
-        if not item:
-            await admin_chat._reply(aseco, login, _unknown_apps_target(item_key))
-            return True
-
-        action_text = _update_config_field(aseco, item, field_key, delta)
-        if _config_app_spec(aseco, app_key)['save_mode'] == 'reload':
-            await _apply_config_reload_if_supported(aseco, app_key)
-            await admin_chat._reply(aseco, login, _reload_done_message(action_text))
-        else:
-            await admin_chat._reply(aseco, login, _restart_required_message(action_text))
-        _show_item_edit_window(aseco, admin, admin_chat, app_key, item_key)
-        return True
-
-    if kind == 'save_form':
-        app_key = str(payload[1])
-        item_key = str(payload[2])
-        item = _find_config_item(aseco, app_key, item_key)
-        if not item:
-            await admin_chat._reply(aseco, login, _unknown_apps_target(item_key))
-            return True
-
-        values = _extract_manialink_values(answer)
-        if not values:
-            logger.info('[AppsManager] save_form received no values for %s.%s answer=%r', app_key, item_key, answer)
-        updates: list[str] = []
-        for field in _editable_fields(aseco, item):
-            if field['field_key'] not in values:
-                continue
-            updates.append(_set_config_field_value(aseco, item, field['field_key'], values[field['field_key']]))
-
-        if _config_app_spec(aseco, app_key)['save_mode'] == 'reload':
-            await _apply_config_reload_if_supported(aseco, app_key)
-            msg = _reload_done_message(', '.join(updates[:3]) if updates else f'{app_key}.{item_key}')
-        else:
-            msg = _restart_required_message(', '.join(updates[:3]) if updates else f'{app_key}.{item_key}')
-        await admin_chat._reply(aseco, login, msg)
-        _show_item_edit_window(aseco, admin, admin_chat, app_key, item_key)
-        return True
-
-    return False
+    return await service.handle_action(aseco, admin, answer)
 
 
 async def _handle_apps_command(
@@ -1633,223 +1524,17 @@ async def _handle_apps_command(
     args: list[str],
     admin_chat,
 ) -> None:
-    if not _is_masteradmin(aseco, admin, login):
+    from apps.apps_manager.service import get_service as get_apps_manager_service
+
+    service = get_apps_manager_service(aseco)
+    if service is None:
         await admin_chat._reply(
-            aseco, login,
-            '{#server}> {#error}Only MasterAdmins may change app and feature states.'
+            aseco,
+            login,
+            '{#server}> {#error}Apps manager unavailable - enable {#highlite}app/apps_manager{#error}.',
         )
         return
-
-    if not args or str(args[0]).strip().lower() == 'list':
-        _show_apps_manager_window(aseco, admin, admin_chat)
-        return
-
-    action = str(args[0]).strip().lower()
-    name = _normalize_app_name(args[1]) if len(args) > 1 else ''
-    config_apps = _discover_config_apps(aseco)
-
-    if action == 'config':
-        if not name:
-            await _reply_apps_usage(aseco, login, admin_chat)
-            return
-        if name in config_apps:
-            _show_app_config_window(aseco, admin, admin_chat, name)
-            return
-        owner = _config_item_owner(aseco, name)
-        if owner:
-            await admin_chat._reply(aseco, login, _config_item_redirect_message(name, owner[0]))
-            return
-        await admin_chat._reply(aseco, login, _unknown_apps_target(name))
-        return
-
-    if action == 'status':
-        if not name:
-            await _reply_apps_usage(aseco, login, admin_chat)
-            return
-        if name in config_apps:
-            enabled_count, total = _config_app_counts(aseco, name)
-            await admin_chat._reply(
-                aseco, login,
-                f'{{#server}}> {{#message}}{config_apps[name]["label"]}: {{#highlite}}{enabled_count}/{total}{{#message}} items enabled.'
-            )
-            return
-        owner = _config_item_owner(aseco, name)
-        if owner:
-            app_key, item = owner
-            await admin_chat._reply(
-                aseco, login,
-                f'{{#server}}> {{#message}}{item["label"]}: {_config_item_state_text(_config_item_state(aseco, item))} '
-                f'{{#message}}(managed via {{#highlite}}/admin apps config {app_key}{{#message}})'
-            )
-            return
-        if _is_manageable_standalone_app(aseco, name):
-            await admin_chat._reply(
-                aseco, login,
-                f'{{#server}}> {{#message}}app/{name}: {{#highlite}}{_standalone_status(aseco, name)}'
-            )
-            return
-        await admin_chat._reply(aseco, login, _unknown_apps_target(name))
-        return
-
-    if action in {'enable', 'disable'}:
-        if not name:
-            await _reply_apps_usage(aseco, login, admin_chat)
-            return
-        if name in config_apps:
-            await admin_chat._reply(
-                aseco, login,
-                '{#server}> {#error}Use {#highlite}/admin apps config ' + name +
-                '{#error} for merged features and UI-owned items.'
-            )
-            return
-        owner = _config_item_owner(aseco, name)
-        if owner:
-            await admin_chat._reply(aseco, login, _config_item_redirect_message(name, owner[0]))
-            return
-        if _is_manageable_standalone_app(aseco, name):
-            enabled = action == 'enable'
-            app_dir, archived = _standalone_paths(aseco, name)
-            if enabled and not app_dir.exists() and archived is not None:
-                await admin_chat._reply(
-                    aseco, login,
-                    '{#server}> {#error}App is archived in {#highlite}apps/00removed'
-                    '{#error}; use {#highlite}/admin apps add ' + name + '{#error} to restore it first.'
-                )
-                return
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', enabled)
-            await admin_chat._reply(
-                aseco, login,
-                _restart_required_message(f"app/{name} {'enabled' if enabled else 'disabled'} in apps.toml")
-            )
-            return
-        await admin_chat._reply(aseco, login, _unknown_apps_target(name))
-        return
-
-    if action == 'add':
-        if not name:
-            await _reply_apps_usage(aseco, login, admin_chat)
-            return
-        if name in config_apps:
-            await admin_chat._reply(
-                aseco, login,
-                '{#server}> {#error}' + name + ' is a core config app and cannot be added or removed through /admin apps.'
-            )
-            return
-        owner = _config_item_owner(aseco, name)
-        if owner:
-            await admin_chat._reply(aseco, login, _config_item_redirect_message(name, owner[0]))
-            return
-        if name in PROTECTED_STANDALONE_APPS:
-            await admin_chat._reply(
-                aseco, login,
-                '{#server}> {#error}Protected core apps are not managed through /admin apps.'
-            )
-            return
-        app_dir, archived = _standalone_paths(aseco, name)
-        if app_dir.exists():
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', True)
-            await admin_chat._reply(
-                aseco, login,
-                _restart_required_message(f'app/{name} enabled in apps.toml')
-            )
-            return
-        if archived is not None:
-            _apps_dir(aseco).mkdir(parents=True, exist_ok=True)
-            shutil.move(str(archived), str(app_dir))
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', True)
-            await admin_chat._reply(
-                aseco, login,
-                _restart_required_message(f'app/{name} restored from apps/00removed and enabled')
-            )
-            return
-        await admin_chat._reply(
-            aseco, login,
-            '{#server}> {#error}No install source found for {#highlite}' + name +
-            '{#error}. Expected either {#highlite}apps/' + name +
-            '{#error} or {#highlite}apps/00removed/' + name + '{#error}.'
-        )
-        return
-
-    if action in {'remove', 'rem'}:
-        if not name:
-            await _reply_apps_usage(aseco, login, admin_chat)
-            return
-        if name in config_apps:
-            await admin_chat._reply(
-                aseco, login,
-                '{#server}> {#error}' + name + ' is a core config app and cannot be removed through /admin apps.'
-            )
-            return
-        owner = _config_item_owner(aseco, name)
-        if owner:
-            await admin_chat._reply(aseco, login, _config_item_redirect_message(name, owner[0]))
-            return
-        if name in PROTECTED_STANDALONE_APPS:
-            await admin_chat._reply(
-                aseco, login,
-                '{#server}> {#error}Protected core apps may not be removed through /admin apps.'
-            )
-            return
-        app_dir, archived = _standalone_paths(aseco, name)
-        if archived is not None and not app_dir.exists():
-            await admin_chat._reply(
-                aseco, login,
-                '{#server}> {#message}App {#highlite}' + name +
-                '{#message} is already archived in {#highlite}apps/00removed{#message}.'
-            )
-            return
-        if not app_dir.exists():
-            await admin_chat._reply(aseco, login, _unknown_apps_target(name))
-            return
-        move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', False)
-        shutil.move(str(app_dir), str(_archive_destination(aseco, name)))
-        await admin_chat._reply(
-            aseco, login,
-            _restart_required_message(f'app/{name} moved to apps/00removed and disabled')
-        )
-        return
-
-    if action in {'fremove', 'frem'}:
-        if not name:
-            await _reply_apps_usage(aseco, login, admin_chat)
-            return
-        if len(args) < 3 or str(args[2]).strip().lower() != 'confirm':
-            await admin_chat._reply(
-                aseco, login,
-                '{#server}> {#error}Destructive removal requires confirmation: '
-                f'{{#highlite}}/admin apps {action} {name} confirm'
-            )
-            return
-        if name in config_apps:
-            await admin_chat._reply(
-                aseco, login,
-                '{#server}> {#error}' + name + ' is a core config app and cannot be physically deleted through /admin apps.'
-            )
-            return
-        owner = _config_item_owner(aseco, name)
-        if owner:
-            await admin_chat._reply(aseco, login, _config_item_redirect_message(name, owner[0]))
-            return
-        if name in PROTECTED_STANDALONE_APPS:
-            await admin_chat._reply(
-                aseco, login,
-                '{#server}> {#error}Protected core apps may not be forcibly removed through /admin apps.'
-            )
-            return
-        app_dir, archived = _standalone_paths(aseco, name)
-        target = app_dir if app_dir.exists() else archived
-        if target is None or not target.exists():
-            await admin_chat._reply(aseco, login, _unknown_apps_target(name))
-            return
-        move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', False)
-        shutil.rmtree(target)
-        await admin_chat._reply(
-            aseco, login,
-            _restart_required_message(f'app/{name} permanently removed from disk')
-        )
-        return
-
-    await _reply_apps_usage(aseco, login, admin_chat)
+    await service.handle_command(aseco, login, admin, args)
 
 
 def can_handle(sub: str) -> bool:

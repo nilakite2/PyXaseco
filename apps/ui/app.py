@@ -148,3 +148,9 @@ def get_state():
 
 def reload_config(aseco: 'Aseco') -> None:
     _load_config(aseco)
+
+
+async def reload_runtime(aseco: 'Aseco') -> None:
+    from .handlers.command_handlers import reload_ui_layout_runtime
+
+    await reload_ui_layout_runtime(aseco)

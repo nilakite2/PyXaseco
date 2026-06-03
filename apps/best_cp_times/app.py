@@ -89,3 +89,7 @@ APP_INSTANCE = BestCpTimesApp()
 
 def register(aseco: "Aseco"):
     APP_INSTANCE.register_runtime(aseco)
+
+
+async def reload_runtime(aseco: "Aseco") -> None:
+    await best_cp_times_v2.reload_best_cp_times_runtime(aseco)

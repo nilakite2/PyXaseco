@@ -285,7 +285,7 @@ async def Clear_bestfinishes(aseco: "Aseco", _challenge):
 
 async def reload_bestfinishes_runtime(aseco: "Aseco") -> None:
     LoadConfig_bestfinishes(aseco)
-    if getattr(getattr(aseco.server, "gameinfo", None), "mode", -1) == getattr(Gameinfo, "SCOR", 7):
+    if getattr(getattr(aseco.server, "gameinfo", None), "state", -1) == getattr(Gameinfo, "SCOR", 7):
         await Clear_bestfinishes(aseco, None)
         return
     await Display_bestfinishes(aseco)

@@ -4,6 +4,7 @@ controller = "PyXaseco_v1.2"
 [loadout]
 enabled = [
 "app/platform_core",
+"app/apps_manager",
 "app/discord",
 "app/admin",
 "app/help",

@@ -55,7 +55,6 @@ class BctState:
     checkpoint_times: dict[int, dict[str, object]] = field(default_factory=dict)
     player_checkpoint_times: dict[str, dict[int, int]] = field(default_factory=dict)
     hidden_logins: set[str] = field(default_factory=set)
-    eyepiece_prev_checkpoint_list: bool | None = None
     pages: dict[str, int] = field(default_factory=dict)
     view_modes: dict[str, str] = field(default_factory=dict)
 
@@ -111,6 +110,18 @@ def _load_cfg(aseco: "Aseco"):
     logger.info("[BestCpTimesV2] Config loaded from %s", display_path(path))
 
 
+def _custom_ui_xml(checkpoint_visible: bool) -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<manialinks>"
+        '<manialink id="0"><line></line></manialink>'
+        "<custom_ui>"
+        f'<checkpoint_list visible="{"true" if checkpoint_visible else "false"}"/>'
+        "</custom_ui>"
+        "</manialinks>"
+    )
+
+
 def _resolve_eyepiece_state():
     module_names = (
         "apps.ui.internal.state",
@@ -146,16 +157,32 @@ def _resolve_eyepiece_apply():
     return None
 
 
-def _custom_ui_xml(checkpoint_visible: bool) -> str:
-    return (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        "<manialinks>"
-        '<manialink id="0"><line></line></manialink>'
-        "<custom_ui>"
-        f'<checkpoint_list visible="{"true" if checkpoint_visible else "false"}"/>'
-        "</custom_ui>"
-        "</manialinks>"
-    )
+async def _restore_eyepiece_checkpoint_list_control(aseco: "Aseco", login: str | None = None) -> None:
+    ep_state = _resolve_eyepiece_state()
+    ep_apply = _resolve_eyepiece_apply()
+    if ep_state and ep_apply:
+        try:
+            ui_app = importlib.import_module("apps.ui.app")
+            reload_config = getattr(ui_app, "reload_config", None)
+            if callable(reload_config):
+                reload_config(aseco)
+            refreshed_state = getattr(ui_app, "get_state", lambda: ep_state)()
+        except Exception:
+            refreshed_state = ep_state
+
+        checkpoint_visible = bool(getattr(refreshed_state, "custom_ui_checkpoint_list", True))
+        ep_state.custom_ui_checkpoint_list = checkpoint_visible
+        await ep_apply(aseco)
+        return
+
+    try:
+        await aseco.client.query_ignore_result("SetForcedUi", {"checkpoint_list": True})
+    except Exception:
+        pass
+    if login:
+        await bct_apply_custom_ui_login(aseco, login, True)
+    else:
+        await bct_apply_custom_ui_all(aseco, True)
 
 
 async def bct_apply_custom_ui_all(aseco: "Aseco", checkpoint_visible: bool):
@@ -170,16 +197,14 @@ async def bct_apply_custom_ui_login(aseco: "Aseco", login: str, checkpoint_visib
 
 async def bct_set_checkpoint_list_visible(aseco: "Aseco", checkpoint_visible: bool):
     if not _state.widget.custom_ui:
+        await _restore_eyepiece_checkpoint_list_control(aseco)
         return
     ep_state = _resolve_eyepiece_state()
     ep_apply = _resolve_eyepiece_apply()
     if ep_state and ep_apply and getattr(ep_state, "custom_ui_enabled", False):
-        if _state.eyepiece_prev_checkpoint_list is None:
-            _state.eyepiece_prev_checkpoint_list = bool(getattr(ep_state, "custom_ui_checkpoint_list", True))
         ep_state.custom_ui_checkpoint_list = checkpoint_visible
         await ep_apply(aseco)
         return
-
     try:
         await aseco.client.query_ignore_result("SetForcedUi", {"checkpoint_list": checkpoint_visible})
     except Exception:
@@ -189,16 +214,14 @@ async def bct_set_checkpoint_list_visible(aseco: "Aseco", checkpoint_visible: bo
 
 async def bct_set_checkpoint_list_visible_login(aseco: "Aseco", login: str, checkpoint_visible: bool):
     if not _state.widget.custom_ui:
+        await _restore_eyepiece_checkpoint_list_control(aseco, login=login)
         return
     ep_state = _resolve_eyepiece_state()
     ep_apply = _resolve_eyepiece_apply()
     if ep_state and ep_apply and getattr(ep_state, "custom_ui_enabled", False):
-        if _state.eyepiece_prev_checkpoint_list is None:
-            _state.eyepiece_prev_checkpoint_list = bool(getattr(ep_state, "custom_ui_checkpoint_list", True))
         ep_state.custom_ui_checkpoint_list = checkpoint_visible
         await ep_apply(aseco)
         return
-
     try:
         await aseco.client.query_ignore_result("SetForcedUi", {"checkpoint_list": checkpoint_visible})
     except Exception:
@@ -676,10 +699,7 @@ async def reload_best_cp_times_runtime(aseco: "Aseco") -> None:
         await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
         return
 
-    if _state.widget.custom_ui:
-        await bct_set_checkpoint_list_visible(aseco, False)
-    else:
-        await bct_apply_custom_ui_all(aseco, True)
+    await bct_set_checkpoint_list_visible(aseco, False)
 
     await bct_buildWidget(aseco, None)
     await bct_buildCheckpointsTimeInlay(aseco)

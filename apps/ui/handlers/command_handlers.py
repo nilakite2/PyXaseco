@@ -321,6 +321,7 @@ async def reload_ui_runtime(aseco: 'Aseco') -> None:
     await reload_karma_runtime(aseco)
     await reload_banner_runtime(aseco)
     await reload_allbutton_runtime(aseco)
+    await _reload_dependent_widget_apps(aseco)
 
 
 async def reload_ui_layout_runtime(aseco: 'Aseco') -> None:
@@ -382,6 +383,32 @@ async def reload_ui_layout_runtime(aseco: 'Aseco') -> None:
     await reload_karma_runtime(aseco)
     await reload_banner_runtime(aseco)
     await reload_allbutton_runtime(aseco)
+    await _reload_dependent_widget_apps(aseco)
+
+
+async def _reload_dependent_widget_apps(aseco: 'Aseco') -> None:
+    active = set(getattr(aseco, 'active_apps', []) or [])
+    reload_targets = (
+        ('bestcps', 'apps.bestcps.app'),
+        ('bestsecs', 'apps.bestsecs.app'),
+        ('bestruns', 'apps.bestruns.app'),
+        ('bestfinishes', 'apps.bestfinishes.app'),
+        ('best_cp_times', 'apps.best_cp_times.app'),
+    )
+
+    for app_id, module_name in reload_targets:
+        if app_id not in active:
+            continue
+        try:
+            mod = __import__(module_name, fromlist=['reload_runtime'])
+            reload_fn = getattr(mod, 'reload_runtime', None)
+            if not callable(reload_fn):
+                continue
+            result = reload_fn(aseco)
+            if hasattr(result, '__await__'):
+                await result
+        except Exception:
+            logger.warning('[UI] Dependent widget reload failed for %s', app_id, exc_info=True)
 
 
 async def chat_estat(aseco: 'Aseco', command: dict) -> None:
