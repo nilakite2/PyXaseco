@@ -16,6 +16,8 @@ import asyncio
 import logging
 from typing import Any, Callable, Awaitable, Union
 
+from pyxaseco.core.gbx_client import GbxError
+
 logger = logging.getLogger(__name__)
 
 Handler = Union[Callable[..., None], Callable[..., Awaitable[None]]]
@@ -65,6 +67,13 @@ class EventBus:
                 if asyncio.iscoroutine(result):
                     await result
             except Exception as e:
+                if _is_transport_shutdown_noise(aseco, e):
+                    if not getattr(aseco, '_transport_noise_logged', False):
+                        logger.warning(
+                            'EventBus: suppressing repeated transport-loss handler errors during shutdown/restart'
+                        )
+                        setattr(aseco, '_transport_noise_logged', True)
+                    continue
                 logger.error('EventBus: handler %s raised for event %s: %s',
                              handler, event_type, e, exc_info=True)
 
@@ -73,3 +82,22 @@ class EventBus:
 
     def registered_events(self) -> list[str]:
         return list(self._handlers.keys())
+
+
+def _is_transport_shutdown_noise(aseco: Any, exc: Exception) -> bool:
+    if not isinstance(exc, GbxError):
+        return False
+    if int(getattr(exc, 'code', 0) or 0) != -32300:
+        return False
+    if 'transport error' not in str(exc).lower():
+        return False
+
+    shutdown_requested = bool(getattr(aseco, '_shutdown_requested', False))
+    client = getattr(aseco, 'client', None)
+    disconnected = False
+    if client is not None:
+        try:
+            disconnected = not bool(client.is_connected())
+        except Exception:
+            disconnected = False
+    return shutdown_requested or disconnected
