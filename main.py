@@ -11,6 +11,7 @@ Run this from the folder that contains config.xml, plugins.xml, etc.
 import asyncio
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -39,6 +40,7 @@ async def main():
     args = parser.parse_args()
 
     setup_logging(args.debug)
+    logger = logging.getLogger('pyxaseco')
 
     # Resolve config to an absolute path so sibling files
     # (plugins.xml, adminops.xml, plugins/ folder, etc.) are always
@@ -52,9 +54,15 @@ async def main():
         print('\n[PyXaseco] Shutting down...')
         await aseco.release_event('onShutdown', None)
         await aseco.client.disconnect()
+        return
     except Exception as e:
-        logging.getLogger('pyxaseco').critical('Fatal error: %s', e, exc_info=True)
+        logger.critical('Fatal error: %s', e, exc_info=True)
         sys.exit(1)
+
+    if aseco.restart_requested:
+        logger.info('PyXaseco restart requested - re-executing the controller process')
+        await asyncio.sleep(0.5)
+        os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
 if __name__ == '__main__':

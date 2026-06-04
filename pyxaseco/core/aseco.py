@@ -541,6 +541,12 @@ class Aseco:
         """
         prev_second = int(time.time())
         while not self._shutdown_requested:
+            if not self.client.is_connected():
+                logger.error('Main loop detected GBX connection loss - requesting controller restart')
+                self._restart_requested = True
+                self._shutdown_requested = True
+                break
+
             loop_start = time.monotonic()
 
             # Dispatch any buffered callbacks

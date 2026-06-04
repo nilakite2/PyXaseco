@@ -279,6 +279,8 @@ class GbxClient:
         Send an XML-RPC call and await the result.
         Raises GbxError on fault or transport error.
         """
+        if not self.is_connected():
+            raise GbxError(-32300, 'transport error - not connected')
         xml = _build_request_xml(method, list(args))
         xml_bytes = xml.encode('utf-8')
         if len(xml_bytes) > MAX_REQUEST_SIZE:
@@ -307,6 +309,8 @@ class GbxClient:
         Send an XML-RPC call without waiting for the result.
         For system.multicall with oversized payload, splits into two calls.
         """
+        if not self.is_connected():
+            raise GbxError(-32300, 'transport error - not connected')
         xml = _build_request_xml(method, list(args))
         xml_bytes = xml.encode('utf-8')
 
@@ -367,6 +371,8 @@ class GbxClient:
 
     async def _send_packet(self, xml_bytes: bytes, handle: int):
         """Send: uint32 len + uint32 handle + xml_bytes (little-endian)."""
+        if not self.is_connected():
+            raise ConnectionResetError('GBX connection is not available')
         header = struct.pack('<II', len(xml_bytes), handle)
         self._writer.write(header + xml_bytes)
         await self._writer.drain()
@@ -442,6 +448,16 @@ class GbxClient:
         except Exception as e:
             logger.error('GbxRemote: reader loop crashed: %s', e, exc_info=True)
         finally:
+            writer = self._writer
+            self._reader = None
+            self._writer = None
+            self._read_task = None
+            if writer is not None:
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except Exception:
+                    pass
             # Unblock any pending futures with an error
             for fut in self._pending.values():
                 if not fut.done():
