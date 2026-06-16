@@ -270,6 +270,12 @@ async def _store_finish(aseco: 'Aseco', finish_item):
         return
 
     cp = checkpoints[login]
+    if score == 0:
+        if mode == 1:
+            cp.curr_cps = []
+            cp.curr_fin = 2**31 - 1
+        return
+
     cp.curr_cps.sort()
 
     if score > 0:

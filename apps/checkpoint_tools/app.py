@@ -93,3 +93,7 @@ APP_INSTANCE = CheckpointToolsApp()
 
 def register(aseco: "Aseco"):
     APP_INSTANCE.register_runtime(aseco)
+
+
+async def reload_runtime(aseco: "Aseco") -> None:
+    await live.reload_cplive_runtime(aseco)

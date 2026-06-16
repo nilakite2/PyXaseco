@@ -36,7 +36,7 @@ CARD_H = 9.2
 TL_PREV_BASE = 9181000    # prev page: -(TL_PREV_BASE + page)
 TL_NEXT_BASE = 9181000    # next page: TL_NEXT_BASE + page + 1
 TL_JB_BASE = 9182000      # jukebox: TL_JB_BASE + global_idx (1-based)
-TL_DROP_BASE = 2000       # drop jb: -(TL_DROP_BASE + jb_pos)
+TL_DROP_BASE = 9187000    # drop jb: -(TL_DROP_BASE + jb_pos)
 
 _TRACK_ENV_IMAGES = {
     'stadium': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-stadium-enabled.png',
@@ -49,6 +49,34 @@ _TRACK_ENV_IMAGES = {
     'alpine': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-enabled.png',
     'snow': 'http://maniacdn.net/undef.de/xaseco1/records-eyepiece/env-snow-enabled.png',
 }
+
+
+def _add_button_xml(action: int) -> str:
+    img = getattr(_state.images, 'widget_plus_normal', '') or ''
+    focus = getattr(_state.images, 'widget_plus_focus', '') or img
+    if img:
+        return (
+            f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{action}"'
+            f' image="{img}" imagefocus="{focus}"/>'
+        )
+    return (
+        f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{action}"'
+        f' style="Icons64x64_1" substyle="Add"/>'
+    )
+
+
+def _drop_button_xml(action: int) -> str:
+    img = getattr(_state.images, 'widget_minus_normal', '') or ''
+    focus = getattr(_state.images, 'widget_minus_focus', '') or img
+    if img:
+        return (
+            f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{action}"'
+            f' image="{img}" imagefocus="{focus}"/>'
+        )
+    return (
+        f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{action}"'
+        f' style="Icons64x64_1" substyle="Close"/>'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +394,7 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
             p.append('<format textsize="1" textcolor="FFF8"/>')
             p.append(f'<quad posn="0 0 0.02" sizen="{CARD_W} {CARD_H}" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
             if can_drop:
-                p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="-{TL_DROP_BASE + juked}" style="Icons64x64_1" substyle="Close"/>')
+                p.append(_drop_button_xml(-(TL_DROP_BASE + juked)))
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="Bgs1InRace" substyle="BgListLine"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textcolor="000F" textsize="1" text="Track #{i+1}"/>')
             p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')
@@ -375,7 +403,7 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
         elif is_recent:
             p.append('<format textsize="1" textcolor="FFF8"/>')
             p.append(f'<quad posn="0 0 0.02" sizen="{CARD_W} {CARD_H}" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
-            p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{TL_JB_BASE + global_idx}" style="Icons64x64_1" substyle="Add"/>')
+            p.append(_add_button_xml(TL_JB_BASE + global_idx))
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textsize="1" text="Track #{i+1}"/>')
             p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')
@@ -385,7 +413,7 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
             p.append('<format textsize="1" textcolor="FFFF"/>')
             p.append(f'<quad posn="0 0 0.02" sizen="{CARD_W} {CARD_H}" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
             if can_drop:
-                p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="-{TL_DROP_BASE + juked}" style="Icons64x64_1" substyle="Close"/>')
+                p.append(_drop_button_xml(-(TL_DROP_BASE + juked)))
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="Bgs1InRace" substyle="BgListLine"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textcolor="000F" textsize="1" text="Track #{i+1}"/>')
             p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')
@@ -394,7 +422,7 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
         else:
             p.append('<format textsize="1" textcolor="FFFF"/>')
             p.append(f'<quad posn="0 0 0.02" sizen="{CARD_W} {CARD_H}" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
-            p.append(f'<quad posn="14.15 -5.65 0.03" sizen="4 4" action="{TL_JB_BASE + global_idx}" style="Icons64x64_1" substyle="Add"/>')
+            p.append(_add_button_xml(TL_JB_BASE + global_idx))
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="BgsPlayerCard" substyle="ProgressBar"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textsize="1" text="Track #{i+1}"/>')
             p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')

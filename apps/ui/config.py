@@ -109,6 +109,10 @@ class ChallengePanelCfg:
 @dataclass
 class ImagesCfg:
     no_screenshot: str = ''
+    widget_plus_normal: str = ''
+    widget_plus_focus: str = ''
+    widget_minus_normal: str = ''
+    widget_minus_focus: str = ''
 
 
 
@@ -461,7 +465,11 @@ def _load_config(aseco: 'Aseco') -> None:
         'mania_karma': str(_get_node_value(links_block, 'MANIA_KARMA', '')),
     }
     _state.images = ImagesCfg(
-        no_screenshot=str(_get_node_value(images_block, 'NO_SCREENSHOT', ''))
+        no_screenshot=str(_get_node_value(images_block, 'NO_SCREENSHOT', '')),
+        widget_plus_normal=str(_get_node_value(images_block, 'WIDGET_PLUS_NORMAL', '')),
+        widget_plus_focus=str(_get_node_value(images_block, 'WIDGET_PLUS_FOCUS', '')),
+        widget_minus_normal=str(_get_node_value(images_block, 'WIDGET_MINUS_NORMAL', '')),
+        widget_minus_focus=str(_get_node_value(images_block, 'WIDGET_MINUS_FOCUS', '')),
     )
 
     # Style -> WIDGET_RACE colours/styles
@@ -563,7 +571,7 @@ def _load_config(aseco: 'Aseco') -> None:
         title=str(_get_node_value(challenge_titles, 'NEXT_TRACK', 'Next Track')),
         icon_style=str(_get_node_value(next_track_icons, 'ICON_STYLE', 'Icons128x128_1')),
         icon_substyle=str(_get_node_value(next_track_icons, 'ICON_SUBSTYLE', 'Challenge')),
-        width=_get_float(challenge_score, 'WIDTH', 0.0),
+        width=_get_float(challenge_score, 'WIDTH', 17.6),
         pos_x=_get_float(challenge_score, 'POS_X', _state.challenge.pos_x),
         pos_y=_get_float(challenge_score, 'POS_Y', _state.challenge.pos_y),
     )

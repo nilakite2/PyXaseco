@@ -32,6 +32,11 @@ MANAGEABLE_STANDALONE_APPS: dict[str, str] = {
 }
 
 CONFIG_APPS: dict[str, dict[str, str]] = {
+    'admin': {
+        'label': 'Admin',
+        'save_mode': 'restart',
+        'description': 'Optional admin-side extension toggles',
+    },
     'ui': {
         'label': 'UI',
         'save_mode': 'reload',
@@ -61,6 +66,11 @@ CONFIG_APPS: dict[str, dict[str, str]] = {
         'label': 'Best CP Times',
         'save_mode': 'reload',
         'description': 'Best CP times widget settings',
+    },
+    'checkpoint_tools': {
+        'label': 'Checkpoint Tools',
+        'save_mode': 'reload',
+        'description': 'Checkpoint live overlay settings',
     },
 }
 
@@ -96,6 +106,7 @@ RELOADABLE_APPS = {
     'bestruns',
     'bestfinishes',
     'best_cp_times',
+    'checkpoint_tools',
 }
 
 _APPS_USAGE = (
@@ -183,7 +194,27 @@ UI_DISCOVERY_EXCLUDE_PREFIXES: tuple[tuple[str, ...], ...] = (
 )
 
 STATIC_CONFIG_ITEMS: dict[str, list[dict[str, Any]]] = {
+    'admin': [
+        {
+            'key': 'stalker',
+            'label': 'Stalker',
+            'file': 'apps/admin/app_defaults.toml',
+            'table_path': ('admin', 'stalker_tools'),
+            'linked_enabled_paths': (
+                ('admin', 'stalker_tools'),
+                ('admin', 'stalker_actionids'),
+            ),
+        },
+    ],
     'ui': UI_CONFIG_ITEMS,
+    'checkpoint_tools': [
+        {
+            'key': 'cplive_v3',
+            'label': 'CP Live',
+            'file': 'apps/checkpoint_tools/app_defaults.toml',
+            'table_path': ('cplive_v3',),
+        },
+    ],
 }
 
 UI_GROUP_ORDER: tuple[str, ...] = (
@@ -374,6 +405,9 @@ def _config_items_for_app(aseco: 'Aseco', app_key: str) -> list[dict[str, Any]]:
 
     for item in STATIC_CONFIG_ITEMS.get(app_key, []):
         append_item(item, allow_excluded=True)
+
+    if app_key == 'admin':
+        return items
 
     file_path = _app_defaults_path_for_app(aseco, app_key)
     if file_path.exists():
@@ -754,6 +788,22 @@ def _config_field_write_path(item: dict[str, Any], info: dict[str, Any], field_k
 
 
 def _config_item_state_from_info(item: dict[str, Any], info: dict[str, Any]) -> str:
+    if item['key'] == 'stalker':
+        file_path = info['file_path']
+        data = read_toml(file_path)
+        states: list[bool] = []
+        for path in tuple(item.get('linked_enabled_paths') or ()):
+            table = _read_nested(data, tuple(path))
+            if isinstance(table, dict) and 'enabled' in table:
+                states.append(_coerce_bool(table.get('enabled', False)))
+        if not states:
+            return 'missing'
+        if all(states):
+            return 'enabled'
+        if not any(states):
+            return 'disabled'
+        return 'mixed'
+
     table = info['effective_table']
     if not isinstance(table, dict):
         return 'missing'
@@ -770,6 +820,7 @@ def _config_item_state_text(state: str) -> str:
     return {
         'enabled': '{#record}Enabled',
         'disabled': '{#error}Disabled',
+        'mixed': '{#highlite}Mixed',
         'config': '{#message}Config',
         'missing': '{#error}Missing',
     }.get(state, state)
@@ -795,6 +846,15 @@ def _parse_pair(value: Any) -> tuple[float, float] | None:
 
 
 def _config_item_summary_from_info(aseco: 'Aseco', item: dict[str, Any], info: dict[str, Any]) -> str:
+    if item['key'] == 'stalker':
+        file_path = info['file_path']
+        data = read_toml(file_path)
+        stalker_tools = _read_nested(data, ('admin', 'stalker_tools'))
+        stalker_actionids = _read_nested(data, ('admin', 'stalker_actionids'))
+        tools_enabled = _coerce_bool(stalker_tools.get('enabled', False)) if isinstance(stalker_tools, dict) else False
+        actionids_enabled = _coerce_bool(stalker_actionids.get('enabled', False)) if isinstance(stalker_actionids, dict) else False
+        return f"tools={_display_value(tools_enabled)}, actionids={_display_value(actionids_enabled)}"
+
     table = info['effective_table']
     if not isinstance(table, dict):
         return '-'
@@ -1382,6 +1442,12 @@ async def _apply_config_toggle(
     item = _find_config_item(aseco, app_key, item_key)
     if not item:
         return _unknown_apps_target(item_key)
+
+    if item['key'] == 'stalker':
+        file_path = _root_dir(aseco) / item['file']
+        for path in tuple(item.get('linked_enabled_paths') or ()):
+            update_toml_table_scalar(file_path, tuple(path), 'enabled', enabled)
+        return _restart_required_message(f'{app_key}.stalker.enabled = {str(enabled).lower()}')
 
     info = _config_item_target_info(aseco, item)
     write_path = _config_field_write_path(item, info, 'enabled')

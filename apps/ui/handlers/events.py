@@ -193,7 +193,7 @@ async def _on_player_retire(aseco: 'Aseco', player: 'Player'):
 
 async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
     from ..widgets.common import _hide
-    from ..hud_views import _fetch_live
+    from ..hud_views import _fetch_live, _resolve_display_login
 
     login = finish.player.login if finish and finish.player else ''
     score = finish.score if finish else 0
@@ -207,7 +207,14 @@ async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
                 finish.player.isspectator = False
                 finish.player.spectatorstatus = 0
             _state.player_cp_idx[login] = 0
+            _state.player_cp_delta[login] = ''
+            await _hide(aseco, login, ML_CPDELTA)
             await _draw_cp_player(aseco, login)
+            for _sp in aseco.server.players.all():
+                if _resolve_display_login(aseco, _sp.login) == login and _sp.login != login:
+                    _state.player_cp_delta[_sp.login] = ''
+                    await _hide(aseco, _sp.login, ML_CPDELTA)
+                    await _draw_cp_player(aseco, _sp.login)
         return
 
     finish.player.retired = False

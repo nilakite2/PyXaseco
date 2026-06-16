@@ -31,6 +31,12 @@ def setup_logging(debug: bool):
     )
 
 
+async def _restart_controller(logger: logging.Logger, reason: str) -> None:
+    logger.info('PyXaseco restart requested - re-executing the controller process (%s)', reason)
+    await asyncio.sleep(2.0)
+    os.execv(sys.executable, [sys.executable, *sys.argv])
+
+
 async def main():
     parser = argparse.ArgumentParser(description='PyXaseco - TMF server controller')
     parser.add_argument('config', nargs='?', default='config.toml',
@@ -56,13 +62,19 @@ async def main():
         await aseco.client.disconnect()
         return
     except Exception as e:
+        if aseco.restart_requested:
+            logger.error(
+                'Run failed while restart was requested; retrying controller re-exec: %s',
+                e,
+                exc_info=True,
+            )
+            await _restart_controller(logger, 'restart-requested after fatal run error')
+            return
         logger.critical('Fatal error: %s', e, exc_info=True)
         sys.exit(1)
 
     if aseco.restart_requested:
-        logger.info('PyXaseco restart requested - re-executing the controller process')
-        await asyncio.sleep(0.5)
-        os.execv(sys.executable, [sys.executable, *sys.argv])
+        await _restart_controller(logger, 'clean shutdown restart request')
 
 
 if __name__ == '__main__':

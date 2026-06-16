@@ -25,7 +25,7 @@ ML_TOGGLE = 91802
 TL_PREV_BASE = 9181000   # prev page: -(TL_PREV_BASE + page)
 TL_NEXT_BASE = 9181000   # next page: TL_NEXT_BASE + page + 1
 TL_JB_BASE   = 9182000    # jukebox:   TL_JB_BASE + global_idx (1-based)
-TL_DROP_BASE = 2000       # drop jb:   -(TL_DROP_BASE + jb_pos)
+TL_DROP_BASE = 9187000    # drop jb:   -(TL_DROP_BASE + jb_pos)
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +131,7 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
             )
         return
 
-    # -- TracklistWindow: drop from jukebox (negative, < -TL_DROP_BASE) ----
+    # -- TracklistWindow: drop from jukebox (private negative action range) -
     if -(TL_DROP_BASE + 100) <= action < -TL_DROP_BASE:
         jb_pos = abs(action) - TL_DROP_BASE
 

@@ -589,20 +589,39 @@ class Aseco:
 
     async def _wait_server_ready(self):
         """Poll GetStatus until server is Running - Play (code 4)."""
-        status = await self.client.query('GetStatus')
-        if status.get('Code') != 4:
-            self.console('[PyXaseco] Waiting for server to reach Running - Play...')
-            last = status.get('Name', '')
-            deadline = time.time() + (self.server.timeout or 120)
-            while status.get('Code') != 4:
-                await asyncio.sleep(1)
+        deadline = time.time() + max(120.0, float(self.server.timeout or 0))
+        last = ''
+        last_error: Exception | None = None
+
+        while True:
+            try:
                 status = await self.client.query('GetStatus')
-                name = status.get('Name', '')
-                if name != last:
-                    self.console('[PyXaseco] Server status: {1}', name)
-                    last = name
+                last_error = None
+            except Exception as e:
+                last_error = e
                 if time.time() > deadline:
-                    raise RuntimeError('Timed out waiting for dedicated server to be ready')
+                    raise RuntimeError('Timed out waiting for dedicated server to be ready') from e
+                logger.warning('GetStatus failed while waiting for dedicated server readiness: %s', e)
+                await asyncio.sleep(1)
+                continue
+
+            if status.get('Code') == 4:
+                return
+
+            if not last:
+                self.console('[PyXaseco] Waiting for server to reach Running - Play...')
+
+            name = status.get('Name', '')
+            if name != last:
+                self.console('[PyXaseco] Server status: {1}', name)
+                last = name
+
+            if time.time() > deadline:
+                if last_error is not None:
+                    raise RuntimeError('Timed out waiting for dedicated server to be ready') from last_error
+                raise RuntimeError('Timed out waiting for dedicated server to be ready')
+
+            await asyncio.sleep(1)
 
     async def _server_sync(self):
         """Sync server state."""
@@ -896,21 +915,19 @@ class Aseco:
         _uid, login, score = params[0], params[1], params[2]
         player = self.server.players.get_player(login)
         mode = getattr(self.server.gameinfo, 'mode', -1)
-        if score == 0:
-            if player:
-                player.retired = (mode != Gameinfo.TA)
-                player.finished_waiting = False
-                if mode == Gameinfo.TA:
-                    player.isspectator = False
-                    player.spectatorstatus = 0
-                if player.retired:
-                    await self.release_event('onPlayerRetire', player)
-            return  # retired / DNF
-
         if not player:
             return
-        player.retired = False
-        player.finished_waiting = (mode in (Gameinfo.RNDS, Gameinfo.TEAM, Gameinfo.LAPS, Gameinfo.CUP))
+
+        is_zero_score = (score == 0)
+        if is_zero_score:
+            player.retired = (mode != Gameinfo.TA)
+            player.finished_waiting = False
+            if mode == Gameinfo.TA:
+                player.isspectator = False
+                player.spectatorstatus = 0
+        else:
+            player.retired = False
+            player.finished_waiting = (mode in (Gameinfo.RNDS, Gameinfo.TEAM, Gameinfo.LAPS, Gameinfo.CUP))
 
         # Build the finish_item object used by downstream race handlers.
         from pyxaseco.models import Record, Challenge as _Ch
@@ -921,6 +938,10 @@ class Aseco:
         finish_item.date   = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         finish_item.challenge = self.server.challenge
         finish_item.new = False
+
+        if is_zero_score and player.retired:
+            await self.release_event('onPlayerRetire', player)
+
         await self.release_event('onPlayerFinish1', finish_item)  # rich object event
         await self.release_event('onPlayerFinish', params)        # legacy compatibility event
 

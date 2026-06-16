@@ -1273,6 +1273,26 @@ def _apply_app_defaults(aseco: "Aseco"):
     except Exception:
         pass
 
+
+async def reload_cplive_runtime(aseco: "Aseco") -> None:
+    _apply_app_defaults(aseco)
+
+    if not isinstance(_plugin, _CPLive):
+        return
+
+    for player in _plugin.players.values():
+        player.PlainNicks = PLAIN_NICKS
+
+    _plugin.cache_static_xml()
+    _plugin.update_title_bar_xml()
+    _plugin.payload_cache = {}
+    _plugin.dirty_mask = DIRTY_SLICE | DIRTY_ROWS
+    _plugin.schedule_global_delivery(include_collapsed=True)
+    _plugin.reschedule_pending_locals()
+
+    if _plugin.should_render:
+        await _plugin.flush(aseco, force_now=True)
+
 async def _on_sync(aseco: "Aseco", _p=None):
     global _plugin
     if isinstance(_plugin, _DisabledCPLive):
@@ -1339,11 +1359,27 @@ async def _on_player_finish(aseco: "Aseco", finish):
         return
 
     _plugin.stats.finishes += 1
-    login = getattr(getattr(finish, "player", None), "login", "")
+    score = 0
+    if isinstance(finish, list):
+        if len(finish) >= 3:
+            login = str(finish[1] or "")
+            try:
+                score = int(finish[2] or 0)
+            except Exception:
+                score = 0
+        else:
+            login = ""
+    else:
+        login = getattr(getattr(finish, "player", None), "login", "")
+        try:
+            score = int(getattr(finish, "score", 0) or 0)
+        except Exception:
+            score = 0
+
     if not login or login not in _plugin.players:
         return
 
-    if getattr(finish, "score", 0) == 0 or _plugin.players[login].CPNumber != _plugin.total_cps:
+    if score == 0 or _plugin.players[login].CPNumber != _plugin.total_cps:
         _plugin.reset_player_time(login)
 
     _plugin.request_slice_refresh()
