@@ -212,7 +212,7 @@ async def chat_xaseco(aseco: 'Aseco', command: dict):
     info += [
         ['Uptime', '{#black}' + f'{updays} day{"s" if updays != 1 else " "} ' +
          format_time_h(uptime_rem * 1000, False)],
-        ['Website', '{#black}$l[https://github.com/PyXaseco/PyXaseco]https://github.com/PyXaseco/PyXaseco$l'],
+        ['Website', '{#black}$l[github.com/nilakite2/PyXaseco/tree/PyXaseco_1.2_TOML_dotenv]github.com/nilakite2/PyXaseco$z'],
         ['Credits', '{#black}Python port: Nila'],
         ['', '{#black}Original authors: Xymph, Flo, Assembler Maniac, Jfreu & others'],
     ]

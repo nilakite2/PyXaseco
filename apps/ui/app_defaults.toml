@@ -7,10 +7,10 @@
 [ui.features]
 refresh_interval = 10
 mark_online_player_records = true
-illuminate_names = true
+illuminate_names = false
 sort_team = true
 number_format = "english"
-shorten_numbers = true
+shorten_numbers = false
 
 [ui.features.karma]
 min_votes = 30
@@ -22,7 +22,7 @@ force_songlist = true
 
 [ui.features.tracklist]
 sorting = "author"
-force_tracklist = true
+force_tracklist = false
 
 [ui.show_progress_indicator]
 tracklist = 120
@@ -36,11 +36,11 @@ mania_karma = "http://www.mania-karma.com/"
 [ui.style]
 
 [ui.style.widget_race]
-background_style = "Bgs1InRace"
-background_substyle = "NavButton"
+background_style = "BgsPlayerCard"
+background_substyle = "BgCardSystem"
 background_color = ""
 title_style = "BgsPlayerCard"
-title_substyle = "BgRacePlayerName"
+title_substyle = "BgCardSystem"
 top_style = "BgsPlayerCard"
 top_substyle = "BgCardSystem"
 highlite_self_style = "BgsPlayerCard"
@@ -62,10 +62,10 @@ background_name = "AAA1"
 
 [ui.style.widget_score]
 background_style = "BgsPlayerCard"
-background_substyle = "BgRacePlayerName"
+background_substyle = "BgCardSystem"
 background_color = ""
 title_style = "BgsPlayerCard"
-title_substyle = "ProgressBar"
+title_substyle = "BgCardSystem"
 formatting_codes = ""
 
 [ui.style.widget_score.colors]
@@ -78,7 +78,7 @@ headline_textcolor = "FFFF"
 window_bgcolor = "001B"
 
 [ui.style.window.lightbox]
-enabled = true
+enabled = false
 bgcolor = "0008"
 
 [ui.custom_ui]
@@ -92,14 +92,14 @@ round_scores = true
 scoretable = true
 
 [ui.welcome_window]
-enabled = true
+enabled = false
 autohide = 10
 icon_style = "Icons128x128_1"
 icon_substyle = "Credits"
 message = "$FF0Welcome {player}!{br}{br}However, we ask you to urgently comply with the rules. They serve the gaming culture on this server and are all participating players have fun together! All violators will be kicked or banned depending on the seriousness of the offense.{br}{br}We think a certain minimum level of decency can be expected of all players. These include for example, a normal tone on this server. When insults, abuse and other non appropriate behavior appropriate action being taken.{br}{br}Play fair on this server! Behave like normal people. We think that the rules above should not be too difficult to follow. They reflect the interests of all players resist on this server.{br}{br}$w$oAnd now have fun at {server}!"
 
 [ui.welcome_window.hide]
-ranked_player = true
+ranked_player = false
 
 [ui.welcome_window.image]
 normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/welcome-records-eyepiece-normal.jpg"
@@ -133,10 +133,10 @@ next_track = "Next Track"
 pos_x = 49.05
 pos_y = 48
 
-enabled = true
 [ui.challenge_widget.score]
-pos_x = 46.7
-pos_y = 48
+width = 17.6
+pos_x = 45.7
+pos_y = 47.5
 
 [ui.music_widget]
 enabled = false
@@ -201,12 +201,12 @@ topcount = 3
 row_height = 1.8
 
 [ui.dedimania_records.gamemode.stunts]
-enabled = true
+enabled = false
 
 [ui.dedimania_records.gamemode.cup]
 enabled = true
 pos_x = -64.7
-pos_y = 10.65
+pos_y = 23.65
 entries = 12
 topcount = 3
 row_height = 1.8
@@ -361,7 +361,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.round_score.gamemode.time_attack]
-enabled = true
+enabled = false
 
 [ui.round_score.gamemode.team]
 enabled = true
@@ -398,7 +398,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.round_score.gamemode.stunts]
-enabled = true
+enabled = false
 
 [ui.round_score.gamemode.cup]
 enabled = true
@@ -419,7 +419,7 @@ row_height = 1.8
 
 [ui.join_leave_info]
 enabled = true
-messages_in_window = true
+messages_in_window = false
 add_rights = true
 join_message = "{#server}>> {#message}{title}: {#highlite}{nickname}$Z$S{#message} Zone: {#highlite}{zone}{#message} Visits: {#highlite}{visits}{#message} Ladder: {#highlite}{ladderrank}{#message} Rank: {#highlite}{serverrank}{#message}"
 leave_message = "{#server}>> {#highlite}{nickname}$Z$S{#message} from {#highlite}{nation}{#message} has left the game after {#highlite}{playtime}{#message} playtime."
@@ -637,7 +637,7 @@ background_style = "BgsPlayerCard"
 background_substyle = "BgRacePlayerName"
 
 [ui.next_environment_widget]
-enabled = false
+enabled = true
 width = 4.6
 height = 6.5
 text_color = "FC0F"
@@ -648,7 +648,7 @@ background_style = "BgsPlayerCard"
 background_substyle = "BgRacePlayerName"
 
 [ui.next_gamemode_widget]
-enabled = false
+enabled = true
 width = 4.6
 height = 6.5
 text_color = "FC0F"
@@ -669,7 +669,7 @@ pos_x = -62
 pos_y = 47
 
 [ui.eyepiece_widget.score]
-enabled = false
+enabled = true
 pos_x = 58.7
 pos_y = -40.9
 background_style = "BgsPlayerCard"
@@ -834,7 +834,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
 [ui.scoretable_lists.top_active_players]
-enabled = true
+enabled = false
 title = "Top Active Players"
 pos_x = 47.8
 pos_y = -14.6
@@ -843,7 +843,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
 [ui.scoretable_lists.top_winning_payouts]
-enabled = true
+enabled = false
 title = "Top Finish Winners"
 pos_x = 47.8
 pos_y = -14.6
@@ -852,7 +852,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Coppers"
 
 [ui.scoretable_lists.top_betwins]
-enabled = true
+enabled = false
 title = "Top Betwins"
 display = "average"
 pos_x = 47.8
@@ -862,7 +862,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Coppers"
 
 [ui.scoretable_lists.top_roundscore]
-enabled = true
+enabled = false
 title = "Top Roundscore"
 pos_x = 47.8
 pos_y = -14.6
@@ -871,10 +871,10 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
 [ui.placement_widget]
-enabled = false
+enabled = true
 
 [ui.nicemode]
-enabled = false
+enabled = true
 force = false
 refresh_interval = 10
 
@@ -969,7 +969,7 @@ night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-disabl
 
 
 [ui.menu]
-enabled = "true"
+enabled = true
 menu_caption = "   Menu"
 size = "8 2.2"
 separatorheight = "0.75"
@@ -1031,16 +1031,16 @@ style = "Icons64x64_1"
 substyle = "LvlYellow"
 
 [ui.allbutton]
-enabled = "false"
+enabled = false
 main_pos_x = -61
 main_pos_y = -45.1
 submenu_pos_x = -39
 submenu_pos_y = -28.2
 
 [ui.banner]
-enabled = "true"
-pos_x = -64.4
-pos_y = 22.7
+enabled = true
+pos_x = -64.5
+pos_y = 23.2
 width = 21
 min_width = 7
 char_width = 0.82
@@ -1051,10 +1051,8 @@ text_y = -0.35
 background_style = "Bgs1InRace"
 background_substyle = "NavButton"
 
-
-
 [ui.karma]
-enabled = "true"
+enabled = true
 number_format = "english"
 show_welcome = "true"
 allow_public_vote = "true"

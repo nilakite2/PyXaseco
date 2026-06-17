@@ -7,10 +7,10 @@
 [ui.features]
 refresh_interval = 10
 mark_online_player_records = true
-illuminate_names = false
+illuminate_names = true
 sort_team = true
 number_format = "english"
-shorten_numbers = false
+shorten_numbers = true
 
 [ui.features.karma]
 min_votes = 30
@@ -22,7 +22,7 @@ force_songlist = true
 
 [ui.features.tracklist]
 sorting = "author"
-force_tracklist = false
+force_tracklist = true
 
 [ui.show_progress_indicator]
 tracklist = 120
@@ -36,11 +36,11 @@ mania_karma = "http://www.mania-karma.com/"
 [ui.style]
 
 [ui.style.widget_race]
-background_style = "BgsPlayerCard"
-background_substyle = "BgCardSystem"
+background_style = "Bgs1InRace"
+background_substyle = "NavButton"
 background_color = ""
 title_style = "BgsPlayerCard"
-title_substyle = "BgCardSystem"
+title_substyle = "BgRacePlayerName"
 top_style = "BgsPlayerCard"
 top_substyle = "BgCardSystem"
 highlite_self_style = "BgsPlayerCard"
@@ -62,10 +62,10 @@ background_name = "AAA1"
 
 [ui.style.widget_score]
 background_style = "BgsPlayerCard"
-background_substyle = "BgCardSystem"
+background_substyle = "BgRacePlayerName"
 background_color = ""
 title_style = "BgsPlayerCard"
-title_substyle = "BgCardSystem"
+title_substyle = "ProgressBar"
 formatting_codes = ""
 
 [ui.style.widget_score.colors]
@@ -78,7 +78,7 @@ headline_textcolor = "FFFF"
 window_bgcolor = "001B"
 
 [ui.style.window.lightbox]
-enabled = false
+enabled = true
 bgcolor = "0008"
 
 [ui.custom_ui]
@@ -92,14 +92,14 @@ round_scores = true
 scoretable = true
 
 [ui.welcome_window]
-enabled = false
+enabled = true
 autohide = 10
 icon_style = "Icons128x128_1"
 icon_substyle = "Credits"
 message = "$FF0Welcome {player}!{br}{br}However, we ask you to urgently comply with the rules. They serve the gaming culture on this server and are all participating players have fun together! All violators will be kicked or banned depending on the seriousness of the offense.{br}{br}We think a certain minimum level of decency can be expected of all players. These include for example, a normal tone on this server. When insults, abuse and other non appropriate behavior appropriate action being taken.{br}{br}Play fair on this server! Behave like normal people. We think that the rules above should not be too difficult to follow. They reflect the interests of all players resist on this server.{br}{br}$w$oAnd now have fun at {server}!"
 
 [ui.welcome_window.hide]
-ranked_player = false
+ranked_player = true
 
 [ui.welcome_window.image]
 normal = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/welcome-records-eyepiece-normal.jpg"
@@ -133,10 +133,10 @@ next_track = "Next Track"
 pos_x = 49.05
 pos_y = 48
 
+enabled = true
 [ui.challenge_widget.score]
-width = 17.6
-pos_x = 45.7
-pos_y = 47.5
+pos_x = 46.7
+pos_y = 48
 
 [ui.music_widget]
 enabled = false
@@ -178,9 +178,9 @@ row_height = 1.8
 
 [ui.dedimania_records.gamemode.time_attack]
 enabled = true
-pos_x = -64.7
-pos_y = 23.65
-entries = 16
+pos_x = 49.2
+pos_y = 0.7
+entries = 10
 topcount = 3
 row_height = 1.8
 
@@ -201,45 +201,15 @@ topcount = 3
 row_height = 1.8
 
 [ui.dedimania_records.gamemode.stunts]
-enabled = false
+enabled = true
 
 [ui.dedimania_records.gamemode.cup]
 enabled = true
 pos_x = -64.7
-pos_y = 23.65
+pos_y = 10.65
 entries = 12
 topcount = 3
 row_height = 1.8
-
-[ui.ultimania_records]
-title = "Ultimania Records"
-width = 15.5
-icon_style = "Icons128x128_1"
-icon_substyle = "Rankings"
-
-[ui.ultimania_records.gamemode]
-
-[ui.ultimania_records.gamemode.rounds]
-enabled = false
-
-[ui.ultimania_records.gamemode.time_attack]
-enabled = false
-
-[ui.ultimania_records.gamemode.team]
-enabled = false
-
-[ui.ultimania_records.gamemode.laps]
-enabled = false
-
-[ui.ultimania_records.gamemode.stunts]
-enabled = false
-pos_x = -64.7
-pos_y = 23.65
-entries = 16
-topcount = 3
-
-[ui.ultimania_records.gamemode.cup]
-enabled = false
 
 [ui.local_records]
 title = "Local Records"
@@ -261,8 +231,8 @@ row_height = 1.8
 [ui.local_records.gamemode.time_attack]
 enabled = true
 pos_x = 49.2
-pos_y = 17.8
-entries = 14
+pos_y = 22.1
+entries = 10
 topcount = 3
 row_height = 1.8
 
@@ -308,7 +278,7 @@ icon_substyle = "Rankings"
 [ui.live_rankings.gamemode]
 
 [ui.live_rankings.gamemode.rounds]
-enabled = true
+enabled = false
 display_type = "scores"
 format = "{score} ({remaining})"
 pos_x = 49.2
@@ -318,15 +288,15 @@ topcount = 3
 row_height = 1.8
 
 [ui.live_rankings.gamemode.time_attack]
-enabled = true
-pos_x = 49.2
-pos_y = -10.7
-entries = 8
-topcount = 3
+enabled = false
+pos_x = 33.5
+pos_y = 48
+entries = 5
+topcount = 0
 row_height = 1.8
 
 [ui.live_rankings.gamemode.team]
-enabled = true
+enabled = false
 pos_x = 49.2
 pos_y = -21.5
 entries = 2
@@ -334,7 +304,7 @@ topcount = 2
 row_height = 1.8
 
 [ui.live_rankings.gamemode.laps]
-enabled = true
+enabled = false
 display_type = "checkpoints"
 pos_x = 49.2
 pos_y = -10.4
@@ -343,7 +313,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.live_rankings.gamemode.stunts]
-enabled = true
+enabled = false
 pos_x = 49.2
 pos_y = -14.8
 entries = 6
@@ -351,7 +321,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.live_rankings.gamemode.cup]
-enabled = true
+enabled = false
 pos_x = 49.2
 pos_y = -14.3
 entries = 7
@@ -391,7 +361,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.round_score.gamemode.time_attack]
-enabled = false
+enabled = true
 
 [ui.round_score.gamemode.team]
 enabled = true
@@ -428,7 +398,7 @@ topcount = 3
 row_height = 1.8
 
 [ui.round_score.gamemode.stunts]
-enabled = false
+enabled = true
 
 [ui.round_score.gamemode.cup]
 enabled = true
@@ -449,7 +419,7 @@ row_height = 1.8
 
 [ui.join_leave_info]
 enabled = true
-messages_in_window = false
+messages_in_window = true
 add_rights = true
 join_message = "{#server}>> {#message}{title}: {#highlite}{nickname}$Z$S{#message} Zone: {#highlite}{zone}{#message} Visits: {#highlite}{visits}{#message} Ladder: {#highlite}{ladderrank}{#message} Rank: {#highlite}{serverrank}{#message}"
 leave_message = "{#server}>> {#highlite}{nickname}$Z$S{#message} from {#highlite}{nation}{#message} has left the game after {#highlite}{playtime}{#message} playtime."
@@ -524,8 +494,8 @@ height = 6.5
 text_color = "FC0F"
 background_color = ""
 roc_server = true
-pos_x = -63.85
-pos_y = 39.8
+pos_x = 39.6
+pos_y = 29
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -535,19 +505,19 @@ width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = -59.05
-pos_y = 39.8
+pos_x = 44.3
+pos_y = 29
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
 [ui.player_spectator_widget]
-enabled = false
+enabled = true
 width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = 39.5
-pos_y = 39.3
+pos_x = -54.5
+pos_y = 41.1
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -557,19 +527,19 @@ width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = -49.45
-pos_y = 39.8
+pos_x = 39.6
+pos_y = 35.6
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
 [ui.tmexchange_widget]
-enabled = true
+enabled = false
 width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = 44.3
-pos_y = 34.88
+pos_x = 34.9
+pos_y = 29
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -579,8 +549,8 @@ width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = 29.9
-pos_y = 39.3
+pos_x = 34.9
+pos_y = 35.6
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -590,19 +560,19 @@ width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = 44.3
-pos_y = 47.9
+pos_x = -59.2
+pos_y = 47.8
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
 [ui.visitors_widget]
-enabled = false
+enabled = true
 width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = 39.5
-pos_y = 39.3
+pos_x = -63.9
+pos_y = 47.8
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -637,8 +607,8 @@ default_timezone = "Europe/Berlin"
 text_color = "FC0F"
 
 [ui.clock_widget.race]
-pos_x = 44.3
-pos_y = 41.4
+pos_x = -54.5
+pos_y = 47.8
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -656,7 +626,7 @@ text_color = "FC0F"
 
 [ui.favorite_widget.race]
 pos_x = 44.3
-pos_y = 32.6
+pos_y = 35.6
 background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
@@ -667,7 +637,7 @@ background_style = "BgsPlayerCard"
 background_substyle = "BgRacePlayerName"
 
 [ui.next_environment_widget]
-enabled = true
+enabled = false
 width = 4.6
 height = 6.5
 text_color = "FC0F"
@@ -678,7 +648,7 @@ background_style = "BgsPlayerCard"
 background_substyle = "BgRacePlayerName"
 
 [ui.next_gamemode_widget]
-enabled = true
+enabled = false
 width = 4.6
 height = 6.5
 text_color = "FC0F"
@@ -699,7 +669,7 @@ pos_x = -62
 pos_y = 47
 
 [ui.eyepiece_widget.score]
-enabled = true
+enabled = false
 pos_x = 58.7
 pos_y = -40.9
 background_style = "BgsPlayerCard"
@@ -728,15 +698,6 @@ width = 15.5
 height = 0
 entries = 8
 row_height = 1.8
-icon_style = "Icons128x128_1"
-icon_substyle = "Rankings"
-
-[ui.scoretable_lists.ultimania_records]
-enabled = false
-title = "Ultimania Records"
-pos_x = -63.5
-pos_y = -8
-entries = 8
 icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
@@ -873,7 +834,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
 [ui.scoretable_lists.top_active_players]
-enabled = false
+enabled = true
 title = "Top Active Players"
 pos_x = 47.8
 pos_y = -14.6
@@ -882,7 +843,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
 [ui.scoretable_lists.top_winning_payouts]
-enabled = false
+enabled = true
 title = "Top Finish Winners"
 pos_x = 47.8
 pos_y = -14.6
@@ -891,7 +852,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Coppers"
 
 [ui.scoretable_lists.top_betwins]
-enabled = false
+enabled = true
 title = "Top Betwins"
 display = "average"
 pos_x = 47.8
@@ -901,7 +862,7 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Coppers"
 
 [ui.scoretable_lists.top_roundscore]
-enabled = false
+enabled = true
 title = "Top Roundscore"
 pos_x = 47.8
 pos_y = -14.6
@@ -910,10 +871,10 @@ icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
 
 [ui.placement_widget]
-enabled = true
+enabled = false
 
 [ui.nicemode]
-enabled = true
+enabled = false
 force = false
 refresh_interval = 10
 
@@ -927,7 +888,6 @@ worse = "19FF"
 
 [ui.nicemode.allow]
 dedimania_records = true
-ultimania_records = false
 local_records = true
 live_rankings = true
 
@@ -1009,7 +969,7 @@ night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-disabl
 
 
 [ui.menu]
-enabled = true
+enabled = "true"
 menu_caption = "   Menu"
 size = "8 2.2"
 separatorheight = "0.75"
@@ -1071,14 +1031,14 @@ style = "Icons64x64_1"
 substyle = "LvlYellow"
 
 [ui.allbutton]
-enabled = false
+enabled = "false"
 main_pos_x = -61
 main_pos_y = -45.1
 submenu_pos_x = -39
 submenu_pos_y = -28.2
 
 [ui.banner]
-enabled = true
+enabled = "true"
 pos_x = -64.4
 pos_y = 22.7
 width = 21
@@ -1094,7 +1054,7 @@ background_substyle = "NavButton"
 
 
 [ui.karma]
-enabled = true
+enabled = "true"
 number_format = "english"
 show_welcome = "true"
 allow_public_vote = "true"
