@@ -8,6 +8,7 @@ Jukebox system: track queuing, /y voting for TMX adds and chat votes,
 from __future__ import annotations
 import logging
 import asyncio
+import hashlib
 import json
 import pathlib
 import random
@@ -32,6 +33,14 @@ logger = logging.getLogger(__name__)
 
 TMX_DOWNLOAD_DIR = 'TMX'
 TMX_SECTION_CHOICES = ('TMNF', 'TMU', 'TMN', 'TMO', 'TMS')
+TMX_STYLE_NAMES = {
+    'Normal', 'Stunt', 'Maze', 'Offroad', 'Laps', 'Fullspeed',
+    'LOL', 'Tech', 'SpeedTech', 'RPG', 'PressForward', 'Trial', 'Grass',
+}
+TMXR_PERMISSION_CHECK = True
+TMXR_DEFAULT_SECTIONS = ['TMNF', 'TMN']
+TMXR_IGNORED_STYLES = ['RPG', 'Trial']
+TMXR_MAX_AUTHOR_TIME_SECONDS = 120
 
 # ---------------------------------------------------------------------------
 # Module-level state (exported to other plugins)
@@ -91,6 +100,7 @@ def register(aseco: 'Aseco'):
     aseco.add_chat_command('autojuke', 'Jukeboxes track from /list (see: /autojuke help)')
     aseco.add_chat_command('aj',       'Alias for /autojuke')
     aseco.add_chat_command('add',      'Adds a track directly from TMX (<ID> {sec})')
+    aseco.add_chat_command('tmxr',     'Adds and jukeboxes a random TMX track ({sec})')
     aseco.add_chat_command('y',        'Votes Yes for a TMX track or chat-based vote')
     aseco.add_chat_command('history',  'Shows the 10 most recently played tracks')
     aseco.add_chat_command('xlist',    'Lists tracks on TMX (see: /xlist help)')
@@ -101,6 +111,7 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onChat_autojuke', chat_autojuke)
     aseco.register_event('onChat_aj',       chat_autojuke)
     aseco.register_event('onChat_add',      chat_add)
+    aseco.register_event('onChat_tmxr',     chat_tmx_random)
     aseco.register_event('onChat_y',        chat_y)
     aseco.register_event('onChat_history',  chat_history)
     aseco.register_event('onChat_xlist',    chat_xlist)
@@ -114,9 +125,31 @@ def _apply_app_defaults(aseco: 'Aseco'):
             sys.modules[__name__],
             attr_map={
                 'tmx_download_dir': 'TMX_DOWNLOAD_DIR',
+                'permission_check': 'TMXR_PERMISSION_CHECK',
+                'default_sections': 'TMXR_DEFAULT_SECTIONS',
+                'ignored_styles': 'TMXR_IGNORED_STYLES',
+                'max_author_time_seconds': 'TMXR_MAX_AUTHOR_TIME_SECONDS',
+                'tmxr_permission_check': 'TMXR_PERMISSION_CHECK',
+                'tmxr_default_sections': 'TMXR_DEFAULT_SECTIONS',
+                'tmxr_ignored_styles': 'TMXR_IGNORED_STYLES',
+                'tmxr_max_author_time_seconds': 'TMXR_MAX_AUTHOR_TIME_SECONDS',
             },
             base_dir=getattr(aseco, '_base_dir', None),
         )
+    except Exception:
+        pass
+
+    try:
+        TMXR_DEFAULT_SECTIONS[:] = _normalise_tmx_sections(TMXR_DEFAULT_SECTIONS)
+    except Exception:
+        pass
+
+    try:
+        TMXR_IGNORED_STYLES[:] = [
+            str(item or '').strip()
+            for item in (TMXR_IGNORED_STYLES or [])
+            if str(item or '').strip()
+        ]
     except Exception:
         pass
 
@@ -275,6 +308,146 @@ def _load_runtime_settings():
         getattr(rasp_mod, 'autosave_matchsettings', autosave_matchsettings) or ''
     )
 
+
+def _normalise_tmx_sections(raw_sections) -> list[str]:
+    values = raw_sections if isinstance(raw_sections, (list, tuple)) else [raw_sections]
+    result: list[str] = []
+    for value in values:
+        section = str(value or '').strip().upper()
+        if section in TMX_SECTION_CHOICES and section not in result:
+            result.append(section)
+    return result or ['TMNF', 'TMN']
+
+
+def _decode_tmx_legacy_text(value: object) -> str:
+    text = html.unescape(str(value or '')).strip()
+    if not text:
+        return ''
+
+    decoded = text
+    for _ in range(2):
+        if not re.search(r'%[0-9A-Fa-f]{2}', decoded) and '+' not in decoded:
+            break
+        trial = urllib.parse.unquote_plus(decoded)
+        if trial == decoded:
+            break
+        decoded = trial
+    return html.unescape(decoded).strip()
+
+
+def _can_use_tmx_random(aseco: 'Aseco', player) -> bool:
+    if not TMXR_PERMISSION_CHECK:
+        return True
+    return bool(aseco.is_master_admin(player) or aseco.is_admin(player))
+
+
+def get_random_candidate_filters() -> dict[str, object]:
+    return {
+        'sections': list(_normalise_tmx_sections(TMXR_DEFAULT_SECTIONS)),
+        'ignored_styles': [
+            str(item or '').strip()
+            for item in (TMXR_IGNORED_STYLES or [])
+            if str(item or '').strip()
+        ],
+        'max_author_time_seconds': int(TMXR_MAX_AUTHOR_TIME_SECONDS or 0),
+    }
+
+
+def _resolve_random_tmx_reference(section: str) -> tuple[int, str]:
+    section_name = str(section or '').strip().upper()
+    if section_name not in TMX_SECTION_CHOICES:
+        raise ValueError(f'Unsupported TMX section: {section}')
+
+    service = _tmx_service()
+    host_impl = getattr(service, 'tmx_public_host_for_section', None) if service is not None else None
+    host = host_impl(section_name) if callable(host_impl) else ''
+    if not host:
+        raise ValueError(f'Unsupported TMX section: {section_name}')
+
+    url = f'https://{host}/trackrandom'
+    req = urllib.request.Request(
+        url,
+        headers={
+            'User-Agent': 'PyXaseco/TMXRandom',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        final_url = str(resp.geturl() or url)
+
+    parsed = urllib.parse.urlparse(final_url)
+    match = re.search(r'/trackshow/(\d+)', parsed.path or '', re.IGNORECASE)
+    if not match:
+        match = re.search(r'(?:^|[?&])(id|trackid)=(\d+)(?:$|[&#])', final_url, re.IGNORECASE)
+        if match:
+            return int(match.group(2)), section_name
+        raise ValueError(f'Could not resolve random TMX track from {final_url}')
+    return int(match.group(1)), section_name
+
+
+async def _fetch_tmx_track_summary(section: str, track_id: int) -> dict | None:
+    fields = 'TrackId,TrackName,UId,Authors,Environment,Style,AuthorTime'
+    try:
+        url = _tmx_api_url(section, 'tracks', fields=fields, id=int(track_id))
+        data = await asyncio.to_thread(_tmx_get_json, url)
+    except Exception:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+    rows = data.get('Results', [])
+    if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+        return None
+
+    row = rows[0]
+    normalised = _normalise_tmx_track_row(row, section)
+    if not normalised:
+        return None
+    normalised['uid'] = str(row.get('UId', '') or '').strip()
+    normalised['author_time'] = int(row.get('AuthorTime', 0) or 0)
+    return normalised
+
+
+async def _queue_server_track(
+    aseco: 'Aseco',
+    *,
+    server_track: dict,
+    login: str,
+    nick: str,
+    source: str = 'TMX',
+    tmx: bool = True,
+) -> tuple[bool, str]:
+    uid = str(server_track.get('UId', '') or server_track.get('Uid', '') or '').strip()
+    if not uid:
+        return False, 'Could not resolve live server UID for the selected track.'
+    if uid in jukebox:
+        return False, 'This map is already in the jukebox.'
+
+    raw_name = str(server_track.get('Name', '') or '').strip() or uid
+    jukebox[uid] = {
+        'FileName': str(server_track.get('FileName', '') or '').strip(),
+        'Name': raw_name,
+        'Env': str(server_track.get('Environnement', '') or '').strip(),
+        'Login': login,
+        'Nick': nick,
+        'source': source,
+        'tmx': bool(tmx),
+        'uid': uid,
+    }
+    await aseco.release_event('onJukeboxChanged', ['add', jukebox[uid]])
+    return True, strip_colors(raw_name)
+
+def _gbx_xml_attr(attributes: str, name: str) -> str:
+    match = re.search(
+        rf'\b{re.escape(name)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\')',
+        attributes,
+        re.IGNORECASE,
+    )
+    if not match:
+        return ''
+    return html.unescape(match.group(1) if match.group(1) is not None else match.group(2)).strip()
+
+
 def _parse_gbx_metadata(path: pathlib.Path) -> dict:
     """
     Parse track metadata from the GBX header XML embedded near the start of the file.
@@ -285,25 +458,19 @@ def _parse_gbx_metadata(path: pathlib.Path) -> dict:
       - environment
     """
     with open(path, 'rb') as f:
-        data = f.read(65536)  # first 64 KiB is enough for the header in practice
+        data = f.read(262144)
 
     text = data.decode('utf-8', errors='ignore')
 
-    ident_m = re.search(
-        r'<ident\b[^>]*\buid="([^"]+)"[^>]*\bname="([^"]*)"[^>]*\bauthor="([^"]*)"',
-        text,
-        re.IGNORECASE
-    )
-    desc_m = re.search(
-        r'<desc\b[^>]*\benvir="([^"]*)"',
-        text,
-        re.IGNORECASE
-    )
+    ident_m = re.search(r'<ident\b([^>]*)>', text, re.IGNORECASE)
+    desc_m = re.search(r'<desc\b([^>]*)>', text, re.IGNORECASE)
+    ident_attrs = ident_m.group(1) if ident_m else ''
+    desc_attrs = desc_m.group(1) if desc_m else ''
 
-    uid = ident_m.group(1).strip() if ident_m else ''
-    name = html.unescape(ident_m.group(2)).strip() if ident_m else ''
-    author = html.unescape(ident_m.group(3)).strip() if ident_m else ''
-    environment = desc_m.group(1).strip() if desc_m else ''
+    uid = _gbx_xml_attr(ident_attrs, 'uid')
+    name = _gbx_xml_attr(ident_attrs, 'name')
+    author = _gbx_xml_attr(ident_attrs, 'author')
+    environment = _gbx_xml_attr(desc_attrs, 'envir')
 
     return {
         'uid': uid,
@@ -446,19 +613,124 @@ async def force_jukebox_next(aseco: 'Aseco') -> bool:
         )
         return False
 
-def _safe_track_filename(track_name: str, track_id: int) -> str:
+
+async def force_jukebox_track_next(aseco: 'Aseco', uid: str) -> bool:
+    """Force a specific jukebox entry to become the next played map."""
+    global jukebox_check
+
+    wanted_uid = str(uid or '').strip()
+    if not wanted_uid:
+        return False
+
+    track = jukebox.get(wanted_uid)
+    if not isinstance(track, dict):
+        logger.debug('[Jukebox] force_jukebox_track_next: missing uid=%s', wanted_uid)
+        return False
+
+    wanted_filename = str(track.get('FileName', '') or '').strip()
+    if not wanted_filename:
+        logger.debug('[Jukebox] force_jukebox_track_next: missing filename for uid=%s', wanted_uid)
+        return False
+
+    try:
+        server_track = await _find_server_track_by_uid_or_filename(aseco, wanted_uid, wanted_filename)
+        live_filename = wanted_filename
+        if server_track:
+            live_filename = (server_track.get('FileName') or live_filename or '').strip()
+        if not live_filename:
+            return False
+
+        await aseco.client.query_ignore_result('ChooseNextChallenge', live_filename)
+        jukebox_check = wanted_uid
+        logger.debug(
+            '[Jukebox] force_jukebox_track_next: ChooseNextChallenge uid=%s filename=%r',
+            wanted_uid,
+            live_filename,
+        )
+        return True
+    except Exception as exc:
+        logger.warning(
+            '[Jukebox] force_jukebox_track_next failed for uid=%s filename=%r: %s',
+            wanted_uid,
+            wanted_filename,
+            exc,
+        )
+        return False
+
+def _safe_track_filename(track_name: str, track_id: int, host: str = '') -> str:
     """
-    Build a safe TMX filename for disk + MatchSettings.
+    Build a dedicated-server-safe TMX filename for disk + MatchSettings.
+
+    Keep the filename human-readable while still sanitizing the visible map
+    title into a stable ASCII stem.
     """
     clean_name = strip_colors(track_name, for_tm=False)
     safe_name = _sanitize_windows_filename(clean_name)
-    return f'{safe_name}_{track_id}.Challenge.Gbx'
+    safe_name = safe_name[:64].strip('._-') if safe_name else 'Unnamed_Track'
+    return f'{safe_name}_({track_id}).Challenge.Gbx'
+
+
+def _files_identical(left: pathlib.Path, right: pathlib.Path) -> bool:
+    if left.stat().st_size != right.stat().st_size:
+        return False
+
+    def _digest(path: pathlib.Path) -> bytes:
+        checksum = hashlib.sha256()
+        with path.open('rb') as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                checksum.update(chunk)
+        return checksum.digest()
+
+    return _digest(left) == _digest(right)
+
+
+def _select_download_path(staged_path: pathlib.Path, wanted_path: pathlib.Path) -> tuple[pathlib.Path, bool]:
+    """Move a validated download without overwriting an existing map file."""
+    if not wanted_path.exists():
+        staged_path.replace(wanted_path)
+        return wanted_path, True
+
+    if _files_identical(staged_path, wanted_path):
+        staged_path.unlink(missing_ok=True)
+        return wanted_path, False
+
+    name = wanted_path.name
+    suffix = '.Challenge.Gbx'
+    stem = name[:-len(suffix)] if name.lower().endswith(suffix.lower()) else wanted_path.stem
+    sequence = 1
+    while True:
+        candidate = wanted_path.with_name(f'{stem}-{sequence}{suffix}')
+        if not candidate.exists():
+            staged_path.replace(candidate)
+            return candidate, True
+        if _files_identical(staged_path, candidate):
+            staged_path.unlink(missing_ok=True)
+            return candidate, False
+        sequence += 1
+
+
+def _discard_downloaded_track(path: pathlib.Path, metadata: dict) -> None:
+    """Delete only files created by the current download attempt."""
+    if not bool(metadata.get('_download_created_file', True)):
+        return
+    path.unlink(missing_ok=True)
 
 
 async def _default_tmx_section(aseco: 'Aseco') -> str:
     service = _tmx_service(aseco)
     impl = getattr(service, 'get_tmx_section', None) if service is not None else None
     return await impl(aseco) if callable(impl) else 'TMNF'
+
+
+def _tmx_section_for_public_host(host: str) -> str:
+    service = _tmx_service()
+    host_impl = getattr(service, 'tmx_public_host_for_section', None) if service is not None else None
+    wanted = str(host or '').strip().lower()
+    for section in TMX_SECTION_CHOICES:
+        candidate = host_impl(section) if callable(host_impl) else ''
+        if str(candidate or '').strip().lower() == wanted:
+            return section
+    return 'TMNF'
 
 
 def _tmx_api_url(section: str, endpoint: str, **params) -> str:
@@ -498,13 +770,13 @@ def _extract_tmx_author_name(track: dict) -> str:
                 continue
             user = author.get('User', {})
             if isinstance(user, dict) and user.get('Name'):
-                return str(user['Name'])
+                return _decode_tmx_legacy_text(user['Name'])
             if author.get('Name'):
-                return str(author['Name'])
+                return _decode_tmx_legacy_text(author['Name'])
 
     uploader = track.get('Uploader', {})
     if isinstance(uploader, dict) and uploader.get('Name'):
-        return str(uploader['Name'])
+        return _decode_tmx_legacy_text(uploader['Name'])
 
     return '?'
 
@@ -526,6 +798,32 @@ def _extract_tmx_environment(track: dict) -> str:
     return env_map.get(int(env or 0), '')
 
 
+def _extract_tmx_style(track: dict) -> str:
+    style = track.get('Style')
+    if isinstance(style, str) and style:
+        return style
+
+    style_map = {
+        0: 'Normal',
+        1: 'Stunt',
+        2: 'Maze',
+        3: 'Offroad',
+        4: 'Laps',
+        5: 'Fullspeed',
+        6: 'LOL',
+        7: 'Tech',
+        8: 'SpeedTech',
+        9: 'RPG',
+        10: 'PressForward',
+        11: 'Trial',
+        12: 'Grass',
+    }
+    try:
+        return style_map.get(int(style or 0), '')
+    except Exception:
+        return ''
+
+
 def _normalise_tmx_track_row(track: dict, section: str) -> dict | None:
     try:
         track_id = int(track.get('TrackId', 0) or 0)
@@ -537,9 +835,10 @@ def _normalise_tmx_track_row(track: dict, section: str) -> dict | None:
 
     return {
         'id': track_id,
-        'name': str(track.get('TrackName', '') or ''),
+        'name': _decode_tmx_legacy_text(track.get('TrackName', '') or ''),
         'author': _extract_tmx_author_name(track),
         'environment': _extract_tmx_environment(track),
+        'style': _extract_tmx_style(track),
         'section': section,
     }
 
@@ -918,11 +1217,20 @@ def _stream_download_to_file(url: str, dest: pathlib.Path):
                 }
             )
             with urllib.request.urlopen(req, timeout=300) as resp:
+                raw_length = str(resp.headers.get('Content-Length', '') or '').strip()
+                expected_length = int(raw_length) if raw_length.isdigit() else 0
+                written = 0
                 while True:
                     chunk = resp.read(1024 * 1024)  # 1 MiB chunks, no total size cap
                     if not chunk:
                         break
                     out.write(chunk)
+                    written += len(chunk)
+
+                if expected_length and written != expected_length:
+                    raise OSError(
+                        f'Incomplete TMX download: received {written} of {expected_length} bytes'
+                    )
 
         pathlib.Path(tmp_name).replace(dest)
 
@@ -942,24 +1250,61 @@ async def download_tmx_track(ref: str, tracks_root: pathlib.Path, source: str = 
     """
     host, track_id = parse_tmx_reference(ref, source)
 
-    temp_rel = pathlib.Path(TMX_DOWNLOAD_DIR) / f'_tmp_{track_id}.Challenge.Gbx'
+    temp_rel = pathlib.Path(TMX_DOWNLOAD_DIR) / f'_tmp_{track_id}_{time.time_ns()}.Challenge.Gbx'
     temp_abs = tracks_root / temp_rel
     url = f'https://{host}/trackgbx/{track_id}'
 
-    await asyncio.to_thread(_stream_download_to_file, url, temp_abs)
+    try:
+        await asyncio.to_thread(_stream_download_to_file, url, temp_abs)
 
-    metadata = await asyncio.to_thread(_parse_gbx_metadata, temp_abs)
-    track_name = metadata.get('name') or f'Track {track_id}'
+        with temp_abs.open('rb') as handle:
+            if handle.read(3) != b'GBX':
+                raise ValueError(f'TMX track {track_id} did not return a valid GBX file.')
 
-    final_rel = pathlib.Path(TMX_DOWNLOAD_DIR) / _safe_track_filename(track_name, track_id)
-    final_abs = tracks_root / final_rel
+        metadata = await asyncio.to_thread(_parse_gbx_metadata, temp_abs)
+        file_uid = str(metadata.get('uid', '') or '').strip()
+        if not file_uid:
+            raise ValueError(f'TMX track {track_id} has no readable UID in its GBX header.')
 
-    final_abs.parent.mkdir(parents=True, exist_ok=True)
-    if final_abs.exists():
-        final_abs.unlink()
-    temp_abs.replace(final_abs)
+        # The GBX header is authoritative for identity and naming. TMX API
+        # data only fills metadata absent from older challenge headers.
+        section = _tmx_section_for_public_host(host)
+        api_summary = await _fetch_tmx_track_summary(section, track_id)
+        api_uid = str((api_summary or {}).get('uid', '') or '').strip()
+        if api_uid and api_uid != file_uid:
+            raise ValueError(
+                f'TMX download/API UID mismatch for track {track_id}: file={file_uid} api={api_uid}. '
+                f'Use the correct TMX section/host for this ID.'
+            )
 
-    return final_abs, str(final_rel).replace('\\', '/'), host, track_id, metadata
+        if isinstance(api_summary, dict):
+            metadata['name'] = str(metadata.get('name', '') or api_summary.get('name', '') or '')
+            metadata['author'] = str(metadata.get('author', '') or api_summary.get('author', '') or '')
+            metadata['environment'] = str(
+                metadata.get('environment', '') or api_summary.get('environment', '') or ''
+            )
+
+        metadata['uid'] = file_uid
+        track_name = metadata.get('name') or f'Track {track_id}'
+        wanted_rel = pathlib.Path(TMX_DOWNLOAD_DIR) / _safe_track_filename(track_name, track_id, host)
+        wanted_abs = tracks_root / wanted_rel
+        wanted_abs.parent.mkdir(parents=True, exist_ok=True)
+
+        final_abs, created_file = await asyncio.to_thread(
+            _select_download_path,
+            temp_abs,
+            wanted_abs,
+        )
+        final_rel = final_abs.relative_to(tracks_root)
+        metadata['_download_created_file'] = created_file
+
+        return final_abs, str(final_rel).replace('\\', '/'), host, track_id, metadata
+    except Exception:
+        try:
+            temp_abs.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
 
 
 async def admin_add_tmx_track(
@@ -986,14 +1331,12 @@ async def admin_add_tmx_track(
                 source_hint = ''
 
         abs_path, rel_insert, host, track_id, metadata = await download_tmx_track(ref, tracks_root, source_hint)
-        # Dedicated filesystem visibility can lag slightly behind the async write.
-        await asyncio.sleep(0.5)
         server_file = _challenge_file_value(rel_insert)
 
         uid = metadata.get('uid', '').strip()
         if not uid:
             try:
-                abs_path.unlink(missing_ok=True)
+                _discard_downloaded_track(abs_path, metadata)
             except Exception:
                 pass
             return False, 'Could not read map UID from downloaded GBX.'
@@ -1005,7 +1348,7 @@ async def admin_add_tmx_track(
                 t_uid = (t.get('UId', '') or t.get('Uid', '') or '').strip()
                 if t_uid == uid:
                     try:
-                        abs_path.unlink(missing_ok=True)
+                        _discard_downloaded_track(abs_path, metadata)
                     except Exception:
                         pass
                     return False, 'This map is already on the server.'
@@ -1014,58 +1357,103 @@ async def admin_add_tmx_track(
 
         server_track = None
 
-        # Insert into dedicated server
+        # Update the live dedicated-server selection first. Unlike the old
+        # fire-and-forget path, wait for the result so persistence and cache
+        # updates never race a rejected or unfinished AddChallenge call.
         try:
             method = 'AddChallenge' if use_add_challenge else 'InsertChallenge'
-            await aseco.client.query_ignore_result(method, server_file)
-            await aseco.release_event('onTracklistChanged', ['add', server_file])
+            added = await aseco.client.query(method, server_file)
+            if added is not True:
+                raise RuntimeError(f'{method} returned {added!r}')
         except Exception as e:
             try:
-                abs_path.unlink(missing_ok=True)
+                _discard_downloaded_track(abs_path, metadata)
             except Exception:
                 pass
             logger.warning('[TMX] %s failed for %s: %s', method, server_file, e)
             raise
 
-        # Ensure MatchSettings.txt contains the track
+        # Ask the server for the exact accepted filename and metadata. Some
+        # older TMF builds can briefly reject GetChallengeInfo directly after
+        # insertion, so retain one live-list lookup as a compatibility fallback.
+        try:
+            info = await aseco.client.query('GetChallengeInfo', server_file)
+            if isinstance(info, dict):
+                info_uid = str(info.get('UId', '') or info.get('Uid', '') or '').strip()
+                if not info_uid or info_uid == uid:
+                    server_track = info
+        except Exception as e:
+            logger.debug('[TMX] GetChallengeInfo failed for %s: %s', server_file, e)
+
+        if server_track is None:
+            server_track = await _find_server_track_by_uid_or_filename(aseco, uid, server_file)
+
+        if server_track is None:
+            logger.warning(
+                '[TMX] %s succeeded but the track could not be confirmed: uid=%s file=%s',
+                method,
+                uid,
+                server_file
+            )
+            try:
+                await aseco.client.query('RemoveChallenge', server_file)
+            except Exception as rollback_exc:
+                logger.warning('[TMX] Could not roll back unconfirmed track %s: %s', server_file, rollback_exc)
+            try:
+                _discard_downloaded_track(abs_path, metadata)
+            except Exception:
+                pass
+            return False, 'Dedicated server accepted the map but its challenge information could not be confirmed.'
+
+        live_uid = str(server_track.get('UId', '') or server_track.get('Uid', '') or '').strip()
+        if live_uid and live_uid != uid:
+            logger.warning(
+                '[TMX] Dedicated server UID mismatch after %s: file=%s expected=%s live=%s',
+                method,
+                server_file,
+                uid,
+                live_uid,
+            )
+            try:
+                await aseco.client.query('RemoveChallenge', server_file)
+            except Exception as rollback_exc:
+                logger.warning('[TMX] Could not roll back UID-mismatched track %s: %s', server_file, rollback_exc)
+            try:
+                _discard_downloaded_track(abs_path, metadata)
+            except Exception:
+                pass
+            return False, 'Dedicated server reported a different map UID after adding the track.'
+
+        logger.debug(
+            '[TMX] Dedicated server accepted track: uid=%s file=%r',
+            uid,
+            server_track.get('FileName', server_file),
+        )
+
+        # Persist the same selection change for the next controller/server
+        # restart. AddChallenge already updated the live list, so reloading the
+        # complete MatchSettings file here would only duplicate that work.
         try:
             await asyncio.to_thread(
                 _ensure_matchsettings_entry,
                 _matchsettings_path(aseco),
                 rel_insert,
-                uid
+                uid,
             )
         except Exception as e:
-            logger.warning('[TMX] Could not update MatchSettings.txt immediately: %s', e)
+            logger.warning('[TMX] Could not persist %s in MatchSettings: %s', server_file, e)
+            live_filename = str(server_track.get('FileName', '') or server_file)
+            try:
+                await aseco.client.query('RemoveChallenge', live_filename)
+            except Exception as rollback_exc:
+                logger.warning('[TMX] Could not roll back live track %s: %s', live_filename, rollback_exc)
+            try:
+                _discard_downloaded_track(abs_path, metadata)
+            except Exception:
+                pass
+            return False, f'Could not persist map in MatchSettings: {e}'
 
-        # Reload dedicated tracklist from MatchSettings
-        try:
-            await aseco.client.query_ignore_result(
-                'LoadMatchSettings',
-                'MatchSettings/MatchSettings.txt'
-            )
-        except Exception as e:
-            logger.warning('[TMX] LoadMatchSettings after add failed: %s', e)
-
-        # Now wait for the track to become visible in live GetChallengeList
-        for _ in range(15):
-            server_track = await _find_server_track_by_uid_or_filename(aseco, uid, server_file)
-            if server_track:
-                break
-            await asyncio.sleep(0.2)
-
-        if server_track:
-            logger.debug(
-                '[TMX] Live challenge list now contains added track: uid=%s file=%r',
-                uid,
-                server_track.get('FileName', '')
-            )
-        else:
-            logger.warning(
-                '[TMX] Track added on disk/MatchSettings but still not visible in live GetChallengeList: uid=%s file=%s',
-                uid,
-                server_file
-            )
+        await aseco.release_event('onTracklistChanged', ['add', server_file])
 
         # Sync LocalDB challenge row and capture the exact live filename/name/author/env
         server_filename = server_file
@@ -1077,14 +1465,13 @@ async def admin_add_tmx_track(
                 author = metadata.get('author', '')
                 env = metadata.get('environment', '')
 
-                if server_track:
-                    t_uid = (server_track.get('UId', '') or server_track.get('Uid', '') or '').strip()
-                    t_file = server_track.get('FileName', '')
-                    uid = t_uid or uid
-                    server_filename = t_file or server_filename
-                    name = server_track.get('Name', name)
-                    author = server_track.get('Author', author)
-                    env = server_track.get('Environnement', env)
+                t_uid = (server_track.get('UId', '') or server_track.get('Uid', '') or '').strip()
+                t_file = server_track.get('FileName', '')
+                uid = t_uid or uid
+                server_filename = t_file or server_filename
+                name = server_track.get('Name', name)
+                author = server_track.get('Author', author)
+                env = server_track.get('Environnement', env)
 
                 if uid:
                     async with pool.acquire() as conn:
@@ -1119,15 +1506,7 @@ async def admin_add_tmx_track(
         # /admin add: auto-queue newly added map
         if use_add_challenge:
             try:
-                if not server_track:
-                    logger.warning(
-                        '[TMX] Track added on disk but not visible yet in live GetChallengeList: uid=%s file=%s',
-                        uid, server_file
-                    )
-
-                live_filename = server_filename
-                if server_track:
-                    live_filename = server_track.get('FileName', live_filename) or live_filename
+                live_filename = server_track.get('FileName', server_filename) or server_filename
 
                 requester_nick = await _resolve_requester_nick(aseco, login)
                 jukebox[uid] = {
@@ -1187,6 +1566,28 @@ def _challenge_file_value(rel_insert: str) -> str:
     return f'Challenges\\{rel_insert}'
 
 
+def _write_matchsettings_atomic(matchsettings_path: pathlib.Path, content: str) -> None:
+    """Replace MatchSettings only after the complete updated XML is on disk."""
+    matchsettings_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f'.{matchsettings_path.name}.',
+        suffix='.tmp',
+        dir=str(matchsettings_path.parent),
+    )
+    tmp_path = pathlib.Path(tmp_name)
+    try:
+        with open(fd, 'w', encoding='utf-8', newline='\n', closefd=True) as handle:
+            handle.write(content)
+            handle.flush()
+        tmp_path.replace(matchsettings_path)
+    except Exception:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
+
+
 def _remove_matchsettings_entry_by_uid(matchsettings_path: pathlib.Path, uid: str):
     """
     Remove the single <challenge> block whose <ident> matches *uid* exactly.
@@ -1217,7 +1618,7 @@ def _remove_matchsettings_entry_by_uid(matchsettings_path: pathlib.Path, uid: st
         )
         new_content = re.sub(pattern, '', content)
         if new_content != content:
-            matchsettings_path.write_text(new_content, encoding='utf-8')
+            _write_matchsettings_atomic(matchsettings_path, new_content)
         return
 
     target_uid = uid.strip().lower()
@@ -1234,7 +1635,7 @@ def _remove_matchsettings_entry_by_uid(matchsettings_path: pathlib.Path, uid: st
     _ET.indent(root, space='\t')
     xml_body = _ET.tostring(root, encoding='unicode')
     new_content = '<?xml version="1.0" encoding="utf-8" ?>\n' + xml_body + '\n'
-    matchsettings_path.write_text(new_content, encoding='utf-8')
+    _write_matchsettings_atomic(matchsettings_path, new_content)
 
 
 def _ensure_matchsettings_entry(matchsettings_path: pathlib.Path, rel_insert: str, uid: str):
@@ -1251,15 +1652,64 @@ def _ensure_matchsettings_entry(matchsettings_path: pathlib.Path, rel_insert: st
             '\t</challenge>\n'
             '</playlist>\n'
         )
-        matchsettings_path.write_text(content, encoding='utf-8')
+        _write_matchsettings_atomic(matchsettings_path, content)
         return
 
     content = matchsettings_path.read_text(encoding='utf-8', errors='ignore')
 
-    if uid and re.search(rf'<ident>\s*{re.escape(uid)}\s*</ident>', content, re.IGNORECASE):
-        return
+    import xml.etree.ElementTree as _ET
+    try:
+        root = _ET.fromstring(content.encode('utf-8'))
+    except _ET.ParseError:
+        root = None
 
-    if re.search(rf'<file>\s*{re.escape(file_value)}\s*</file>', content, re.IGNORECASE):
+    if root is not None:
+        changed = False
+        target_file = file_value.strip().lower()
+        target_uid = str(uid or '').strip()
+
+        for ch in root.findall('challenge'):
+            file_el = ch.find('file')
+            ident_el = ch.find('ident')
+            current_file = str(file_el.text or '').strip().lower() if file_el is not None else ''
+            if current_file != target_file:
+                continue
+
+            if file_el is None:
+                file_el = _ET.SubElement(ch, 'file')
+            if ident_el is None:
+                ident_el = _ET.SubElement(ch, 'ident')
+
+            if (file_el.text or '').strip() != file_value:
+                file_el.text = file_value
+                changed = True
+            if target_uid and (ident_el.text or '').strip() != target_uid:
+                ident_el.text = target_uid
+                changed = True
+
+            if changed:
+                _ET.indent(root, space='\t')
+                xml_body = _ET.tostring(root, encoding='unicode')
+                new_content = '<?xml version="1.0" encoding="utf-8" ?>\n' + xml_body + '\n'
+                _write_matchsettings_atomic(matchsettings_path, new_content)
+            return
+
+        if target_uid:
+            for ch in list(root.findall('challenge')):
+                ident_el = ch.find('ident')
+                file_el = ch.find('file')
+                current_uid = str(ident_el.text or '').strip() if ident_el is not None else ''
+                current_file = str(file_el.text or '').strip().lower() if file_el is not None else ''
+                if current_uid == target_uid and current_file != target_file:
+                    root.remove(ch)
+                    changed = True
+
+        if changed:
+            _ET.indent(root, space='\t')
+            xml_body = _ET.tostring(root, encoding='unicode')
+            content = '<?xml version="1.0" encoding="utf-8" ?>\n' + xml_body + '\n'
+
+    if uid and re.search(rf'<ident>\s*{re.escape(uid)}\s*</ident>', content, re.IGNORECASE):
         return
 
     block = (
@@ -1282,7 +1732,7 @@ def _ensure_matchsettings_entry(matchsettings_path: pathlib.Path, rel_insert: st
             content += '\n'
         content += block + '</playlist>\n'
 
-    matchsettings_path.write_text(content, encoding='utf-8')
+    _write_matchsettings_atomic(matchsettings_path, content)
 
 # ---------------------------------------------------------------------------
 # Events
@@ -1644,7 +2094,22 @@ async def chat_y(aseco: 'Aseco', command: dict):
                 aseco.console('Vote by {1} replays track after finish!', vlogin)
 
             elif vtype == 3:  # skip
-                await force_jukebox_next(aseco)
+                endless_prepared = False
+                try:
+                    from apps.endlesstmxr.service import prepare_skip_random_next
+
+                    endless_prepared, _reason = await prepare_skip_random_next(
+                        aseco,
+                        login=vlogin,
+                        nickname=str(chatvote.get('nick', '') or vlogin),
+                    )
+                    if not endless_prepared and _reason:
+                        logger.warning('[Votes] EndlessTMXR skip prepare failed for %s: %s', vlogin, _reason)
+                except Exception:
+                    endless_prepared = False
+
+                if not endless_prepared:
+                    await force_jukebox_next(aseco)
                 await aseco.client.query_ignore_result('NextChallenge')
                 aseco.console('Vote by {1} skips this track!', vlogin)
 
@@ -2882,7 +3347,7 @@ async def chat_add(aseco: 'Aseco', command: dict):
         size_kb = 0
     if size_kb > 1024:
         try:
-            abs_path.unlink(missing_ok=True)
+            _discard_downloaded_track(abs_path, metadata)
         except Exception:
             pass
         await _reply(aseco, login, format_text(_get_rasp_msg(aseco, 'TRACK_TOO_LARGE'), size_kb))
@@ -2893,7 +3358,7 @@ async def chat_add(aseco: 'Aseco', command: dict):
     environment = str(metadata.get('environment', '') or '').strip()
     if not uid or not name:
         try:
-            abs_path.unlink(missing_ok=True)
+            _discard_downloaded_track(abs_path, metadata)
         except Exception:
             pass
         await _reply(aseco, login, '{#server}> {#error}No such track on TMX!')
@@ -2903,7 +3368,7 @@ async def chat_add(aseco: 'Aseco', command: dict):
     server_track = await _find_server_track_by_uid_or_filename(aseco, uid, server_file)
     if server_track:
         try:
-            abs_path.unlink(missing_ok=True)
+            _discard_downloaded_track(abs_path, metadata)
         except Exception:
             pass
         await _reply(aseco, login, _get_rasp_msg(aseco, 'ADD_PRESENTJB'))
@@ -2919,7 +3384,7 @@ async def chat_add(aseco: 'Aseco', command: dict):
 
     if uid in jukebox:
         try:
-            abs_path.unlink(missing_ok=True)
+            _discard_downloaded_track(abs_path, metadata)
         except Exception:
             pass
         await _reply(aseco, login, _get_rasp_msg(aseco, 'ADD_DUPL'))
@@ -2934,7 +3399,7 @@ async def chat_add(aseco: 'Aseco', command: dict):
 
     if not ok:
         try:
-            abs_path.unlink(missing_ok=True)
+            _discard_downloaded_track(abs_path, metadata)
         except Exception:
             pass
         await _reply(
@@ -2977,6 +3442,200 @@ async def chat_add(aseco: 'Aseco', command: dict):
 
     if rasp_votes.auto_vote_starter:
         await chat_y(aseco, command)
+
+
+async def chat_tmx_random(aseco: 'Aseco', command: dict):
+    player = command['author']
+    login = player.login
+    raw = str(command.get('params') or '').strip()
+    params = raw.split() if raw else []
+
+    if aseco.server.isrelay:
+        await _reply(aseco, login, format_text(aseco.get_chat_message('NOTONRELAY')))
+        return
+
+    if not (feature_jukebox and feature_tmxadd):
+        await _reply(aseco, login, _get_rasp_msg(aseco, 'NO_ADD'))
+        return
+
+    if not _can_use_tmx_random(aseco, player):
+        await _reply(aseco, login, '{#server}> {#error}This command is available only to Admins and MasterAdmins.')
+        return
+
+    if params and params[0].lower() == 'help':
+        header = '{#black}/tmxr$g will add and jukebox a random TMX track:'
+        data = [
+            ['...', '{#black}help', 'Displays this help information'],
+            ['...', '{#black}<empty>', 'Uses a random section from the configured defaults'],
+            ['...', '{#black}tmnf', 'Uses TMNF random map page'],
+            ['...', '{#black}tmn', 'Uses Nations random map page'],
+            ['...', '{#black}tmu', 'Uses TMU random map page'],
+            ['...', '{#black}tmo', 'Uses Original random map page'],
+            ['...', '{#black}tms', 'Uses Sunrise random map page'],
+        ]
+        display_manialink(
+            aseco,
+            login,
+            header,
+            ['Icons64x64_1', 'TrackInfo', -0.01],
+            data,
+            [1.05, 0.05, 0.18, 0.82],
+            'OK',
+        )
+        return
+
+    filters = get_random_candidate_filters()
+    sections = _normalise_tmx_sections(filters.get('sections') or TMXR_DEFAULT_SECTIONS)
+    ignored_styles = [
+        str(item or '').strip()
+        for item in (filters.get('ignored_styles') or [])
+        if str(item or '').strip()
+    ]
+    max_author_time_seconds = int(filters.get('max_author_time_seconds', 0) or 0)
+
+    if params:
+        chosen = str(params[0] or '').strip().upper()
+        if chosen not in TMX_SECTION_CHOICES:
+            await _reply(aseco, login, '{#server}> {#error}Unknown TMX section. Use TMNF, TMN, TMU, TMO, or TMS.')
+            return
+        sections = [chosen]
+
+    ok, info = await add_random_tmx_track(
+        aseco,
+        login=login,
+        nick=player.nickname,
+        sections=sections,
+        ignored_styles=ignored_styles,
+        max_author_time_seconds=max_author_time_seconds,
+    )
+    if not ok:
+        await _reply(aseco, login, f'{{#server}}> {{#error}}Could not add a random TMX track: {info}')
+        return
+
+    await _jb_broadcast(
+        aseco,
+        format_text(
+            '{#server}>> {#admin}{1}$z$s {#highlite}{2}$z$s {#admin}randomly adds & jukeboxes track: {#highlite}{3} {#admin}from {#highlite}{4}',
+            getattr(player, 'title', 'Admin'),
+            player.nickname,
+            str(info.get('name', '') or ''),
+            str(info.get('section', '') or ''),
+        ),
+    )
+
+
+async def add_random_tmx_track(
+    aseco: 'Aseco',
+    *,
+    login: str = '',
+    nick: str = '',
+    sections: list[str] | tuple[str, ...] | None = None,
+    allowed_styles: list[str] | tuple[str, ...] | None = None,
+    ignored_styles: list[str] | tuple[str, ...] | None = None,
+    max_author_time_seconds: int | None = None,
+) -> tuple[bool, dict | str]:
+    candidates = _normalise_tmx_sections(sections or TMXR_DEFAULT_SECTIONS)
+    allowed = {
+        str(item or '').strip().casefold()
+        for item in (allowed_styles or [])
+        if str(item or '').strip()
+    }
+    ignored = {
+        str(item or '').strip().casefold()
+        for item in (ignored_styles or [])
+        if str(item or '').strip()
+    }
+    random.shuffle(candidates)
+    attempts = max(6, len(candidates) * 6)
+    last_error = 'No random TMX track could be resolved.'
+
+    for attempt in range(attempts):
+        section = candidates[attempt % len(candidates)]
+        try:
+            track_id, resolved_section = await asyncio.to_thread(_resolve_random_tmx_reference, section)
+            summary = await _fetch_tmx_track_summary(resolved_section, track_id)
+            style_name = str((summary or {}).get('style', '') or '').strip()
+            author_time = int((summary or {}).get('author_time', 0) or 0)
+            if ignored and style_name.casefold() in ignored:
+                last_error = f'Skipped style {style_name or "<unknown>"}'
+                continue
+            if allowed:
+                if style_name.casefold() not in allowed:
+                    last_error = f'Skipped style {style_name or "<unknown>"}'
+                    continue
+            if int(max_author_time_seconds or 0) > 0 and author_time > int(max_author_time_seconds) * 1000:
+                last_error = (
+                    f'Skipped author time {author_time} ms '
+                    f'(>{int(max_author_time_seconds)} s limit)'
+                )
+                continue
+            if summary and summary.get('uid'):
+                server_track = await _find_server_track_by_uid_or_filename(
+                    aseco,
+                    str(summary.get('uid', '')),
+                    '',
+                )
+                if server_track is not None:
+                    ok, info = await _queue_server_track(
+                        aseco,
+                        server_track=server_track,
+                        login=login,
+                        nick=nick,
+                        source='TMX',
+                        tmx=True,
+                    )
+                    if ok:
+                        return True, {
+                            'name': info,
+                            'section': resolved_section,
+                            'uid': str(server_track.get('UId', '') or server_track.get('Uid', '') or '').strip(),
+                            'source': 'jukebox',
+                            'style': str(summary.get('style', '') or ''),
+                        }
+                    if 'already in the jukebox' in str(info).lower():
+                        last_error = str(info)
+                        continue
+                    last_error = str(info or last_error)
+                    continue
+
+            existing_uids = set(str(key or '').strip() for key in jukebox.keys())
+            ok, info = await admin_add_tmx_track(
+                aseco,
+                str(track_id),
+                login,
+                resolved_section,
+                use_add_challenge=True,
+            )
+            if ok:
+                queued_uid = ''
+                if summary:
+                    queued = jukebox.get(str(summary.get('uid', '') or '').strip())
+                    if isinstance(queued, dict):
+                        queued_uid = str(queued.get('uid', '') or '').strip()
+                if not queued_uid and summary:
+                    queued_uid = str(summary.get('uid', '') or '').strip()
+                if not queued_uid:
+                    new_uids = [str(key or '').strip() for key in jukebox.keys() if str(key or '').strip() not in existing_uids]
+                    if new_uids:
+                        queued_uid = new_uids[-1]
+                return True, {
+                    'name': str(info or ''),
+                    'section': resolved_section,
+                    'uid': queued_uid,
+                    'source': 'add',
+                    'style': str((summary or {}).get('style', '') or ''),
+                }
+            last_error = str(info or last_error)
+            if 'already in the jukebox' in last_error.lower():
+                continue
+        except urllib.error.HTTPError as exc:
+            last_error = f'HTTP {exc.code}'
+        except urllib.error.URLError as exc:
+            last_error = str(exc.reason)
+        except Exception as exc:
+            last_error = str(exc) or last_error
+
+    return False, last_error
 
 
 # ---------------------------------------------------------------------------

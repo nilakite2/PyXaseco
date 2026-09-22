@@ -70,10 +70,15 @@ class EventBus:
                 if _is_transport_shutdown_noise(aseco, e):
                     if not getattr(aseco, '_transport_noise_logged', False):
                         logger.warning(
-                            'EventBus: suppressing repeated transport-loss handler errors during shutdown/restart'
+                            'EventBus: transport lost while dispatching %s; '
+                            'remaining handlers are being skipped',
+                            event_type,
                         )
                         setattr(aseco, '_transport_noise_logged', True)
-                    continue
+                    request_restart = getattr(aseco, '_request_transport_restart', None)
+                    if callable(request_restart):
+                        request_restart()
+                    break
                 logger.error('EventBus: handler %s raised for event %s: %s',
                              handler, event_type, e, exc_info=True)
 

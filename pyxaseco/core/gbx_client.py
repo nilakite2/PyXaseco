@@ -203,6 +203,7 @@ class GbxClient:
     def __init__(self):
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
+        self._connected: bool = False
         self._handle: int = HANDLE_ORIGIN
         self._pending: dict[int, asyncio.Future] = {}  # handle → Future(result)
         self._cb_queue: list[tuple[str, list]] = []    # buffered server callbacks
@@ -215,6 +216,7 @@ class GbxClient:
 
     async def connect(self, host: str, port: int, timeout: float = 10.0):
         """Open TCP connection and perform GbxRemote handshake."""
+        self._connected = False
         try:
             self._reader, self._writer = await asyncio.wait_for(
                 asyncio.open_connection(host, port), timeout=timeout
@@ -236,10 +238,12 @@ class GbxClient:
         logger.info('GbxRemote handshake OK: %s', handshake)
 
         # Start the background reader
+        self._connected = True
         self._read_task = asyncio.ensure_future(self._reader_loop())
 
     async def disconnect(self):
         """Close the connection cleanly."""
+        self._connected = False
         if self._read_task:
             self._read_task.cancel()
             try:
@@ -257,7 +261,11 @@ class GbxClient:
         logger.info('GbxClient disconnected')
 
     def is_connected(self) -> bool:
-        return self._writer is not None and not self._writer.is_closing()
+        return (
+            self._connected
+            and self._writer is not None
+            and not self._writer.is_closing()
+        )
 
     # ------------------------------------------------------------------
     # Authentication helper
@@ -293,7 +301,8 @@ class GbxClient:
             try:
                 await self._send_packet(xml_bytes, handle)
             except Exception as e:
-                del self._pending[handle]
+                self._pending.pop(handle, None)
+                fut.cancel()
                 raise GbxError(-32300, f'transport error - send failed: {e}')
 
         # Wait for the background reader to deliver our result
@@ -369,13 +378,26 @@ class GbxClient:
             self._handle = HANDLE_ORIGIN + 1
         return self._handle
 
+    def _mark_transport_lost(self) -> None:
+        # StreamWriter.is_closing() can lag behind a failed drain(). Keep an
+        # explicit state so no other callback writes to the poisoned stream.
+        self._connected = False
+
     async def _send_packet(self, xml_bytes: bytes, handle: int):
         """Send: uint32 len + uint32 handle + xml_bytes (little-endian)."""
         if not self.is_connected():
             raise ConnectionResetError('GBX connection is not available')
+        writer = self._writer
+        if writer is None:
+            self._mark_transport_lost()
+            raise ConnectionResetError('GBX connection is not available')
         header = struct.pack('<II', len(xml_bytes), handle)
-        self._writer.write(header + xml_bytes)
-        await self._writer.drain()
+        try:
+            writer.write(header + xml_bytes)
+            await writer.drain()
+        except Exception:
+            self._mark_transport_lost()
+            raise
 
     async def _read_exactly(self, n: int) -> bytes:
         """Read exactly n bytes from the server, raising on EOF."""
@@ -399,9 +421,11 @@ class GbxClient:
                 handle = handle & 0xFFFFFFFF
 
                 if handle == 0 or size == 0:
+                    self._mark_transport_lost()
                     logger.error('GbxRemote: connection interrupted (zero handle/size)')
                     break
                 if size > MAX_PACKET_SIZE:
+                    self._mark_transport_lost()
                     logger.error('GbxRemote: packet too large (%d), dropping', size)
                     break
 
@@ -442,12 +466,18 @@ class GbxClient:
                         logger.warning('GbxRemote: callback parse error: %s', e)
 
         except asyncio.IncompleteReadError:
+            self._mark_transport_lost()
             logger.warning('GbxRemote: server closed connection')
         except asyncio.CancelledError:
             pass
+        except (ConnectionError, OSError) as e:
+            self._mark_transport_lost()
+            logger.error('GbxRemote: connection lost: %s', e)
         except Exception as e:
+            self._mark_transport_lost()
             logger.error('GbxRemote: reader loop crashed: %s', e, exc_info=True)
         finally:
+            self._mark_transport_lost()
             writer = self._writer
             self._reader = None
             self._writer = None

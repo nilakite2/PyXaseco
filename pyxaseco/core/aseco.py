@@ -103,6 +103,7 @@ class Aseco:
         self._shutdown_requested: bool = False
         self._shutdown_stop_server: bool = False
         self._restart_requested: bool = False
+        self._transport_noise_logged: bool = False
 
         # Chat commands: name → ChatCommand
         self._chat_commands: dict[str, ChatCommand] = {}
@@ -453,6 +454,14 @@ class Aseco:
     def restart_requested(self) -> bool:
         return bool(self._restart_requested)
 
+    def _request_transport_restart(self) -> None:
+        """Stop callback dispatch and restart after an unexpected GBX loss."""
+        if self._shutdown_requested:
+            return
+        logger.error('GBX connection lost - requesting controller restart')
+        self._restart_requested = True
+        self._shutdown_requested = True
+
     async def _perform_shutdown(self):
         """
         Final shutdown sequence after main loop exits.
@@ -716,18 +725,20 @@ class Aseco:
         prev_second = int(time.time())
         while not self._shutdown_requested:
             if not self.client.is_connected():
-                logger.error('Main loop detected GBX connection loss - requesting controller restart')
-                self._restart_requested = True
-                self._shutdown_requested = True
+                self._request_transport_restart()
                 break
 
             loop_start = time.monotonic()
 
             # Dispatch any buffered callbacks
             await self._execute_callbacks()
+            if self._shutdown_requested:
+                break
 
             # Fire main loop event
             await self.release_event('onMainLoop', None)
+            if self._shutdown_requested:
+                break
 
             # Fire per-second event
             now = int(time.time())
@@ -744,6 +755,9 @@ class Aseco:
         """Drain the GbxClient callback queue and dispatch each."""
         callbacks = self.client.get_cb_responses()
         for method, params in callbacks:
+            if not self.client.is_connected():
+                self._request_transport_restart()
+                break
             handler_name = _CALLBACK_MAP.get(method)
             if handler_name:
                 handler = getattr(self, handler_name, None)
@@ -751,7 +765,13 @@ class Aseco:
                     try:
                         await handler(params)
                     except Exception as e:
+                        if not self.client.is_connected():
+                            self._request_transport_restart()
+                            break
                         logger.error('Callback error in %s: %s', handler_name, e, exc_info=True)
+                    if not self.client.is_connected():
+                        self._request_transport_restart()
+                        break
             else:
                 if self.debug:
                     logger.debug('Unhandled callback: %s', method)
