@@ -1,15 +1,19 @@
-"""
-XML config loader for PyXaseco.
+﻿"""
+TOML-first config loader for PyXaseco.
 
-Reads config.xml, plugins.xml, adminops.xml, bannedips.xml.
+Active runtime config now comes from TOML files:
+  - config.toml
+  - apps.toml
+  - adminops.toml
+  - bannedips.toml
 
-The PHP Examsly parser produces a peculiar nested array structure where every
-element becomes a list (even singletons).  We reproduce that same normalised
-dict/list structure so downstream code can be ported directly.
+The legacy XML parser remains available only for deferred or disabled assets.
 """
 
 from __future__ import annotations
 import logging
+import os
+import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -17,8 +21,209 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _load_dotenv(path: str | Path = ".env") -> None:
+    """Load KEY=VALUE pairs from path into os.environ if not already set."""
+    try:
+        env_path = Path(path)
+        if not env_path.exists():
+            return
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except Exception:
+        # .env remains optional and must never block startup.
+        pass
+
+
+def _env(key: str, default: str = "") -> str:
+    return os.environ.get(key, default)
+
+
+def display_path(path: str | Path | None, root: str | Path | None = None) -> str:
+    """Return a concise display path rooted at the PyXaseco runtime folder."""
+    if path is None:
+        return "<none>"
+
+    source = Path(path)
+
+    candidates: list[Path] = []
+    if root is not None:
+        candidates.append(Path(root))
+
+    if source.is_absolute():
+        if source.is_dir():
+            candidates.append(source)
+        else:
+            candidates.append(source.parent)
+
+        current = source.parent if source.is_file() else source
+        candidates.extend(current.parents)
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            continue
+        key = str(resolved).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        if not (resolved / "config.toml").exists():
+            continue
+        try:
+            rel = source.resolve().relative_to(resolved)
+            if str(rel) == ".":
+                return resolved.name
+            return str(Path(resolved.name) / rel).replace("/", "\\")
+        except Exception:
+            continue
+
+    return str(source)
+
+
+def _lookup_path(node: Any, path: str) -> Any:
+    current = node
+    for part in [p for p in str(path or "").split("/") if p]:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(part)
+        if current is None:
+            return None
+    return current
+
+
+def _set_env_default(key: str, value: Any) -> None:
+    if key in os.environ:
+        return
+    if value is None:
+        return
+    if isinstance(value, list):
+        text = ",".join(str(v).strip() for v in value if str(v).strip())
+    else:
+        text = str(value).strip()
+    if text != "":
+        os.environ[key] = text
+
+
+def _overlay_env_from_config(data: dict[str, Any]) -> None:
+    env_map = {
+        "LOCK_PASSWORD": (
+            "aseco/lock_password",
+        ),
+        "TM_LOGIN": (
+            "tmserver/login",
+        ),
+        "TM_PASSWORD": (
+            "tmserver/password",
+        ),
+        "TM_IP": (
+            "tmserver/ip",
+        ),
+        "TM_PORT": (
+            "tmserver/port",
+        ),
+        "TM_TIMEOUT": (
+            "tmserver/timeout",
+        ),
+        "MASTERADMIN_LOGINS": (
+            "masteradmins/tmlogin",
+            "aseco/masteradmins/tmlogin",
+        ),
+        "DB_HOST": (
+            "database/host",
+            "localdb/host",
+        ),
+        "DB_PORT": (
+            "database/port",
+            "localdb/port",
+        ),
+        "DB_NAME": (
+            "database/name",
+            "database/db",
+            "localdb/name",
+            "localdb/db",
+        ),
+        "DB_USER": (
+            "database/user",
+            "localdb/user",
+        ),
+        "DB_PASSWORD": (
+            "database/password",
+            "localdb/password",
+        ),
+        "DEDI_LOGIN": (
+            "dedimania/login",
+            "records_dedimania/login",
+        ),
+        "DEDI_PASSWORD": (
+            "dedimania/password",
+            "records_dedimania/password",
+        ),
+        "DEDI_NATION": (
+            "dedimania/nation",
+            "records_dedimania/nation",
+        ),
+        "MK_NATION": (
+            "mania_karma/nation",
+            "ui/karma/nation",
+        ),
+        "PUBLIC_STATS_API_BASE": (
+            "public_stats/api_base",
+            "server_info/public_stats/api_base",
+        ),
+        "PUBLIC_STATS_API_TOKEN": (
+            "public_stats/api_token",
+            "server_info/public_stats/api_token",
+        ),
+        "DISCORD_ADMIN_WEBHOOK_URL": (
+            "discord_webhook/admin_webhook_url",
+            "discord_webhook/config/discord_webhook/admin_webhook_url",
+            "discord/config/discord_webhook/admin_webhook_url",
+        ),
+        "DISCORD_CHAT_WEBHOOK_URL": (
+            "discord_webhook/chat_webhook_url",
+            "discord_webhook/config/discord_webhook/chat_webhook_url",
+            "discord/config/discord_webhook/chat_webhook_url",
+        ),
+        "DISCORD_ADMIN_WEBHOOK_NAME": (
+            "discord_webhook/admin_webhook_name",
+            "discord_webhook/config/discord_webhook/admin_webhook_name",
+            "discord/config/discord_webhook/admin_webhook_name",
+        ),
+        "DISCORD_CHAT_WEBHOOK_NAME": (
+            "discord_webhook/chat_webhook_name",
+            "discord_webhook/config/discord_webhook/chat_webhook_name",
+            "discord/config/discord_webhook/chat_webhook_name",
+        ),
+    }
+
+    for env_key, candidates in env_map.items():
+        for candidate in candidates:
+            value = _lookup_path(data, candidate)
+            if value is not None:
+                _set_env_default(env_key, value)
+                break
+
+
+def load_toml_file(path: str | Path) -> dict:
+    try:
+        with Path(path).open('rb') as fh:
+            data = tomllib.load(fh)
+        return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, OSError, tomllib.TOMLDecodeError) as e:
+        logger.error('load_toml_file: failed to parse %s: %s', path, e)
+        return {}
+
+
 # ---------------------------------------------------------------------------
-# Generic XML → dict parser (mirrors Examsly::parseXml)
+# Generic XML parser retained for deferred/disabled legacy assets
 # ---------------------------------------------------------------------------
 
 def parse_xml_file(path: str | Path) -> dict:
@@ -45,7 +250,7 @@ def _element_to_dict(elem: ET.Element) -> Any:
     children = list(elem)
 
     if not children:
-        # Leaf node — return text (or empty string)
+        # Leaf node â€” return text (or empty string)
         return (elem.text or '').strip()
 
     result: dict[str, list] = {}
@@ -66,7 +271,7 @@ def _element_to_dict(elem: ET.Element) -> Any:
 
 class Settings:
     """
-    Holds all settings from config.xml.
+    Holds all active runtime settings.
     Mirrors the $this->settings array and $this->server fields set by
     Aseco::loadSettings() in aseco.php.
     """
@@ -88,15 +293,15 @@ class Settings:
     show_tmxrec: int = 0
     show_playtime: int = 0
     show_curtrack: int = 0
-    default_tracklist: str = 'MatchSettings.xml'
+    default_tracklist: str = 'MatchSettings.txt'
     topclans_minplayers: int = 2
     global_win_multiple: int = 1
     window_timeout: int = 12
-    adminops_file: str = 'adminops.xml'
-    bannedips_file: str = 'bannedips.xml'
-    blacklist_file: str = 'blacklist.xml'
-    guestlist_file: str = 'guestlist.xml'
-    trackhist_file: str = 'trackhist.xml'
+    adminops_file: str = 'adminops.toml'
+    bannedips_file: str = 'bannedips.toml'
+    blacklist_file: str = 'blacklist.txt'
+    guestlist_file: str = 'guestlist.txt'
+    trackhist_file: str = 'trackhist.txt'
     admin_client: str = ''
     player_client: str = ''
     default_rpoints: str = ''
@@ -139,8 +344,9 @@ class Settings:
         self.masteradmin_list: dict = {'TMLOGIN': [], 'IPADDRESS': []}
         self.admin_list: dict = {'TMLOGIN': [], 'IPADDRESS': []}
         self.operator_list: dict = {'TMLOGIN': [], 'IPADDRESS': []}
-        self.adm_abilities: list = []
-        self.op_abilities: list = []
+        self.adm_abilities: dict = {}
+        self.op_abilities: dict = {}
+        self.admin_abilities: dict = {}
 
         # Banned IPs
         self.bannedips: list = []
@@ -174,134 +380,92 @@ class Settings:
 
 def load_config(config_file: str | Path, settings: Settings) -> bool:
     """
-    Parse config.xml and populate settings.
+    Parse config.toml and populate settings.
     Returns True on success.
     """
-    data = parse_xml_file(config_file)
+    cfg_path = Path(config_file)
+    _load_dotenv(cfg_path.parent / ".env")
+    _load_dotenv(".env")
+
+    data = load_toml_file(cfg_path)
     if not data:
         logger.error('load_config: could not read/parse %s', config_file)
         return False
+    _overlay_env_from_config(data)
+    aseco = data.get('aseco', {})
+    tmserver = data.get('tmserver', {})
+
+    settings.chat_colors = {}
+    settings.chat_messages = {}
+
+    masteradmins = data.get('masteradmins', {}) or aseco.get('masteradmins', {}) or {}
+    logins = list(masteradmins.get('tmlogin', []) or [])
+    ip_addrs = list(masteradmins.get('ipaddress', []) or [])
+    while len(ip_addrs) < len(logins):
+        ip_addrs.append('')
+    settings.masteradmin_list = {
+        'TMLOGIN': logins,
+        'IPADDRESS': ip_addrs,
+    }
+
+    settings.lock_password = _env("LOCK_PASSWORD") or str(aseco.get('lock_password', ''))
+    settings.server_login = _env("TM_LOGIN") or str(tmserver.get('login', 'SuperAdmin'))
+    settings.server_password = _env("TM_PASSWORD") or str(tmserver.get('password', 'SuperAdmin'))
+    settings.server_port = settings._int(_env("TM_PORT") or tmserver.get('port', 5000))
+    settings.server_ip = _env("TM_IP") or str(tmserver.get('ip', '127.0.0.1'))
+    settings.server_timeout = settings._int(_env("TM_TIMEOUT") or tmserver.get('timeout', 10))
+
+    extra_masteradmins = [x.strip() for x in (_env("MASTERADMIN_LOGINS") or "").split(",") if x.strip()]
+    for login in extra_masteradmins:
+        if login not in settings.masteradmin_list['TMLOGIN']:
+            settings.masteradmin_list['TMLOGIN'].append(login)
+            settings.masteradmin_list['IPADDRESS'].append('')
 
     try:
-        root = data.get('SETTINGS', {})
-        aseco = (root.get('ASECO') or [{}])[0]
-        tmserver = (root.get('TMSERVER') or [{}])[0]
-    except (KeyError, IndexError, TypeError) as e:
-        logger.error('load_config: unexpected structure in %s: %s', config_file, e)
-        return False
+        from pyxaseco.message_loader import overlay_colors, overlay_core
+        overlay_colors(settings, cfg_path.parent)
+        overlay_core(settings, cfg_path.parent)
+    except Exception as exc:
+        logger.warning('load_config: messages config overlay failed: %s', exc)
 
-    g = settings._get  # shorthand
+    try:
+        from pyxaseco.settings_loader import overlay_server
+        overlay_server(settings, cfg_path.parent)
+    except Exception as exc:
+        logger.warning('load_config: settings config overlay failed: %s', exc)
 
-    # -- ASECO block --
-    raw_colors = aseco.get('COLORS', [{}])[0] if aseco.get('COLORS') else {}
-    
-    settings.chat_colors = {
-        key.lower(): value
-        for key, value in raw_colors.items()
-    }
-    
-    raw_msgs = aseco.get('MESSAGES', [{}])[0] if aseco.get('MESSAGES') else {}
-    
-    settings.chat_messages = {
-        key.upper(): value
-        for key, value in raw_msgs.items()
-    }
-
-    ma = aseco.get('MASTERADMINS', [{}])[0] if aseco.get('MASTERADMINS') else {}
-    settings.masteradmin_list = {
-        'TMLOGIN':   ma.get('TMLOGIN', []),
-        'IPADDRESS': ma.get('IPADDRESS', []),
-    }
-    # Fill IPADDRESS list if absent
-    cnt = len(settings.masteradmin_list['TMLOGIN'])
-    if not settings.masteradmin_list['IPADDRESS'] and cnt:
-        settings.masteradmin_list['IPADDRESS'] = [''] * cnt
-
-    settings.lock_password           = g(aseco, 'LOCK_PASSWORD', '')
-    settings.cheater_action          = settings._int(g(aseco, 'CHEATER_ACTION', 0))
-    settings.script_timeout          = settings._int(g(aseco, 'SCRIPT_TIMEOUT', 3600))
-    settings.show_min_recs           = settings._int(g(aseco, 'SHOW_MIN_RECS', 1))
-    settings.show_recs_before        = settings._int(g(aseco, 'SHOW_RECS_BEFORE', 0))
-    settings.show_recs_after         = settings._int(g(aseco, 'SHOW_RECS_AFTER', 0))
-    settings.show_tmxrec             = settings._int(g(aseco, 'SHOW_TMXREC', 0))
-    settings.show_playtime           = settings._int(g(aseco, 'SHOW_PLAYTIME', 0))
-    settings.show_curtrack           = settings._int(g(aseco, 'SHOW_CURTRACK', 0))
-    settings.default_tracklist       = g(aseco, 'DEFAULT_TRACKLIST', 'MatchSettings.xml')
-    settings.topclans_minplayers     = settings._int(g(aseco, 'TOPCLANS_MINPLAYERS', 2))
-    settings.global_win_multiple     = max(1, settings._int(g(aseco, 'GLOBAL_WIN_MULTIPLE', 1)))
-    settings.window_timeout          = settings._int(g(aseco, 'WINDOW_TIMEOUT', 12))
-    settings.adminops_file           = g(aseco, 'ADMINOPS_FILE', 'adminops.xml')
-    settings.bannedips_file          = g(aseco, 'BANNEDIPS_FILE', 'bannedips.xml')
-    settings.blacklist_file          = g(aseco, 'BLACKLIST_FILE', 'blacklist.xml')
-    settings.guestlist_file          = g(aseco, 'GUESTLIST_FILE', 'guestlist.xml')
-    settings.trackhist_file          = g(aseco, 'TRACKHIST_FILE', 'trackhist.xml')
-    settings.admin_client            = g(aseco, 'ADMIN_CLIENT_VERSION', '')
-    settings.player_client           = g(aseco, 'PLAYER_CLIENT_VERSION', '')
-    settings.default_rpoints         = g(aseco, 'DEFAULT_RPOINTS', '')
-    settings.window_style            = g(aseco, 'WINDOW_STYLE', '')
-    settings.admin_panel             = g(aseco, 'ADMIN_PANEL', '')
-    settings.donate_panel            = g(aseco, 'DONATE_PANEL', '')
-    settings.records_panel           = g(aseco, 'RECORDS_PANEL', '')
-    settings.vote_panel              = g(aseco, 'VOTE_PANEL', '')
-    settings.welcome_msg_window      = settings._bool(g(aseco, 'WELCOME_MSG_WINDOW', 'false'))
-    settings.log_all_chat            = settings._bool(g(aseco, 'LOG_ALL_CHAT', 'false'))
-    settings.chatpmlog_times         = settings._bool(g(aseco, 'CHATPMLOG_TIMES', 'false'))
-    settings.show_recs_range         = settings._bool(g(aseco, 'SHOW_RECS_RANGE', 'false'))
-    settings.recs_in_window          = settings._bool(g(aseco, 'RECS_IN_WINDOW', 'false'))
-    settings.rounds_in_window        = settings._bool(g(aseco, 'ROUNDS_IN_WINDOW', 'false'))
-    settings.writetracklist_random   = settings._bool(g(aseco, 'WRITETRACKLIST_RANDOM', 'false'))
-    settings.help_explanation        = settings._bool(g(aseco, 'HELP_EXPLANATION', 'false'))
-    settings.lists_colornicks        = settings._bool(g(aseco, 'LISTS_COLORNICKS', 'false'))
-    settings.lists_colortracks       = settings._bool(g(aseco, 'LISTS_COLORTRACKS', 'false'))
-    settings.display_checkpoints     = settings._bool(g(aseco, 'DISPLAY_CHECKPOINTS', 'false'))
-    settings.enable_cpsspec          = settings._bool(g(aseco, 'ENABLE_CPSSPEC', 'false'))
-    settings.auto_enable_cps         = settings._bool(g(aseco, 'AUTO_ENABLE_CPS', 'false'))
-    settings.auto_enable_dedicps     = settings._bool(g(aseco, 'AUTO_ENABLE_DEDICPS', 'false'))
-    settings.auto_admin_addip        = settings._bool(g(aseco, 'AUTO_ADMIN_ADDIP', 'false'))
-    settings.afk_force_spec          = settings._bool(g(aseco, 'AFK_FORCE_SPEC', 'false'))
-    settings.clickable_lists         = settings._bool(g(aseco, 'CLICKABLE_LISTS', 'false'))
-    settings.show_rec_logins         = settings._bool(g(aseco, 'SHOW_REC_LOGINS', 'false'))
-    settings.sb_stats_panels         = settings._bool(g(aseco, 'SB_STATS_PANELS', 'false'))
-
-    # -- TMSERVER block --
-    settings.server_login    = g(tmserver, 'LOGIN', 'SuperAdmin')
-    settings.server_password = g(tmserver, 'PASSWORD', 'SuperAdmin')
-    settings.server_port     = settings._int(g(tmserver, 'PORT', 5000))
-    settings.server_ip       = g(tmserver, 'IP', '127.0.0.1')
-    settings.server_timeout  = settings._int(g(tmserver, 'TIMEOUT', 10))
-
-    logger.info('load_config: loaded %s', config_file)
+    logger.info('load_config: loaded %s', display_path(cfg_path))
     return True
 
 
 def load_adminops(path: str | Path, settings: Settings) -> bool:
     """
-    Parse adminops.xml and populate settings.admin_list, operator_list,
-    adm_abilities, op_abilities.
+    Parse adminops.toml and populate settings admin/operator lists and abilities.
     """
-    data = parse_xml_file(path)
+    data = load_toml_file(path)
     if not data:
         logger.warning('load_adminops: could not read %s', path)
         return False
+    def _extract_list(key: str) -> dict:
+        block = data.get(key, {}) or {}
+        logins = list(block.get('tmlogin', []) or [])
+        ips = list(block.get('ipaddress', []) or [])
+        while len(ips) < len(logins):
+            ips.append('')
+        return {'TMLOGIN': logins, 'IPADDRESS': ips}
 
-    root = data.get('ADMINOPS', {})
+    masters = _extract_list('masteradmins')
+    if masters['TMLOGIN'] or masters['IPADDRESS']:
+        settings.masteradmin_list = masters
+    settings.admin_list = _extract_list('admins')
+    settings.operator_list = _extract_list('operators')
 
-    def _extract_list(block_key: str) -> dict:
-        block = (root.get(block_key.upper()) or [{}])[0]
-        if not isinstance(block, dict):
-            return {'TMLOGIN': [], 'IPADDRESS': []}
-        return {
-            'TMLOGIN':   block.get('TMLOGIN', []),
-            'IPADDRESS': block.get('IPADDRESS', []),
-        }
-
-    settings.admin_list    = _extract_list('ADMINS')
-    settings.operator_list = _extract_list('OPERATORS')
-
-    abilities_block = (root.get('ABILITIES') or [{}])[0]
-    if isinstance(abilities_block, dict):
-        settings.adm_abilities = abilities_block.get('ADMIN', [])
-        settings.op_abilities  = abilities_block.get('OPERATOR', [])
+    abilities = data.get('abilities', {}) or {}
+    admin_abilities = {str(k).upper(): [bool(v)] for k, v in (abilities.get('admin', {}) or {}).items()}
+    operator_abilities = {str(k).upper(): [bool(v)] for k, v in (abilities.get('operator', {}) or {}).items()}
+    settings.adm_abilities = admin_abilities
+    settings.op_abilities = operator_abilities
+    settings.admin_abilities = {str(k).lower(): bool(v[0]) for k, v in admin_abilities.items()}
 
     logger.info('load_adminops: %d admin(s), %d operator(s)',
                 len(settings.admin_list['TMLOGIN']),
@@ -311,29 +475,31 @@ def load_adminops(path: str | Path, settings: Settings) -> bool:
 
 def load_bannedips(path: str | Path, settings: Settings) -> bool:
     """
-    Parse bannedips.xml and populate settings.bannedips.
+    Parse bannedips.toml and populate settings.bannedips.
     """
-    data = parse_xml_file(path)
+    data = load_toml_file(path)
     if not data:
         logger.warning('load_bannedips: could not read %s', path)
         return False
 
-    root = data.get('BANNEDIPS', {})
-    settings.bannedips = root.get('IPADDRESS', [])
+    settings.bannedips = list(data.get('ipaddress', []) or data.get('banned_ips', []) or [])
     logger.info('load_bannedips: %d banned IP(s)', len(settings.bannedips))
     return True
 
 
-def load_plugins_list(path: str | Path) -> list[str]:
+def load_apps_list(path: str | Path) -> list[str]:
     """
-    Parse plugins.xml and return list of plugin filenames.
+    Parse apps.toml and return the active app loadout.
     """
-    data = parse_xml_file(path)
+    data = load_toml_file(path)
     if not data:
-        logger.error('load_plugins_list: could not read %s', path)
+        logger.error('load_apps_list: could not read %s', path)
         return []
 
-    root = data.get('ASECO_PLUGINS', {})
-    plugins = root.get('PLUGIN', [])
-    logger.info('load_plugins_list: %d plugin(s) to load', len(plugins))
-    return plugins
+    root = data.get('loadout', {}) or {}
+    apps = list(root.get('enabled', []) or [])
+    logger.info('load_apps_list: %d app entry(s) to load', len(apps))
+    return apps
+
+
+

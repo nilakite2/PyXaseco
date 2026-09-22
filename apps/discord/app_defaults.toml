@@ -1,0 +1,14 @@
+[discord_webhook]
+
+[discord_webhook.config]
+
+[discord_webhook.config.discord_webhook]
+enabled = "true"
+mirror_player_chat = "true"
+mirror_server_chat = "false"
+mirror_admin_commands = "true"
+mirror_joins_leaves = "true"
+mirror_new_challenge = "true"
+mirror_warnings_errors = "true"
+strip_tm_colors = "true"
+request_timeout = "10"

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import logging
@@ -6,7 +6,6 @@ import importlib
 from datetime import datetime
 import pathlib
 from typing import TYPE_CHECKING
-import warnings
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -16,13 +15,11 @@ logger = logging.getLogger(__name__)
 _backfill_task: asyncio.Task | None = None
 
 
-def _plugin_module(name: str):
-    for mod_name in (f'pyxaseco_plugins.{name}', f'pyxaseco.plugins.{name}'):
-        try:
-            return importlib.import_module(mod_name)
-        except ImportError:
-            continue
-    raise ImportError(name)
+def _app_module(name: str):
+    ref = str(name or "").replace("\\", "/").strip("/")
+    if ref in {"service.tmx", "service/tmx"}:
+        return importlib.import_module("apps.tmx.service")
+    raise ImportError(f"Unsupported app module reference: {name}")
 
 
 def _track_uid(track: dict | None) -> str:
@@ -146,12 +143,9 @@ def _normalise_tmx_upload_date(value) -> str | None:
 async def ensure_schema(pool):
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore",
-                    message=r".*Table 'challenges_extra' already exists.*",
-                    category=Warning,
-                )
+            # Suppress "already exists" notes on MariaDB/MySQL for idempotent DDL.
+            await cur.execute("SET sql_notes = 0")
+            try:
                 await cur.execute(
                     """
                     CREATE TABLE IF NOT EXISTS `challenges_extra` (
@@ -169,6 +163,8 @@ async def ensure_schema(pool):
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                     """
                 )
+            finally:
+                await cur.execute("SET sql_notes = 1")
 
             await cur.execute("SHOW COLUMNS FROM `challenges_extra`")
             rows = await cur.fetchall()
@@ -385,7 +381,7 @@ async def _fetch_tmx_meta_for_uid(aseco: 'Aseco', uid: str) -> dict:
     if not uid:
         return {}
     try:
-        mod = _plugin_module('plugin_tmxinfo')
+        mod = _app_module('service.tmx')
         getter = getattr(mod, 'get_tmx_trackmeta_for_uid', None)
         if callable(getter):
             return await getter(aseco, uid) or {}
@@ -522,3 +518,4 @@ async def _backfill_missing_rows(aseco: 'Aseco', pool):
             )
     except Exception as exc:
         logger.warning('[ChallengesCache] Backfill failed: %s', exc)
+

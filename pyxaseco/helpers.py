@@ -13,6 +13,9 @@ import re
 import html
 from typing import TYPE_CHECKING
 
+from pyxaseco.core.command_queries import command_label, iter_commands, visible_chat_commands_for_player
+from pyxaseco.models import ChatCommand
+
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
     from pyxaseco.models import Player
@@ -189,9 +192,90 @@ ML_ID_DONATE = '6'   # Donate panel
 ML_ID_MSG    = '7'   # Messages window
 
 
+_WINDOW_MESSAGE_BUFFER_LEN = 21
+_WINDOW_MESSAGE_LINE_LEN = 800
+_WINDOW_MESSAGE_WINDOW_LEN = 5
+_window_message_buffer: list[str] = []
+
+
 def _esc(text: str) -> str:
     """HTML-escape text for ManiaLink XML."""
     return html.escape(validate_utf8(str(text)))
+
+
+def configure_window_message_history(*, buffer_len: int | None = None,
+                                     line_len: int | None = None,
+                                     window_len: int | None = None) -> None:
+    """Adjust shared popup-message history sizes used by send_window_message()."""
+    global _WINDOW_MESSAGE_BUFFER_LEN, _WINDOW_MESSAGE_LINE_LEN, _WINDOW_MESSAGE_WINDOW_LEN
+
+    if buffer_len is not None:
+        _WINDOW_MESSAGE_BUFFER_LEN = max(1, int(buffer_len))
+    if line_len is not None:
+        _WINDOW_MESSAGE_LINE_LEN = max(1, int(line_len))
+    if window_len is not None:
+        _WINDOW_MESSAGE_WINDOW_LEN = max(1, int(window_len))
+
+    if len(_window_message_buffer) > _WINDOW_MESSAGE_BUFFER_LEN:
+        del _window_message_buffer[:-_WINDOW_MESSAGE_BUFFER_LEN]
+
+
+def get_window_message_buffer() -> list[str]:
+    """Return a copy of the shared popup-message history buffer."""
+    return list(_window_message_buffer)
+
+
+async def _display_window_message_history(aseco: 'Aseco', messages: list[str], timeout: int) -> None:
+    if not messages:
+        return
+
+    count = len(messages)
+    xml = (
+        f'<manialink id="{ML_ID_MSG}"><frame posn="-49 43.5 0">'
+        f'<quad sizen="93 {1.5 + count * 2.5}" style="Bgs1" substyle="NavButton"/>'
+    )
+    pos = -1.0
+    for msg in messages:
+        xml += (
+            f'<label posn="1 {pos} 1" sizen="91 1" style="TextRaceChat" '
+            f'text="{_esc(msg)}"/>'
+        )
+        pos -= 2.5
+    xml += '</frame></manialink>'
+
+    await aseco.client.query_ignore_result('SendDisplayManialinkPage', aseco.format_colors(xml), timeout, False)
+
+
+async def send_window_message(aseco: 'Aseco', message: str, scoreboard: bool) -> None:
+    """Show a short popup window and retain the message history for /msglog-style viewers."""
+    for item in str(message or '').split('\n'):
+        if item is None:
+            continue
+        text = str(item)
+        if not text:
+            continue
+
+        wrapped = '$z$s' + text
+        while len(wrapped) > _WINDOW_MESSAGE_LINE_LEN:
+            line = wrapped[:_WINDOW_MESSAGE_LINE_LEN]
+            if len(_window_message_buffer) >= _WINDOW_MESSAGE_BUFFER_LEN:
+                _window_message_buffer.pop(0)
+            _window_message_buffer.append(line)
+            wrapped = '$z$s$n' + wrapped[_WINDOW_MESSAGE_LINE_LEN:]
+        if len(_window_message_buffer) >= _WINDOW_MESSAGE_BUFFER_LEN:
+            _window_message_buffer.pop(0)
+        _window_message_buffer.append(wrapped)
+
+    if scoreboard:
+        try:
+            timeout_info = await aseco.client.query('GetChatTime') or {}
+            timeout = int(timeout_info.get('CurrentValue', 0)) + 5000
+        except Exception:
+            timeout = 10000
+    else:
+        timeout = int(getattr(getattr(aseco, 'settings', None), 'window_timeout', 10)) * 1000
+
+    await _display_window_message_history(aseco, _window_message_buffer[-_WINDOW_MESSAGE_WINDOW_LEN:], timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -245,14 +329,21 @@ def show_help(aseco: 'Aseco', player: 'Player', show_admin: bool = False,
     """
     import asyncio
 
-    cmds = {name: cmd for name, cmd in aseco._chat_commands.items()
-            if cmd.isadmin == show_admin}
+    if show_admin:
+        regs = [cmd for _name, cmd in iter_commands(aseco, is_admin=True)]
+    else:
+        regs = [cmd for _name, cmd in visible_chat_commands_for_player(aseco, player)]
+
+    cmds = {
+        command_label(cmd): ChatCommand(command_label(cmd), cmd.help_text, cmd.is_admin)
+        for cmd in regs
+    }
 
     if not disp_all:
         # Show the available command names in a single compact message.
         kind = 'admin' if show_admin else 'chat'
         head = aseco.format_colors(f'{{#interact}}Currently supported {kind} commands:\n')
-        msg  = head + ', '.join(sorted(cmds.keys()))
+        msg  = head + ', '.join(cmds.keys())
         asyncio.ensure_future(
             aseco.client.query_ignore_result(
                 'ChatSendServerMessageToLogin', msg, player.login
@@ -261,8 +352,7 @@ def show_help(aseco: 'Aseco', player: 'Player', show_admin: bool = False,
         return
 
     head = f'Currently supported {"admin" if show_admin else "chat"} commands:'
-    prefix = '$f00... ' if show_admin else '$f00/'
-    rows = [[f'{prefix}{name}', cmd.help] for name, cmd in sorted(cmds.items())]
+    rows = [[f'$f00{name}', cmd.help] for name, cmd in cmds.items()]
 
     pages_data = [rows[i:i + 15] for i in range(0, max(len(rows), 1), 15)]
     player.msgs = [[1, head, [1.3, width, 1.3 - width],
@@ -303,7 +393,7 @@ async def _event_manialink(aseco: 'Aseco', answer: list):
     Action routing:
       action  0          -> close main window
       action -4..-2, 1-4 -> page navigation for multi-page windows
-      action -6..36      -> passed through; plugin_panels.py handles the rest
+      action -6..36      -> passed through; the panel runtime handles the rest
       action outside -6..36 -> ignored (left to other handlers)
     """
     if len(answer) < 3:
@@ -327,7 +417,7 @@ async def _event_manialink(aseco: 'Aseco', answer: list):
     # Actions -4..-2 and 1-4 = multi-page navigation
     # Action 1 = "current page" (display_manialink_multi triggers this)
     if action not in (-4, -3, -2, 1, 2, 3, 4):
-        # Actions -6..-5 and 5..36 handled by plugin_panels and other plugins
+        # Actions -6..-5 and 5..36 handled by the panel runtime and other apps
         return
 
     player = aseco.server.players.get_player(login)

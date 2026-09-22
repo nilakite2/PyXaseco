@@ -1,0 +1,30 @@
+[jfreu_plugin]
+servername = "YOUR SERVER NAME"
+servertop = "$449TOP"
+autochangename = false
+infomessages = 1
+badwords = false
+badwordsban = false
+badwordsnum = 3
+badwordstime = 10
+unspecvote = true
+novote = false
+ranklimit = false
+limit = 500000
+hardlimit = 1000000
+autorank = false
+offset = 999
+autolimit = 500000
+autorankminplayers = 10
+autorankvip = false
+maxplayers = 20
+kickhirank = false
+pf = 0
+
+[jfreu_vips]
+vip_list = []
+vip_team_list = []
+
+[jfreu_bans]
+login = []
+time = []

@@ -1,0 +1,34 @@
+phase = 1
+controller = "PyXaseco_v1.2"
+
+[loadout]
+enabled = [
+"app/platform_core",
+"app/apps_manager",
+"app/discord",
+"app/admin",
+"app/help",
+"app/records_local",
+"app/records_dedimania",
+"app/players",
+"app/server_info",
+"app/social_chat",
+"app/tmx",
+"app/records_trial",
+"app/records_rpg",
+"app/jukebox",
+"app/voting",
+"app/jfreu",
+"app/best_cp_times",
+"app/bestfinishes",
+"app/checkpoint_tools",
+"app/ztrack",
+"app/platform_ui",
+"app/ui"
+]
+disabled = [
+"app/flexitime",
+"app/bestsecs",
+"app/bestruns",
+"app/bestcps"
+]

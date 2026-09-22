@@ -1,0 +1,11 @@
+[bestcps]
+
+[bestcps.config]
+number = "5"
+newline = "5"
+rows = "4"
+orientation = "0"
+
+[bestcps.config.position]
+x = "-35"
+y = "46.66"

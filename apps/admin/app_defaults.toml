@@ -1,0 +1,11 @@
+[admin]
+pm_buffer_len = 30
+pm_line_len = 40
+auto_scorepanel = true
+rounds_finishpanel = true
+
+[admin.stalker_actionids]
+enabled = true
+
+[admin.stalker_tools]
+enabled = true

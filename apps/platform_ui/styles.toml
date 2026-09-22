@@ -1,0 +1,381 @@
+# Generated from legacy XML style templates
+
+[styles]
+
+[styles.Black.window]
+style = "Bgs1InRace"
+substyle = "BgWindow1"
+blackcolor = "$ffc"
+[styles.Black.header]
+style = "Bgs1InRace"
+substyle = "BgTitle2"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.Black.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.Black.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.BlackBlur.window]
+style = "Bgs1"
+substyle = "BgWindow2"
+blackcolor = "$ffc"
+[styles.BlackBlur.header]
+style = "Bgs1InRace"
+substyle = "BgTitle2"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.BlackBlur.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.BlackBlur.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.Blue.window]
+style = "Bgs1InRace"
+substyle = "BgWindow1"
+blackcolor = "$ffc"
+[styles.Blue.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3_3"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.Blue.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.Blue.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.BlueBlur.window]
+style = "Bgs1"
+substyle = "BgWindow2"
+blackcolor = "$ffc"
+[styles.BlueBlur.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3_3"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.BlueBlur.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.BlueBlur.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.Cyan.window]
+style = "Bgs1InRace"
+substyle = "BgWindow1"
+blackcolor = "$ffc"
+[styles.Cyan.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3_2"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.Cyan.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.Cyan.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.CyanBlur.window]
+style = "Bgs1"
+substyle = "BgWindow2"
+blackcolor = "$ffc"
+[styles.CyanBlur.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3_2"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.CyanBlur.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.CyanBlur.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.DarkBlur.window]
+style = "Bgs1InRace"
+substyle = "BgWindow1"
+blackcolor = "$ffc"
+[styles.DarkBlur.header]
+style = "Bgs1InRace"
+substyle = "BgTitle2"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.DarkBlur.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.DarkBlur.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.DarkTransp.window]
+style = "Bgs1InRace"
+substyle = "BgWindow3"
+blackcolor = "$ffc"
+[styles.DarkTransp.header]
+style = "BgsPlayerCard"
+substyle = "BgPlayerName"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.DarkTransp.body]
+style = "BgsPlayerCard"
+substyle = "BgActivePlayerName"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.DarkTransp.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.Gray.window]
+style = "Bgs1InRace"
+substyle = "BgWindow1"
+blackcolor = "$ffc"
+[styles.Gray.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.Gray.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.Gray.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.GrayBlur.window]
+style = "Bgs1"
+substyle = "BgWindow2"
+blackcolor = "$ffc"
+[styles.GrayBlur.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.GrayBlur.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.GrayBlur.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.Green.window]
+style = "Bgs1InRace"
+substyle = "BgWindow1"
+blackcolor = "$ffc"
+[styles.Green.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3_4"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.Green.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.Green.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.GreenBlur.window]
+style = "Bgs1"
+substyle = "BgWindow2"
+blackcolor = "$ffc"
+[styles.GreenBlur.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3_4"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.GreenBlur.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.GreenBlur.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.LightTransp.window]
+style = "BgsPlayerCard"
+substyle = "BgRacePlayerName"
+blackcolor = "$000"
+[styles.LightTransp.header]
+style = "BgsPlayerCard"
+substyle = "BgMediaTracker"
+textsize = "0.06"
+textstyle = "TextButtonSmall"
+[styles.LightTransp.body]
+style = "BgsPlayerCard"
+substyle = "BgRacePlayerName"
+textsize = "0.04"
+textstyle = "TextChallengeNameSmall"
+[styles.LightTransp.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.LightTransp2.window]
+style = "BgsPlayerCard"
+substyle = "BgRacePlayerName"
+blackcolor = "$000"
+[styles.LightTransp2.header]
+style = "BgsPlayerCard"
+substyle = "BgMediaTracker"
+textsize = "0.06"
+textstyle = "TextButtonSmall"
+[styles.LightTransp2.body]
+style = "BgsPlayerCard"
+substyle = "BgMediaTracker"
+textsize = "0.04"
+textstyle = "TextChallengeNameSmall"
+[styles.LightTransp2.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.LightTransp3.window]
+style = "BgsPlayerCard"
+substyle = "BgRacePlayerName"
+blackcolor = "$000"
+[styles.LightTransp3.header]
+style = "BgsPlayerCard"
+substyle = "BgActivePlayerScore"
+textsize = "0.06"
+textstyle = "TextButtonSmall"
+[styles.LightTransp3.body]
+style = "BgsPlayerCard"
+substyle = "BgMediaTracker"
+textsize = "0.04"
+textstyle = "TextChallengeNameSmall"
+[styles.LightTransp3.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.Orange.window]
+style = "Bgs1InRace"
+substyle = "BgWindow1"
+blackcolor = "$ffc"
+[styles.Orange.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3_1"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.Orange.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.Orange.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.OrangeBlur.window]
+style = "Bgs1"
+substyle = "BgWindow2"
+blackcolor = "$ffc"
+[styles.OrangeBlur.header]
+style = "Bgs1InRace"
+substyle = "BgTitle3_1"
+textsize = "0.07"
+textstyle = "TextTitle2"
+[styles.OrangeBlur.body]
+style = "Bgs1InRace"
+substyle = "BgList"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.OrangeBlur.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.ProgressBar.window]
+style = "Bgs1"
+substyle = "BgWindow2"
+blackcolor = "$fff"
+[styles.ProgressBar.header]
+style = "Bgs1InRace"
+substyle = "ProgressBar"
+textsize = "0.065"
+textstyle = "TextSubTitle2"
+[styles.ProgressBar.body]
+style = "Bgs1InRace"
+substyle = "NavButtonBlink"
+textsize = "0.04"
+textstyle = "TextTitle3"
+[styles.ProgressBar.button]
+style = "BgsPlayerCard"
+substyle = "BgCardSystem"
+
+[styles.WhiteCard.window]
+style = "Bgs1InRace"
+substyle = "BgCard1"
+blackcolor = "$000"
+[styles.WhiteCard.header]
+style = "Bgs1InRace"
+substyle = "BgListLine"
+textsize = "0.06"
+textstyle = "TextButtonSmall"
+[styles.WhiteCard.body]
+style = "BgsPlayerCard"
+substyle = "BgMediaTracker"
+textsize = "0.04"
+textstyle = "TextChallengeNameSmall"
+[styles.WhiteCard.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.WhiteRect.window]
+style = "Bgs1InRace"
+substyle = "BgIconBorder"
+blackcolor = "$000"
+[styles.WhiteRect.header]
+style = "Bgs1InRace"
+substyle = "BgListLine"
+textsize = "0.06"
+textstyle = "TextButtonSmall"
+[styles.WhiteRect.body]
+style = "BgsPlayerCard"
+substyle = "BgMediaTracker"
+textsize = "0.04"
+textstyle = "TextChallengeNameSmall"
+[styles.WhiteRect.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
+
+[styles.WhiteRound.window]
+style = "Bgs1InRace"
+substyle = "BgButtonBig"
+blackcolor = "$000"
+[styles.WhiteRound.header]
+style = "BgsPlayerCard"
+substyle = "BgActivePlayerScore"
+textsize = "0.06"
+textstyle = "TextButtonSmall"
+[styles.WhiteRound.body]
+style = "Bgs1InRace"
+substyle = "NavButton"
+textsize = "0.04"
+textstyle = "TextChallengeNameSmall"
+[styles.WhiteRound.button]
+style = "Bgs1InRace"
+substyle = "NavButton"
