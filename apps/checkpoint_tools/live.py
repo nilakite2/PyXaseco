@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pyxaseco.helpers import display_manialink, safe_manialink_text, strip_sizes
+from pyxaseco.core.widget_delivery import is_score_phase
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -343,6 +344,9 @@ class _CPLive:
         self.dirty_mask = DIRTY_SLICE | DIRTY_ROWS
 
         self.stats.reset()
+        if is_score_phase(aseco):
+            await self.destroy_widget_ui(aseco)
+            return
         self.schedule_global_delivery(include_collapsed=True)
         await self.flush(aseco, force_now=True)
 
@@ -770,6 +774,7 @@ class _CPLive:
         if not self.should_render:
             return
 
+        await _send_ml_global(aseco, self.xml_empty, 0, False)
         self.should_render = False
         self.dirty_mask = 0
         self.global_due_at = None
@@ -781,7 +786,6 @@ class _CPLive:
             p.LocalDueAt = None
 
         now = _ms()
-        await _send_ml_global(aseco, self.xml_empty, 1, False)
 
         for p in self.players.values():
             p.SentHash = self.xml_empty_hash
@@ -1170,7 +1174,8 @@ async def _send_chat_global(aseco: "Aseco", msg: str):
     )
 
 async def _send_ml_logins(aseco: "Aseco", logins: str, xml: str, timeout: int = 0, hide: bool = False):
-    await aseco.client.query_ignore_result(
+    from pyxaseco.core.widget_delivery import deliver_ui
+    await deliver_ui(aseco,
         "SendDisplayManialinkPageToLogin",
         logins,
         xml,
@@ -1179,7 +1184,8 @@ async def _send_ml_logins(aseco: "Aseco", logins: str, xml: str, timeout: int = 
     )
 
 async def _send_ml_global(aseco: "Aseco", xml: str, timeout: int = 0, hide: bool = False):
-    await aseco.client.query_ignore_result(
+    from pyxaseco.core.widget_delivery import deliver_ui
+    await deliver_ui(aseco,
         "SendDisplayManialinkPage",
         xml,
         timeout,
@@ -1275,16 +1281,21 @@ def _apply_app_defaults(aseco: "Aseco"):
 
 
 async def reload_cplive_runtime(aseco: "Aseco") -> None:
+    previous_plain_nicks = PLAIN_NICKS
     _apply_app_defaults(aseco)
 
     if not isinstance(_plugin, _CPLive):
         return
 
-    for player in _plugin.players.values():
-        player.PlainNicks = PLAIN_NICKS
+    if PLAIN_NICKS != previous_plain_nicks:
+        for player in _plugin.players.values():
+            player.PlainNicks = PLAIN_NICKS
 
     _plugin.cache_static_xml()
     _plugin.update_title_bar_xml()
+    if is_score_phase(aseco):
+        await _plugin.destroy_widget_ui(aseco)
+        return
     _plugin.payload_cache = {}
     _plugin.dirty_mask = DIRTY_SLICE | DIRTY_ROWS
     _plugin.schedule_global_delivery(include_collapsed=True)
@@ -1478,7 +1489,10 @@ async def _on_begin_round(aseco: "Aseco", _p=None):
 
 async def _on_every_second(aseco: "Aseco", _p=None):
     if isinstance(_plugin, _CPLive):
-        await _plugin.flush(aseco)
+        if is_score_phase(aseco):
+            await _plugin.destroy_widget_ui(aseco)
+        else:
+            await _plugin.flush(aseco)
 
 async def chat_cplive(aseco: "Aseco", command: dict):
     global _plugin

@@ -132,7 +132,7 @@ async def time_endrace(aseco: 'Aseco', _params):
 async def chat_track(aseco: 'Aseco', command: dict):
     challenge = aseco.server.challenge
     is_stnt = aseco.server.gameinfo and aseco.server.gameinfo.mode == Gameinfo.STNT
-    name = strip_colors(challenge.name)
+    name = _tmx_linked_name(aseco, challenge)
 
     if is_stnt:
         author_score = getattr(getattr(challenge, 'gbx', None), 'author_score', 0)

@@ -21,6 +21,10 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_int, bind_app_settings
 from pyxaseco.core.config import _load_dotenv, _env
+from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy, Admission
+from pyxaseco.core.http_sessions import HttpPolicy, request_timeout
+from pyxaseco.core.external_io import read_limited
+from pyxaseco.core.aseco import PYXASECO_VERSION
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -55,6 +59,8 @@ DEDI_SETTINGS_SCHEMA = AppSettingsSchema(
 
 
 def register(aseco: 'Aseco'):
+    global _runtime_aseco
+    _runtime_aseco = aseco
     aseco.register_service(
         'service/records_dedimania',
         sys.modules[__name__],
@@ -66,7 +72,9 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onPlayerConnect',    _dedi_playerconnect)
     aseco.register_event('onPlayerDisconnect', _dedi_playerdisconnect)
     aseco.register_event('onNewChallenge',     _dedi_newchallenge)
+    aseco.register_event('onRestartChallenge', _dedi_restart)
     aseco.register_event('onEndRace',          _dedi_endrace)
+    aseco.register_event('onShutdown',         _dedi_endrace)
     aseco.register_event('onPlayerFinish',     _dedi_playerfinish)
 
 
@@ -80,7 +88,7 @@ def _auth_struct() -> dict:
         'Login':       dedi_db.get('Login', ''),
         'Password':    dedi_db.get('Password', ''),
         'Tool':        'PYXASECO',
-        'Version':     '1.2-DEV',
+        'Version':     PYXASECO_VERSION,
         'Nation':      dedi_db.get('Nation', ''),
         'Packmask':    dedi_db.get('Packmask', ''),
         'PlayersGame': True,
@@ -97,21 +105,42 @@ def _build_multicall(*calls) -> bytes:
 
 
 async def _dedi_post(payload: bytes, timeout: int = 15):
-    try:
-        import aiohttp
-        url = dedi_db.get('Url', 'http://dedimania.net:8002/Dedimania')
-        async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=timeout)) as sess:
-            async with sess.post(url, data=payload,
-                                 headers={'Content-Type': 'text/xml'}) as resp:
-                body = await resp.text(errors='replace')
-        results, _ = xmlrpc.client.loads(body)
-        if results and isinstance(results[0], list):
-            return results[0]
-        return results
-    except Exception as e:
-        logger.debug('[Dedimania] POST error: %s', e)
-        return None
+    session = _runtime_aseco.jobs.http.get('dedimania', HttpPolicy())
+    async with session.post(dedi_db.get('Url', 'http://dedimania.net:8002/Dedimania'),
+                            data=payload, headers={'Content-Type': 'text/xml'},
+                            timeout=request_timeout(timeout)) as response:
+        response.raise_for_status()
+        body = await read_limited(response, 4 * 1024 * 1024)
+    results, _ = xmlrpc.client.loads(body)
+    if results and isinstance(results[0], list):
+        return results[0]
+    return results
+
+
+def _authenticated(results):
+    auth = results[0] if isinstance(results, (list, tuple)) and results else None
+    if isinstance(auth, list) and len(auth) == 1:
+        auth = auth[0]
+    return auth is True
+
+
+async def _submit(aseco, calls, apply, *, current_map=True, key=None):
+    job = JobEnvelope.capture(aseco.capture_job_context(), {'calls': calls})
+    async def operation(envelope):
+        return await _dedi_post(_build_multicall(*envelope.payload()['calls']))
+    async def completed(result):
+        global _connected, _bad_time
+        valid = result.status == 'completed' and _authenticated(result.value)
+        if not valid:
+            _connected, _bad_time = False, time.time()
+            reason = result.failure_label if result.status != 'completed' else 'authentication rejected'
+            logger.warning('[Dedimania] Queued request unavailable (%s); reconnect deferred', reason)
+        await apply(result.value if valid else None)
+    outcome = aseco.jobs.service('dedimania', JobPolicy(deadline_seconds=120)).submit(
+        job, operation, completed, current_map=current_map, dedupe_key=key)
+    if outcome not in (Admission.ACCEPTED, Admission.DUPLICATE):
+        logger.warning('[Dedimania] Request not admitted (%s)', outcome.value)
+    return outcome
 
 
 def _extract(results, index: int):
@@ -131,6 +160,7 @@ def _extract(results, index: int):
 
 async def _dedi_init(aseco: 'Aseco', _data):
     global dedi_db, _connected, _bad_time, _last_sent, DEDI_TIMEOUT, DEDI_REFRESH
+    _connected, _bad_time, _last_sent = False, 0.0, 0.0
 
     try:
         base = pathlib.Path(getattr(aseco, '_base_dir', '.'))
@@ -191,6 +221,7 @@ async def _dedi_init(aseco: 'Aseco', _data):
             return
 
         aseco.console('************* (Dedimania) *************')
+        _record_delivery(aseco)
         await _connect(aseco)
         aseco.console('------------- (Dedimania) -------------')
         _last_sent = time.time()
@@ -200,51 +231,27 @@ async def _dedi_init(aseco: 'Aseco', _data):
 
 
 async def _connect(aseco: 'Aseco'):
-    global _connected, _bad_time
-
-    aseco.console('* Dedimania: connecting to {1} ...', dedi_db.get('Url', ''))
-
-    try:
-        payload = _build_multicall(('dedimania.ValidateAccount',))
-        results = await _dedi_post(payload)
-
-        if not results:
-            aseco.console('* Dedimania: no response from server')
-            _bad_time = time.time()
-            return
-
-        auth = results[0]
-        if isinstance(auth, list) and auth:
-            auth = auth[0]
-
+    global _bad_time
+    _bad_time = time.time()  # admission failures must not start a retry storm
+    async def apply(results):
+        global _connected, _bad_time
         validate = _extract(results, 0)
-
         if isinstance(validate, dict) and validate.get('Status'):
             _connected = True
             dedi_db['News'] = validate.get('Messages', []) or []
             aseco.console('* Dedimania: connection OK!')
-
             if dedi_db.get('LogNews'):
                 for news in dedi_db['News']:
                     if isinstance(news, dict):
-                        aseco.console(
-                            '* NEWS ({1}, {2}): {3}',
-                            dedi_db.get('Name', 'Dedimania'),
-                            news.get('Date', ''),
-                            news.get('Text', ''),
-                        )
-            return
-
-        aseco.console(
-            '* Dedimania: authentication failed: auth={1} validate={2}',
-            str(auth)[:80],
-            str(validate)[:150],
-        )
-
-    except Exception as e:
-        aseco.console('* Dedimania: connection error: {1}', str(e))
-
-    _bad_time = time.time()
+                        aseco.console('* NEWS ({1}, {2}): {3}', dedi_db.get('Name', 'Dedimania'),
+                                      news.get('Date', ''), news.get('Text', ''))
+            await _dedi_newchallenge(aseco, aseco.server.challenge, preserve_finishes=True)
+            for player in aseco.server.players.all():
+                await _dedi_playerconnect(aseco, player)
+        else:
+            _connected, _bad_time = False, time.time()
+            logger.warning('[Dedimania] Authentication unavailable/rejected; retry after configured timeout')
+    await _submit(aseco, [('dedimania.ValidateAccount',)], apply, current_map=False, key='auth')
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +260,7 @@ async def _connect(aseco: 'Aseco'):
 
 async def _dedi_update(aseco: 'Aseco', _param=None):
     global _last_sent, _connected, _bad_time
-    if not dedi_db:
+    if not dedi_db or not dedi_db.get('Login'):
         return
     if _connected:
         if _last_sent + DEDI_REFRESH < time.time():
@@ -270,16 +277,12 @@ async def _dedi_update(aseco: 'Aseco', _param=None):
 async def _announce(aseco: 'Aseco'):
     global _last_sent
     _last_sent = time.time()
-    try:
-        srv = await _server_info(aseco)
-        pls = _collect_players(aseco)
-        mode = getattr(aseco.server.gameinfo, 'mode', 1)
-        payload = _build_multicall(
-            ('dedimania.UpdateServerPlayers', 'TMF', mode, srv, pls),
-        )
-        await _dedi_post(payload, timeout=10)
-    except Exception as e:
-        logger.debug('[Dedimania] Announce error: %s', e)
+    srv, players = await _server_info(aseco), _collect_players(aseco)
+    mode = getattr(aseco.server.gameinfo, 'mode', 1)
+    async def apply(_results):
+        return
+    await _submit(aseco, [('dedimania.UpdateServerPlayers', 'TMF', mode, srv, players)],
+                  apply, current_map=False, key='announce')
 
 
 # ---------------------------------------------------------------------------
@@ -287,78 +290,49 @@ async def _announce(aseco: 'Aseco'):
 # ---------------------------------------------------------------------------
 
 async def _dedi_playerconnect(aseco: 'Aseco', player):
-    if _connected and not _is_server_login(aseco, player.login) and not _is_lan_login(player.login):
-        try:
-            payload = _build_multicall(
-                ('dedimania.PlayerArrive',
-                 'TMF',
-                 player.login,
-                 player.nickname,
-                 getattr(player, 'nation', ''),
-                 getattr(player, 'teamname', ''),
-                 getattr(player, 'ladderrank', 0),
-                 bool(getattr(player, 'isspectator', False)),
-                 bool(getattr(player, 'isofficial', False))),
-            )
-            results = await _dedi_post(payload)
+    login, nickname = str(player.login), str(player.nickname)
+    if _connected and not _is_server_login(aseco, login) and not _is_lan_login(login):
+        calls = [('dedimania.PlayerArrive', 'TMF', login, nickname,
+                  getattr(player, 'nation', ''), getattr(player, 'teamname', ''),
+                  getattr(player, 'ladderrank', 0), bool(player.isspectator),
+                  bool(getattr(player, 'isofficial', False)))]
+        async def apply(results):
+            if aseco.server.players.get_player(login) is not player:
+                return
             data = _extract(results, 0)
-
-            if isinstance(data, dict):
-                if dedi_db.get('RecsValid'):
-                    for rec in dedi_db.get('Challenge', {}).get('Records', []):
-                        if isinstance(rec, dict) and rec.get('Login') == player.login:
-                            rec['NickName'] = player.nickname
-                            break
-
-                player.dedirank = int(
-                    data.get('MaxRank', dedi_db.get('ServerMaxRank', dedi_db.get('MaxRank', 30)))
-                    or dedi_db.get('ServerMaxRank', dedi_db.get('MaxRank', 30))
-                )
-
-                status = int(data.get('Status', 0) or 0)
-                if status % 2 == 1:
-                    if player.login not in dedi_db['BannedLogins']:
-                        dedi_db['BannedLogins'].append(player.login)
-
-                    msg_tpl = dedi_db.get('Messages', {}).get(
-                        'BANNED_LOGIN',
-                        ['{#server}>> {#highlite}{1}{#dedimsg} ({2}) is banned on Dedimania - finishes ignored!']
-                    )
-                    msg = msg_tpl[0] if isinstance(msg_tpl, list) else str(msg_tpl)
-                    msg = msg.replace('{1}', player.nickname).replace('{2}', player.login)
-                    await aseco.client.query_ignore_result('ChatSendServerMessage', aseco.format_colors(msg))
-                    aseco.console('[Dedimania] player {1} is banned - finishes ignored!', player.login)
-
-        except Exception as e:
-            logger.debug('[Dedimania] PlayerArrive error for %s: %s', player.login, e)
-
+            if not isinstance(data, dict):
+                return
+            player.dedirank = int(data.get('MaxRank') or dedi_db.get('ServerMaxRank', 30))
+            if int(data.get('Status', 0) or 0) % 2 and login not in dedi_db['BannedLogins']:
+                dedi_db['BannedLogins'].append(login)
+                template = dedi_db.get('Messages', {}).get('BANNED_LOGIN',
+                    ['{#server}>> {#highlite}{1}{#dedimsg} ({2}) is banned on Dedimania - finishes ignored!'])
+                message = (template[0] if isinstance(template, list) else str(template)).replace('{1}', nickname).replace('{2}', login)
+                await aseco.client.query_ignore_result('ChatSendServerMessage', aseco.format_colors(message))
+        await _submit(aseco, calls, apply, current_map=False)
     if dedi_db.get('ShowWelcome') and dedi_db.get('Welcome'):
-        msg = '{#server}> ' + dedi_db['Welcome']
-        msg = msg.replace('{br}', '\n')
-        msg = aseco.format_colors(msg)
-        await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', msg, player.login)
+        await aseco.client.query_ignore_result('ChatSendServerMessageToLogin',
+            aseco.format_colors('{#server}> ' + dedi_db['Welcome'].replace('{br}', '\n')), login)
 
 
 async def _dedi_playerdisconnect(aseco: 'Aseco', player):
-    if _connected and not _is_server_login(aseco, player.login) and not _is_lan_login(player.login):
-        try:
-            payload = _build_multicall(
-                ('dedimania.PlayerLeave', 'TMF', player.login),
-            )
-            await _dedi_post(payload, timeout=10)
-        except Exception as e:
-            logger.debug('[Dedimania] PlayerLeave error for %s: %s', player.login, e)
-
-    if player.login in dedi_db.get('BannedLogins', []):
-        dedi_db['BannedLogins'].remove(player.login)
+    login = str(player.login)
+    if _connected and not _is_server_login(aseco, login) and not _is_lan_login(login):
+        async def apply(_results):
+            return
+        await _submit(aseco, [('dedimania.PlayerLeave', 'TMF', login)], apply, current_map=False)
+    if login in dedi_db.get('BannedLogins', []):
+        dedi_db['BannedLogins'].remove(login)
 
 
 # ---------------------------------------------------------------------------
 # New challenge
 # ---------------------------------------------------------------------------
 
-async def _dedi_newchallenge(aseco: 'Aseco', challenge):
+async def _dedi_newchallenge(aseco: 'Aseco', challenge, *, preserve_finishes=False):
     dedi_db['Challenge'] = {}
+    if not preserve_finishes:
+        dedi_db['CapturedFinishes'] = {}
     dedi_db['RecsValid'] = False
     dedi_db['TrackValid'] = False
     dedi_db['ServerMaxRank'] = int(dedi_db.get('MaxRank', 30) or 30)
@@ -391,172 +365,122 @@ async def _dedi_newchallenge(aseco: 'Aseco', challenge):
         await aseco.release_event('onDediRecsLoaded', False)
         return
 
-    try:
-        srv = await _server_info(aseco)
-        pls = _collect_players(aseco)
-        payload = _build_multicall(
-            ('dedimania.CurrentChallenge',
-             challenge.uid, challenge.name, challenge.environment,
-             challenge.author, 'TMF', mode, srv, dedi_db['MaxRank'], pls),
-        )
-        results = await _dedi_post(payload)
+    srv, players = await _server_info(aseco), _collect_players(aseco)
+    calls = [('dedimania.CurrentChallenge', challenge.uid, challenge.name, challenge.environment,
+              challenge.author, 'TMF', mode, srv, dedi_db['MaxRank'], players)]
+    async def apply(results):
         data = _extract(results, 0)
-
-        if data and isinstance(data, dict):
-            dedi_db['Challenge'] = data
-            dedi_db['RecsValid'] = True
-            if 'ServerMaxRecords' in data:
-                dedi_db['ServerMaxRank'] = int(data['ServerMaxRecords'])
-                dedi_db['MaxRank'] = int(data['ServerMaxRecords'])
-            for pl in aseco.server.players.all():
-                if not _is_server_login(aseco, pl.login) and not _is_lan_login(pl.login):
-                    try:
-                        pl.dedirank = int(dedi_db['ServerMaxRank'])
-                    except Exception:
-                        pass
-            for rec in dedi_db['Challenge'].get('Records', []):
-                if isinstance(rec, dict):
-                    rec['NickName'] = rec.get('NickName', '').replace('\n', '')
-            if dedi_db.get('ShowRecsBefore', 1) > 0:
-                await _show_recs(aseco, challenge, before=True)
-            await aseco.release_event('onDediRecsLoaded', True)
+        if (not isinstance(data, dict) or not isinstance(data.get('Records'), list)
+                or 'faultCode' in data):
+            await aseco.release_event('onDediRecsLoaded', False)
             return
-
-        logger.debug('[Dedimania] Bad CurrentChallenge response: %s', str(data)[:200])
-
-    except Exception as e:
-        logger.debug('[Dedimania] NewChallenge error: %s', e)
-
-    await aseco.release_event('onDediRecsLoaded', False)
-
-
-def _get_rec_slice(recs: list[dict], show_min: int) -> tuple[int, list[dict]]:
-    """
-    Return (start_rank, slice_records), where start_rank is 1-based.
-    If ShowRecsRange is disabled, just return the top N.
-    If enabled, try to show a centered range around the best newly-improved record.
-    """
-    if not recs:
-        return 1, []
-
-    show_min = max(1, int(show_min or 1))
-
-    if not dedi_db.get('ShowRecsRange', True):
-        return 1, recs[:show_min]
-
-    focus_idx = None
-    for idx, rec in enumerate(recs):
-        if isinstance(rec, dict) and rec.get('NewBest'):
-            focus_idx = idx
-            break
-
-    if focus_idx is None:
-        return 1, recs[:show_min]
-
-    half = show_min // 2
-    start = max(0, focus_idx - half)
-    end = start + show_min
-
-    if end > len(recs):
-        end = len(recs)
-        start = max(0, end - show_min)
-
-    return start + 1, recs[start:end]
+        # Finishes captured while the lookup/authentication was pending are newer
+        # than the remote snapshot; keep their times and checkpoint arrays.
+        records = {rec['Login']: dict(rec) for rec in data['Records']
+                   if isinstance(rec, dict) and rec.get('Login')}
+        for login, finish in dedi_db.get('CapturedFinishes', {}).items():
+            previous = records.get(login)
+            if previous is None or finish['Best'] < int(previous.get('Best') or 0):
+                player = aseco.server.players.get_player(login)
+                records[login] = {**(previous or {}), 'Login': login,
+                                 'NickName': finish.get('NickName') or getattr(player, 'nickname', login),
+                                 'Best': finish['Best'], 'NewBest': True,
+                                 'Checks': [int(cp) for cp in finish['Checks'].split(',') if cp]}
+        data['Records'] = sorted(records.values(), key=lambda rec: rec['Best'])
+        dedi_db['Challenge'], dedi_db['RecsValid'] = data, True
+        dedi_db['ServerMaxRank'] = int(data.get('ServerMaxRecords') or dedi_db.get('MaxRank', 30))
+        dedi_db['MaxRank'] = dedi_db['ServerMaxRank']
+        for player in aseco.server.players.all():
+            if not _is_server_login(aseco, player.login) and not _is_lan_login(player.login):
+                player.dedirank = dedi_db['ServerMaxRank']
+        for rec in data.get('Records', []):
+            rec['NickName'] = str(rec.get('NickName', '')).replace('\n', '')
+        if dedi_db.get('ShowRecsBefore', 1) > 0:
+            await _show_recs(aseco, challenge, before=True)
+        await aseco.release_event('onDediRecsLoaded', True)
+    await _submit(aseco, calls, apply, key='current')
 
 
 async def _show_recs(aseco: 'Aseco', challenge, before: bool = True):
-    recs = dedi_db.get('Challenge', {}).get('Records', [])
-    msgs = dedi_db.get('Messages', {}) or {}
+    from .commands import show_dedirecs
 
-    from pyxaseco.helpers import format_time, strip_colors
-
-    name = strip_colors(getattr(challenge, 'name', ''))
-    show_min = int(dedi_db.get('ShowMinRecs', 8) or 8)
-    when_word = 'before' if before else 'after'
-
-    if not recs:
-        tpl = msgs.get(
-            'RANKING_NONE',
-            ['{#server}>> {#dedimsg}Dedimania Record rankings on {#highlite}{1}{#dedimsg} {2} this round: no records!']
-        )
-        header = tpl[0] if isinstance(tpl, list) else str(tpl)
-        header = header.replace('{1}', name).replace('{2}', when_word)
-        await aseco.client.query_ignore_result('ChatSendServerMessage', aseco.format_colors(header))
-        return
-
-    tpl = msgs.get(
-        'RANKING',
-        ['{#server}>> {#dedimsg}Dedimania Record rankings on {#highlite}{1}{#dedimsg} {2} this round:']
+    mode = 1 if before else 3
+    await show_dedirecs(
+        aseco,
+        getattr(challenge, 'name', ''),
+        getattr(challenge, 'uid', ''),
+        dedi_db.get('Challenge', {}).get('Records', []),
+        None,
+        mode,
+        0,
     )
-    header = tpl[0] if isinstance(tpl, list) else str(tpl)
-    header = header.replace('{1}', name).replace('{2}', when_word)
-
-    start_rank, shown_recs = _get_rec_slice(recs, show_min)
-
-    parts = []
-    rank_no = start_rank
-    for rec in shown_recs:
-        if not isinstance(rec, dict):
-            rank_no += 1
-            continue
-
-        who = rec.get('NickName', rec.get('Login', '?')) if dedi_db.get('ShowRecLogins') else rec.get('Login', '?')
-        who = strip_colors(str(who)).replace('\n', '').replace('\r', '')
-        score = int(rec.get('Best', 0) or 0)
-
-        part = f'{{#rank}}{rank_no}.{{#dedirec}}{who}{{#dedirec}} [{{#highlite}}{format_time(score)}{{#dedirec}}]'
-        if rec.get('NewBest'):
-            part = f'{{#highlite}}>> {{#dedirec}}{part}'
-        parts.append(part)
-        rank_no += 1
-
-    await aseco.client.query_ignore_result('ChatSendServerMessage', aseco.format_colors(header))
-    if parts:
-        await aseco.client.query_ignore_result('ChatSendServerMessage', aseco.format_colors(' '.join(parts)))
 
 # ---------------------------------------------------------------------------
 # End race
 # ---------------------------------------------------------------------------
 
+async def _dedi_restart(aseco, _param):
+    await _dedi_endrace(aseco, None)
+    await _dedi_newchallenge(aseco, aseco.server.challenge)
+
+
 async def _dedi_endrace(aseco: 'Aseco', _data):
-    if not _connected or not dedi_db.get('TrackValid') or not dedi_db.get('RecsValid'):
+    if not dedi_db.get('TrackValid'):
         return
     records = dedi_db.get('Challenge', {}).get('Records', [])
-    times = [
-        {'Login': r['Login'], 'Best': r['Best'],
-         'Checks': ','.join(str(c) for c in r.get('Checks', []))}
-        for r in records
-        if isinstance(r, dict) and r.get('NewBest') and r.get('Best', 0) >= DEDI_MIN_TIME
-    ]
+    times = [{'Login': r['Login'], 'Best': r['Best'],
+              'Checks': ','.join(str(c) for c in r.get('Checks', []))}
+             for r in records if isinstance(r, dict) and r.get('NewBest')
+             and r.get('Best', 0) >= DEDI_MIN_TIME]
+    captured = dict(dedi_db.get('CapturedFinishes', {}))
+    by_login = {row['Login']: row for row in times}
+    for login, row in captured.items():
+        if row['Best'] >= DEDI_MIN_TIME and (login not in by_login or row['Best'] < by_login[login]['Best']):
+            by_login[login] = {key: row[key] for key in ('Login', 'Best', 'Checks')}
+    times = list(by_login.values())
     if not times:
         return
-    times.sort(key=lambda x: x['Best'])
-    try:
-        ch   = aseco.server.challenge
-        mode = getattr(aseco.server.gameinfo, 'mode', 0)
-        nc   = len(times[0].get('Checks', '').split(',')) if times else 0
-        payload = _build_multicall(
-            ('dedimania.ChallengeRaceTimes',
-             ch.uid, ch.name, ch.environment, ch.author,
-             'TMF', mode, nc, dedi_db['MaxRank'], times),
-        )
-        results = await _dedi_post(payload)
-        data = _extract(results, 0)
-        if data and isinstance(data, dict):
-            dedi_db['Results'] = data
+    times.sort(key=lambda row: row['Best'])
+    ch = aseco.server.challenge
+    calls = [('dedimania.ChallengeRaceTimes', ch.uid, ch.name, ch.environment, ch.author,
+              'TMF', aseco.server.gameinfo.mode, len(times[0]['Checks'].split(',')),
+              dedi_db['MaxRank'], times)]
+    await _record_delivery(aseco).retain({'calls': calls})
+    dedi_db['CapturedFinishes'] = {}
+    for record in records:
+        record['NewBest'] = False
 
-            new_records = data.get('Records', [])
-            for rec in new_records:
-                if isinstance(rec, dict):
-                    rec['NickName'] = rec.get('NickName', '').replace('\n', '')
 
-            if isinstance(dedi_db.get('Challenge'), dict):
-                dedi_db['Challenge']['Records'] = list(new_records)
-
-            if new_records and dedi_db.get('ShowRecsAfter', 1) > 0:
-                await _show_recs(aseco, ch, before=False)
-    except Exception as e:
-        logger.debug('[Dedimania] EndRace error: %s', e)
+def _record_delivery(aseco):
+    from pyxaseco.core.retained_delivery import PreparationDeferred, delivery
+    def ready():
+        return _connected
+    async def prepare(data):
+        if not ready():
+            raise PreparationDeferred('Dedimania authentication is not ready')
+        return data
+    async def send(data):
+        results = await _dedi_post(_build_multicall(*data['calls']))
+        reply = _extract(results, 0)
+        if (not _authenticated(results) or not isinstance(reply, dict)
+                or not isinstance(reply.get('Records'), list) or 'faultCode' in reply):
+            raise RuntimeError('Unconfirmed Dedimania result')
+        return reply
+    async def apply(_data, response, current):
+        if not current:
+            return
+        dedi_db['Results'] = response
+        records = response.get('Records', [])
+        for rec in records:
+            rec['NickName'] = str(rec.get('NickName', '')).replace('\n', '')
+        dedi_db['Challenge']['Records'] = records
+        if records and dedi_db.get('ShowRecsAfter', 1) > 0:
+            await _show_recs(aseco, aseco.server.challenge, before=False)
+    async def failed(_result):
+        global _connected, _bad_time
+        if _connected:
+            _connected, _bad_time = False, time.time()
+    return delivery(aseco, 'dedimania', send, apply, prepare=prepare, on_failure=failed, ready=ready)
 
 
 # ---------------------------------------------------------------------------
@@ -577,8 +501,12 @@ async def _dedi_playerfinish(aseco: 'Aseco', finish_item):
         login = player.login
         score = finish_item.score
         is_new = getattr(finish_item, 'new', False)
+        _uid = getattr(getattr(finish_item, 'challenge', None), 'uid', '')
 
-    if not dedi_db.get('RecsValid') or score == 0:
+    if isinstance(_uid, str) and _uid and _uid != aseco.server.challenge.uid:
+        return
+
+    if score == 0 or not dedi_db.get('TrackValid'):
         return
 
     mode = getattr(aseco.server.gameinfo, 'mode', 0)
@@ -612,6 +540,16 @@ async def _dedi_playerfinish(aseco: 'Aseco', finish_item):
         cp = None
 
     from pyxaseco.helpers import format_time, strip_colors
+
+    checks = list(getattr(cp, 'curr_cps', [])) if cp else []
+    captured = dedi_db.setdefault('CapturedFinishes', {})
+    old = captured.get(login)
+    if old is None or score < old['Best']:
+        captured[login] = {'Login': login, 'Best': score,
+                           'Checks': ','.join(str(c) for c in checks),
+                           'NickName': str(player.nickname)}
+    if not dedi_db.get('RecsValid'):
+        return
 
     dedi_recs = dedi_db.get('Challenge', {}).get('Records', [])
     if not isinstance(dedi_recs, list):

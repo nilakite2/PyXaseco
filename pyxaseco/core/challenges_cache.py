@@ -5,15 +5,13 @@ import logging
 import importlib
 from datetime import datetime
 import pathlib
+from pyxaseco.core.background_jobs import JobPolicy
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
 logger = logging.getLogger(__name__)
-
-_backfill_task: asyncio.Task | None = None
-
 
 def _app_module(name: str):
     ref = str(name or "").replace("\\", "/").strip("/")
@@ -236,26 +234,26 @@ async def get_metadata_map(pool) -> dict[str, dict]:
 
 
 async def schedule_backfill(aseco: 'Aseco', pool):
-    global _backfill_task
-
-    if _backfill_task and not _backfill_task.done():
+    from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy
+    from pyxaseco.core.playlist import playlist
+    tracks = await _paged_challenge_list(aseco)
+    source = playlist(aseco)
+    revision = source.revision
+    # The playlist snapshot is captured on the ordered lane; no mutable
+    # current-map state is needed by the low-priority enrichment worker.
+    job = JobEnvelope.capture(aseco.capture_job_context(), {'track_count': len(tracks)})
+    async def operation(envelope):
+        await _backfill_missing_rows(aseco, pool, tracks,
+                                     guard=lambda: source.revision == revision)
+    async def apply(_result):
         return
+    aseco.jobs.service('metadata_backfill', JobPolicy(capacity=1, deadline_seconds=300)).submit(
+        job, operation, apply, current_map=False, dedupe_key='backfill')
 
-    _backfill_task = asyncio.create_task(_backfill_missing_rows(aseco, pool))
 
-
-async def _paged_challenge_list(aseco: 'Aseco', batch_size: int = 500) -> list[dict]:
-    tracks: list[dict] = []
-    offset = 0
-    while True:
-        chunk = await aseco.client.query('GetChallengeList', batch_size, offset) or []
-        if not chunk:
-            break
-        tracks.extend(chunk)
-        if len(chunk) < batch_size:
-            break
-        offset += len(chunk)
-    return tracks
+async def _paged_challenge_list(aseco: 'Aseco', batch_size=500):
+    from pyxaseco.core.playlist import playlist
+    return await playlist(aseco).snapshot()
 
 
 async def _fetch_challenge_info_times(aseco: 'Aseco', filename: str) -> tuple[int, int]:
@@ -305,6 +303,8 @@ async def upsert_for_track(
     repair_added_at: bool = False,
     tmx_id: int | None = None,
     tmx_upload_date=None,
+    guard=None,
+    fetch_tmx_meta: bool = True,
 ):
     uid = (uid or _track_uid(track)).strip()
     if not uid:
@@ -329,7 +329,7 @@ async def upsert_for_track(
 
     added_at = added_at or _file_modified_at(aseco, filename) or datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    if not tmx_id or not tmx_upload_date:
+    if fetch_tmx_meta and (not tmx_id or not tmx_upload_date):
         tmx_meta = await _fetch_tmx_meta_for_uid(aseco, uid)
         if tmx_meta:
             tmx_id = tmx_id or int(tmx_meta.get('id', 0) or 0) or None
@@ -339,6 +339,8 @@ async def upsert_for_track(
 
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
+            if guard is not None and not guard():
+                return
             if challenge_id <= 0:
                 challenge_id = await _ensure_challenge_row(
                     cur,
@@ -349,6 +351,9 @@ async def upsert_for_track(
                 )
 
             if challenge_id <= 0:
+                return
+
+            if guard is not None and not guard():
                 return
 
             await cur.execute(
@@ -374,15 +379,16 @@ async def upsert_for_track(
                     1 if repair_added_at else 0,
                 ),
             )
+            return True
 
 
-async def _fetch_tmx_meta_for_uid(aseco: 'Aseco', uid: str) -> dict:
+async def _fetch_tmx_meta_for_uid(aseco: 'Aseco', uid: str, *, wait=False) -> dict:
     uid = (uid or '').strip()
     if not uid:
         return {}
     try:
         mod = _app_module('service.tmx')
-        getter = getattr(mod, 'get_tmx_trackmeta_for_uid', None)
+        getter = getattr(mod, '_load_tmx_trackmeta_for_uid' if wait else 'get_tmx_trackmeta_for_uid', None)
         if callable(getter):
             return await getter(aseco, uid) or {}
     except Exception:
@@ -406,12 +412,11 @@ async def remove_for_uid(pool, uid: str):
                 await cur.execute('DELETE FROM challenges_extra WHERE Challenge_Id=%s', (challenge_id,))
 
 
-async def _backfill_missing_rows(aseco: 'Aseco', pool):
+async def _backfill_missing_rows(aseco: 'Aseco', pool, tracks, *, guard=lambda: True):
     try:
         await asyncio.sleep(2.0)
 
-        tracks = await _paged_challenge_list(aseco)
-        if not tracks:
+        if not tracks or not guard():
             return
 
         async with pool.acquire() as conn:
@@ -439,75 +444,100 @@ async def _backfill_missing_rows(aseco: 'Aseco', pool):
                     for row in (extra_rows or [])
                 }
 
-            inserted = 0
-            enriched = 0
-            repaired_added_at = 0
-            for track in tracks:
-                uid = _track_uid(track)
-                if not uid:
-                    continue
+        inserted = 0
+        enriched = 0
+        repaired_added_at = 0
+        for track in tracks:
+            if not guard():
+                return
+            uid = _track_uid(track)
+            if not uid:
+                continue
 
-                row = by_uid.get(uid)
-                if not row:
-                    async with conn.cursor() as cur:
-                        challenge_id = await _ensure_challenge_row(
-                            cur,
-                            uid=uid,
-                            name=str(track.get('Name', '') or ''),
-                            author=str(track.get('Author', '') or ''),
-                            environment=str(track.get('Environnement', '') or track.get('Environment', '') or ''),
-                        )
-                    row = {
-                        'id': challenge_id,
-                        'name': str(track.get('Name', '') or ''),
-                        'author': str(track.get('Author', '') or ''),
-                        'environment': str(track.get('Environnement', '') or track.get('Environment', '') or ''),
-                    }
-                    by_uid[uid] = row
-
-                row_meta = extra_meta.get(row['id'])
-                needs_insert = row_meta is None
-                needs_tmx_enrich = bool(
-                    row_meta is not None and
-                    (not row_meta.get('tmx_id') or not row_meta.get('tmx_upload_date'))
-                )
-                file_added_at = _file_modified_at(aseco, _track_filename(track))
-                existing_added_at = _normalise_tmx_upload_date(row_meta.get('added_at')) if row_meta else None
-                needs_added_at_repair = bool(
-                    row_meta is not None and
-                    file_added_at and
-                    existing_added_at != file_added_at
-                )
-                if not needs_insert and not needs_tmx_enrich and not needs_added_at_repair:
-                    continue
-
-                tmx_meta = await _fetch_tmx_meta_for_uid(aseco, uid) if (needs_insert or needs_tmx_enrich) else {}
-
-                await upsert_for_track(
-                    aseco,
-                    pool,
-                    track=track,
-                    challenge_id=row['id'],
-                    uid=uid,
-                    name=row['name'],
-                    author=row['author'],
-                    environment=row['environment'],
-                    added_at=file_added_at,
-                    repair_added_at=needs_added_at_repair,
-                    tmx_id=int(tmx_meta.get('id', 0) or 0) or None,
-                    tmx_upload_date=tmx_meta.get('uploaded'),
-                )
-                extra_meta[row['id']] = {
-                    'added_at': file_added_at or existing_added_at,
-                    'tmx_id': int(tmx_meta.get('id', 0) or 0),
-                    'tmx_upload_date': tmx_meta.get('uploaded'),
+            row = by_uid.get(uid)
+            if not row:
+                async with pool.acquire() as conn, conn.cursor() as cur:
+                    if not guard():
+                        return
+                    challenge_id = await _ensure_challenge_row(
+                        cur,
+                        uid=uid,
+                        name=str(track.get('Name', '') or ''),
+                        author=str(track.get('Author', '') or ''),
+                        environment=str(track.get('Environnement', '') or track.get('Environment', '') or ''),
+                    )
+                row = {
+                    'id': challenge_id,
+                    'name': str(track.get('Name', '') or ''),
+                    'author': str(track.get('Author', '') or ''),
+                    'environment': str(track.get('Environnement', '') or track.get('Environment', '') or ''),
                 }
-                if needs_insert:
-                    inserted += 1
-                if needs_tmx_enrich:
-                    enriched += 1
-                if needs_added_at_repair:
-                    repaired_added_at += 1
+                by_uid[uid] = row
+
+            row_meta = extra_meta.get(row['id'])
+            needs_insert = row_meta is None
+            needs_tmx_enrich = bool(
+                row_meta is not None and
+                (not row_meta.get('tmx_id') or not row_meta.get('tmx_upload_date'))
+            )
+            file_added_at = _file_modified_at(aseco, _track_filename(track))
+            existing_added_at = _normalise_tmx_upload_date(row_meta.get('added_at')) if row_meta else None
+            needs_added_at_repair = bool(
+                row_meta is not None and
+                file_added_at and
+                existing_added_at != file_added_at
+            )
+            if not needs_insert and not needs_tmx_enrich and not needs_added_at_repair:
+                continue
+
+            service = aseco.jobs.service('tmx_metadata', JobPolicy(deadline_seconds=60))
+            while service.outstanding:
+                await asyncio.sleep(0.1)
+                if not guard():
+                    return
+            tmx_meta = await _fetch_tmx_meta_for_uid(aseco, uid, wait=True) if (needs_insert or needs_tmx_enrich) else {}
+
+            if not guard():
+                return
+
+            previous_id = int((row_meta or {}).get('tmx_id') or 0)
+            previous_upload = _normalise_tmx_upload_date((row_meta or {}).get('tmx_upload_date'))
+            resolved_id = int(tmx_meta.get('id') or previous_id)
+            resolved_upload = _normalise_tmx_upload_date(tmx_meta.get('uploaded')) or previous_upload
+            tmx_changed = bool((resolved_id and resolved_id != previous_id) or
+                               (resolved_upload and resolved_upload != previous_upload))
+            if not needs_insert and not needs_added_at_repair and not tmx_changed:
+                continue
+
+            written = await upsert_for_track(
+                aseco,
+                pool,
+                track=track,
+                challenge_id=row['id'],
+                uid=uid,
+                name=row['name'],
+                author=row['author'],
+                environment=row['environment'],
+                added_at=file_added_at,
+                repair_added_at=needs_added_at_repair,
+                tmx_id=resolved_id or None,
+                tmx_upload_date=resolved_upload,
+                guard=guard,
+                fetch_tmx_meta=False,
+            )
+            if not written:
+                continue
+            extra_meta[row['id']] = {
+                'added_at': file_added_at or existing_added_at,
+                'tmx_id': resolved_id,
+                'tmx_upload_date': resolved_upload,
+            }
+            if needs_insert:
+                inserted += 1
+            if needs_tmx_enrich and tmx_changed:
+                enriched += 1
+            if needs_added_at_repair:
+                repaired_added_at += 1
 
         if inserted or enriched or repaired_added_at:
             logger.info(

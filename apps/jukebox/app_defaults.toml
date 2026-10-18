@@ -1,2 +1,6 @@
 [jukebox]
 tmx_download_dir = "TMX"
+permission_check = true
+default_sections = ["TMNF", "TMN"]
+ignored_styles = ["RPG", "Trial"]
+max_author_time_seconds = 120

@@ -13,8 +13,10 @@ Reads apps/players/app_defaults.toml for ranking feature flags.
 """
 
 from __future__ import annotations
+import asyncio
 import logging
 import time
+from uuid import uuid4
 from typing import TYPE_CHECKING, Optional
 
 from pyxaseco.helpers import (format_text, format_time, format_time_h,
@@ -130,6 +132,12 @@ PLAYER_RANKING_SETTINGS_SCHEMA = AppSettingsSchema(
 
 
 def register(aseco: 'Aseco'):
+    aseco.register_event('onTracklistChanged', _invalidate_playlist_ranks)
+    aseco.register_event('onChallengeListModified', _invalidate_playlist_ranks)
+    aseco.register_event('onLocalRecord', _invalidate_ranks)
+    aseco.register_event('onRecordsChanged', _invalidate_ranks)
+    aseco.register_event('onRanksUpdated', _ranks_updated)
+    aseco.register_event('onEverySecond', _retry_rank_work)
     aseco.register_event('onStartup',       rasp_startup)
     aseco.register_event('onSync',          rasp_sync)
     aseco.register_event('onNewChallenge2', rasp_new_challenge)
@@ -239,11 +247,78 @@ async def rasp_new_challenge(aseco: 'Aseco', challenge):
 async def rasp_end_race(aseco: 'Aseco', _params):
     if aseco.server.isrelay or not feature_ranks:
         return
-    await _reset_ranks(aseco)
+    from pyxaseco.core.background_jobs import JobPolicy
+    aseco.jobs.service('rank_messages', JobPolicy(capacity=2, deadline_seconds=60)).invalidate()
+    aseco._rank_message_retry_at = 0.0
+    aseco._rank_message_players = (
+        {} if aseco.settings.sb_stats_panels else
+        {p.login: p for p in aseco.server.players.all()})
+    if await _reset_ranks(aseco) is None:
+        await _ranks_updated(aseco)
 
-    if not aseco.settings.sb_stats_panels:
-        for player in aseco.server.players.all():
-            await _show_rank(aseco, player.login)
+
+async def _ranks_updated(aseco, _param=None):
+    from bisect import bisect_left
+    from pyxaseco.core.background_jobs import Admission, JobEnvelope, JobPolicy
+    players = getattr(aseco, '_rank_message_players', {})
+    if not players:
+        return
+    pool = await localdb_get_pool(aseco)
+    if not pool:
+        aseco._rank_message_retry_at = time.monotonic() + 10
+        return
+    job = JobEnvelope.capture(aseco.capture_job_context(), {})
+    async def operation(_job):
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute('SELECT p.Login, r.avg FROM rs_rank r '
+                                  'LEFT JOIN players p ON p.Id=r.playerID ORDER BY r.avg')
+                return list(await cur.fetchall())
+    async def apply(result):
+        if result.status != 'completed':
+            logger.warning('[Players] Rank feedback unavailable (%s)', result.error_type)
+            aseco._rank_message_players = players
+            aseco._rank_message_retry_at = time.monotonic() + 10
+            return
+        averages = [row[1] for row in result.value]
+        by_login = dict(result.value)
+        for login, player in players.items():
+            if aseco.server.players.get_player(login) is not player:
+                continue
+            average = by_login.get(login)
+            message = (format_text(_rasp_msg('RANK_NONE'), minrank) if average is None else
+                       format_text(_rasp_msg('RANK'), bisect_left(averages, average) + 1,
+                                   len(averages), f'{average / 10000:4.1f}'))
+            await aseco.client.query_ignore_result(
+                'ChatSendServerMessageToLogin', aseco.format_colors(message), login)
+    # These are server ranks, not map UI. A quick skip must not discard feedback.
+    outcome = aseco.jobs.service('rank_messages', JobPolicy(capacity=2, deadline_seconds=60)).submit(
+        job, operation, apply, current_map=False, dedupe_key='score-ranks')
+    if outcome in (Admission.ACCEPTED, Admission.DUPLICATE):
+        aseco._rank_message_players = {}
+        aseco._rank_message_retry_at = 0.0
+    else:
+        logger.warning('[Players] Rank feedback deferred (%s)', outcome.value)
+        if outcome != Admission.STOPPED:
+            aseco._rank_message_retry_at = time.monotonic() + (10 if outcome == Admission.COOLDOWN else 1)
+
+
+async def _retry_rank_work(aseco, _param=None):
+    now = time.monotonic()
+    if not feature_ranks or aseco.server.isrelay:
+        return
+    if 0 < getattr(aseco, '_rank_retry_at', 0) <= now:
+        aseco._rank_retry_at = 0.0
+        outcome = await _reset_ranks(aseco)
+        if outcome is None:
+            await _ranks_updated(aseco)
+        else:
+            # Wait for publication before sending feedback after database recovery.
+            aseco._rank_message_retry_at = 0.0
+            return
+    if 0 < getattr(aseco, '_rank_message_retry_at', 0) <= now:
+        aseco._rank_message_retry_at = 0.0
+        await _ranks_updated(aseco)
 
 
 # ---------------------------------------------------------------------------
@@ -303,64 +378,158 @@ async def rasp_player_connect(aseco: 'Aseco', player: 'Player'):
 # Core functions
 # ---------------------------------------------------------------------------
 
-async def _reset_ranks(aseco: 'Aseco'):
-    """Recalculate rs_rank for all players."""
-    try:
-        pool = await localdb_get_pool(aseco)
-        if pool is None:
-            return
-    except ImportError:
-        return
-
-    aseco.console('[Players] Calculating ranks...')
-    track_ids = await _get_challenge_ids(aseco, pool)
-    total = len(track_ids)
-    if total == 0:
-        return
-
-    is_stnt = (aseco.server.gameinfo and aseco.server.gameinfo.mode == 4)
-    order = 'DESC' if is_stnt else 'ASC'
-
+async def _publish_ranks(pool, rows):
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute('TRUNCATE TABLE rs_rank')
-
-            # Players with at least minrank records
-            await cur.execute(
-                'SELECT PlayerId, COUNT(*) AS cnt FROM records '
-                'GROUP BY PlayerId HAVING cnt >= %s', (minrank,)
-            )
-            rows = await cur.fetchall()
-            players = {row[0]: [0, 0] for row in rows}  # {pid: [sum, count]}
-
-            if not players:
-                aseco.console('[Players] ...No ranked players.')
+            await cur.execute("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='rs_rank'")
+            engine = await cur.fetchone()
+            name = engine[0] if engine else None
+            if isinstance(name, bytes):
+                name = name.decode('ascii', errors='replace')
+            name = str(name or 'unavailable').strip().upper()[:32]
+            if name == 'MYISAM':
+                await _publish_myisam_ranks(cur, rows)
                 return
+            if name not in ('INNODB', 'XTRADB'):
+                logger.error('[Players] Cannot publish ranks: unsupported rs_rank engine=%s', name)
+                raise RuntimeError(f'Unsupported rs_rank engine: {name}')
+        await conn.begin()
+        try:
+            async with conn.cursor() as cur:
+                await cur.execute('DELETE FROM rs_rank')
+                if rows:
+                    await cur.executemany('INSERT INTO rs_rank (playerID, avg) VALUES (%s, %s)', rows)
+            await conn.commit()
+        except BaseException:
+            await conn.rollback()
+            raise
 
-            for track_id in track_ids:
-                await cur.execute(
-                    f'SELECT PlayerId FROM records WHERE ChallengeId=%s '
-                    f'ORDER BY Score {order}, Date ASC LIMIT %s',
-                    (track_id, maxrecs)
-                )
-                recs = await cur.fetchall()
-                for rank_i, rec in enumerate(recs, 1):
-                    pid = rec[0]
-                    if pid in players:
-                        players[pid][0] += rank_i
-                        players[pid][1] += 1
 
-            # Build one-shot INSERT
-            if players:
-                values = []
-                for pid, (total_sum, count) in players.items():
-                    avg = (total_sum + (total - count) * maxrecs) / total
-                    values.append(f'({pid},{round(avg * 10000)})')
-                await cur.execute(
-                    'INSERT INTO rs_rank VALUES ' + ','.join(values)
-                )
+async def _publish_myisam_ranks(cur, rows):
+    # CREATE LIKE cannot carry custom triggers or external data/index directories.
+    await cur.execute('SELECT COUNT(*) FROM information_schema.TRIGGERS '
+                      "WHERE TRIGGER_SCHEMA=DATABASE() AND EVENT_OBJECT_TABLE='rs_rank'")
+    triggers = await cur.fetchone()
+    if triggers is None or triggers[0]:
+        logger.error('[Players] MyISAM rs_rank has custom triggers or unavailable trigger metadata; '
+                     'publication requires operator review')
+        raise RuntimeError('MyISAM rs_rank trigger metadata requires operator review')
+    await cur.execute('SHOW CREATE TABLE rs_rank')
+    definition = await cur.fetchone()
+    ddl = definition[1] if definition else ''
+    if isinstance(ddl, bytes):
+        ddl = ddl.decode('ascii', errors='replace')
+    if not ddl or any(option in ddl.upper() for option in ('DATA DIRECTORY', 'INDEX DIRECTORY')):
+        logger.error('[Players] MyISAM rs_rank has external directory options or unavailable table metadata; '
+                     'publication requires operator review')
+        raise RuntimeError('MyISAM rs_rank table options require operator review')
+    suffix = uuid4().hex
+    staging, previous = f'rs_rank_stage_{suffix}', f'rs_rank_old_{suffix}'
+    created = False
+    try:
+        await cur.execute(f'CREATE TABLE `{staging}` LIKE rs_rank')
+        created = True
+        if rows:
+            await cur.executemany(f'INSERT INTO `{staging}` (playerID, avg) VALUES (%s, %s)', rows)
+        # One swap: readers see a complete old or new table, never a partial insert.
+        await cur.execute(f'RENAME TABLE rs_rank TO `{previous}`, `{staging}` TO rs_rank')
+    except BaseException:
+        if created:
+            try:
+                await cur.execute(f'DROP TABLE IF EXISTS `{staging}`')
+            except Exception:
+                logger.warning('[Players] Could not clean owned staging table %s', staging)
+        # Never drop the backup after an unacknowledged swap.
+        logger.warning('[Players] Rank publication failed; review %s if present', previous)
+        raise
+    try:
+        await cur.execute(f'DROP TABLE `{previous}`')
+    except Exception:
+        logger.warning('[Players] Ranks published; old table %s needs cleanup', previous)
 
-    aseco.console('[Players] ...Done!')
+
+async def _reset_ranks(aseco: 'Aseco'):
+    from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy, Admission
+    from pyxaseco.core.file_io import file_io
+    from .rank_calculation import calculate_ranks
+    pool = await localdb_get_pool(aseco)
+    if pool is None:
+        aseco._rank_retry_at = time.monotonic() + 10
+        return
+    track_ids = await _get_challenge_ids(aseco, pool)
+    if not track_ids:
+        return
+    track_ids = tuple(track_ids)
+    revision = getattr(aseco, '_rank_revision', 0)
+    job = JobEnvelope.capture(aseco.capture_job_context(), {
+        'track_count': len(track_ids), 'maxrecs': int(maxrecs), 'minrank': int(minrank),
+        'stunts': aseco.server.gameinfo.mode == 4})
+    async def operation(envelope):
+        p = envelope.payload()
+        direction = 'DESC' if p['stunts'] else 'ASC'
+        ordered = []
+        async with pool.acquire() as conn:
+            await conn.begin()
+            try:
+                async with conn.cursor() as cur:
+                    await cur.execute('SELECT PlayerId, COUNT(*) AS cnt FROM records GROUP BY PlayerId HAVING cnt >= %s',
+                                      (p['minrank'],))
+                    eligible = [row[0] for row in await cur.fetchall()]
+                    ids = list(dict.fromkeys(track_ids))
+                    for offset in range(0, len(ids), 256):
+                        chunk = ids[offset:offset + 256]
+                        placeholders = ','.join(['%s'] * len(chunk))
+                        await cur.execute(
+                            f'SELECT ChallengeId, PlayerId FROM records WHERE ChallengeId IN ({placeholders}) '
+                            f'ORDER BY ChallengeId ASC, Score {direction}, Date ASC', tuple(chunk))
+                        ordered.extend(await cur.fetchall())
+                await conn.commit()
+            except BaseException:
+                await conn.rollback()
+                raise
+        # No connection retained during CPU calculation.
+        return await file_io(calculate_ranks, track_ids, eligible, ordered, p['maxrecs'])
+    async def apply(result):
+        if result.status != 'completed':
+            logger.warning('[Players] Rank calculation failed; keeping last complete ranks (%s)', result.error_type)
+            return
+        # Metadata locks on a shared database must not leave publication waiting forever.
+        async with asyncio.timeout(10):
+            await _publish_ranks(pool, result.value)
+        aseco.console('[Players] ...Done! ({1} ranked players)', len(result.value))
+        await aseco.release_event('onRanksUpdated', None)
+    async def discard(_result):
+        current = aseco.capture_job_context()
+        if (aseco.jobs.running and feature_ranks
+                and job.context.run_id == current.run_id
+                and job.context.server_id == current.server_id
+                and revision != getattr(aseco, '_rank_revision', 0)):
+            # Record/playlist edits invalidate the snapshot; rebuild the latest one.
+            await _reset_ranks(aseco)
+    outcome = aseco.jobs.service('player_ranks', JobPolicy(capacity=2, deadline_seconds=120)).submit(
+        job, operation, apply, current_map=False, dedupe_key='ranks', discard=discard)
+    if outcome == Admission.ACCEPTED:
+        aseco._rank_retry_at = 0.0
+        aseco.console('[Players] Calculating ranks in background; last complete ranks remain available')
+    elif outcome == Admission.DUPLICATE:
+        aseco._rank_retry_at = 0.0
+    else:
+        logger.warning('[Players] Rank calculation deferred (%s)', outcome.value)
+        if outcome != Admission.STOPPED:
+            aseco._rank_retry_at = time.monotonic() + (10 if outcome == Admission.COOLDOWN else 1)
+    return outcome
+
+
+async def _invalidate_ranks(aseco, _param=None):
+    from pyxaseco.core.background_jobs import JobPolicy
+    aseco._rank_revision = getattr(aseco, '_rank_revision', 0) + 1
+    aseco.jobs.service('player_ranks', JobPolicy(capacity=2, deadline_seconds=120)).invalidate()
+
+
+async def _invalidate_playlist_ranks(aseco, _param=None):
+    global _challenge_list_cache
+    _challenge_list_cache = []
+    await _invalidate_ranks(aseco)
 
 
 async def _clean_data(aseco: 'Aseco'):
@@ -427,55 +596,36 @@ async def _clean_data(aseco: 'Aseco'):
 
 
 async def _get_challenge_ids(aseco: 'Aseco', pool) -> list:
-    """Get all challenge IDs from the server track list and ensure they're in DB."""
     global _challenge_list_cache
-
     if _challenge_list_cache:
-        return _challenge_list_cache
-
-    tracks = []
-    batch_size = 500
-    offset = 0
-    while True:
-        try:
-            chunk = await aseco.client.query('GetChallengeList', batch_size, offset)
-        except Exception:
-            chunk = []
-        if not chunk:
-            break
-        tracks.extend(chunk)
-        if len(chunk) < batch_size:
-            break
-        offset += len(chunk)
-
-    ids = []
+        return list(_challenge_list_cache)
+    from pyxaseco.core.playlist import playlist
+    tracks = await playlist(aseco).snapshot()
+    by_uid = {}
+    valid = [row for row in tracks if row.get('UId')]
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            for t in (tracks or []):
-                uid = t.get('UId', '')
-                if not uid:
+            for offset in range(0, len(valid), 256):
+                chunk = list({row['UId']: row for row in valid[offset:offset + 256]}.values())
+                await cur.execute('SELECT Uid, Id FROM challenges WHERE Uid IN (' +
+                                  ','.join(['%s'] * len(chunk)) + ')', tuple(row['UId'] for row in chunk))
+                by_uid.update(await cur.fetchall())
+                missing = [row for row in chunk if row['UId'] not in by_uid]
+                if not missing:
                     continue
-                await cur.execute('SELECT Id FROM challenges WHERE Uid=%s', (uid,))
-                row = await cur.fetchone()
-                if row:
-                    ids.append(row[0])
-                else:
-                    try:
-                        await cur.execute(
-                            'INSERT INTO challenges (Uid, Name, Author, Environment) '
-                            'VALUES (%s, %s, %s, %s)',
-                            (uid, t.get('Name',''), t.get('Author',''),
-                             t.get('Environnement',''))
-                        )
-                        ids.append(cur.lastrowid)
-                    except Exception:
-                        pass
-
-    if not ids:
-        logger.error('[Players] Cannot obtain challenge list from server and/or database - check configuration files!')
-
+                # Another controller may insert the UID after our SELECT.
+                # A no-op upsert preserves its ID and metadata without IGNORE warnings.
+                await cur.executemany(
+                    'INSERT INTO challenges (Uid, Name, Author, Environment) VALUES (%s,%s,%s,%s) '
+                    'ON DUPLICATE KEY UPDATE Uid=VALUES(Uid)',
+                    [(row['UId'], row.get('Name', ''), row.get('Author', ''),
+                      row.get('Environnement', row.get('Environment', ''))) for row in missing])
+                await cur.execute('SELECT Uid, Id FROM challenges WHERE Uid IN (' +
+                                  ','.join(['%s'] * len(missing)) + ')', tuple(row['UId'] for row in missing))
+                by_uid.update(await cur.fetchall())
+    ids = [by_uid[row['UId']] for row in valid if row['UId'] in by_uid]
     _challenge_list_cache = ids
-    return ids
+    return list(ids)
 
 
 async def _show_pb(aseco: 'Aseco', player: 'Player', challenge_id: int, always_show: bool):
@@ -565,19 +715,14 @@ async def _show_rank(aseco: 'Aseco', login: str):
 
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
-                await cur.execute('SELECT avg FROM rs_rank WHERE playerID=%s', (pid,))
+                # One statement keeps average, total and ties on the same publication.
+                await cur.execute(
+                    'SELECT r.avg, (SELECT COUNT(*) FROM rs_rank), '
+                    '(SELECT COUNT(*) FROM rs_rank b WHERE b.avg < r.avg) + 1 '
+                    'FROM rs_rank r WHERE r.playerID=%s LIMIT 1', (pid,))
                 row = await cur.fetchone()
                 if row:
-                    my_avg = row[0]
-                    await cur.execute('SELECT COUNT(*) FROM rs_rank')
-                    total_row = await cur.fetchone()
-                    total = total_row[0] if total_row else 0
-
-                    await cur.execute(
-                        'SELECT COUNT(*) FROM rs_rank WHERE avg < %s', (my_avg,))
-                    better_row = await cur.fetchone()
-                    rank = (better_row[0] if better_row else 0) + 1
-
+                    my_avg, total, rank = row
                     message = format_text(_rasp_msg('RANK'), rank, total,
                                           f'{my_avg/10000:4.1f}')
                 else:

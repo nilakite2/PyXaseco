@@ -13,13 +13,9 @@ Configure the API base/token below before deployment.
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from typing import TYPE_CHECKING
 
 from pyxaseco.helpers import display_manialink_multi, format_time, strip_colors
@@ -41,6 +37,9 @@ TRIAL_API_TOKEN = ""
 _enabled: bool = False
 _current_track: dict | None = None
 _last_checked_uid: str = ""
+_current_records = []
+_runtime_aseco = None
+_records_revision = 0
 
 
 def _trial_api_base() -> str:
@@ -77,72 +76,42 @@ def _pick_display_name(*candidates: object) -> str:
     return values[0]
 
 
-def _json_request_sync(url: str) -> object:
-    req = urllib.request.Request(url, headers=_build_headers())
-    last_error = None
-    for attempt in range(2):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read().decode("utf-8", errors="replace"))
-        except urllib.error.HTTPError as exc:
-            if int(getattr(exc, "code", 0) or 0) == 404:
-                return None
-            last_error = exc
-            if attempt == 0:
-                time.sleep(1.0)
-        except Exception as exc:
-            last_error = exc
-            if attempt == 0:
-                time.sleep(1.0)
-    raise last_error or RuntimeError(f"Could not fetch JSON from {url}")
-
-
-def _json_post_sync(url: str, payload: dict) -> object:
-    body = json.dumps(payload).encode("utf-8")
-    headers = _build_headers()
-    headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    last_error = None
-    for attempt in range(2):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read().decode("utf-8", errors="replace").strip()
-            return json.loads(raw) if raw else {}
-        except Exception as exc:
-            last_error = exc
-            if attempt == 0:
-                time.sleep(1.0)
-    raise last_error or RuntimeError(f"Could not POST JSON to {url}")
-
-
 async def _json_request(url: str) -> object:
-    return await asyncio.to_thread(_json_request_sync, url)
+    from pyxaseco.core.external_io import request_legacy_json
+    return await request_legacy_json(_runtime_aseco, 'GET', url, headers=_build_headers())
 
 
 async def _json_post(url: str, payload: dict) -> object:
-    return await asyncio.to_thread(_json_post_sync, url, payload)
+    from pyxaseco.core.external_io import request_legacy_json
+    return await request_legacy_json(_runtime_aseco, 'POST', url,
+                              payload=payload, headers=_build_headers())
 
 
 def _normalize_trial_track_payload(payload: object) -> dict | None:
+    if payload is None:
+        return None
     if isinstance(payload, dict):
+        if payload.get('ok') is False:
+            raise ValueError('Trial track lookup rejected')
+        if 'track' in payload and payload['track'] is None:
+            return None
         if isinstance(payload.get("track"), dict):
             return dict(payload["track"])
         if isinstance(payload.get("data"), dict):
-            nested = _normalize_trial_track_payload(payload.get("data"))
-            if isinstance(nested, dict):
-                return nested
+            return _normalize_trial_track_payload(payload['data'])
         if isinstance(payload.get("result"), dict):
-            nested = _normalize_trial_track_payload(payload.get("result"))
-            if isinstance(nested, dict):
-                return nested
-        if any(key in payload for key in ("challenge_uid", "uid_primary", "uid_values", "uid_aliases", "tmx_id")):
+            return _normalize_trial_track_payload(payload['result'])
+        if any(key in payload for key in ("storage_uid", "challenge_uid", "uid_primary", "uid_values", "uid_aliases", "tmx_id")):
             return dict(payload)
-        return dict(payload)
-    return None
+    raise ValueError('Unexpected Trial track response')
 
 
 def _normalize_trial_records_payload(payload: object) -> list[dict]:
+    if payload is None:
+        return []
     if isinstance(payload, dict):
+        if payload.get('ok') is False:
+            raise ValueError('Trial records lookup rejected')
         records = payload.get("records")
         if isinstance(records, list):
             return [dict(row) for row in records if isinstance(row, dict)]
@@ -152,10 +121,9 @@ def _normalize_trial_records_payload(payload: object) -> list[dict]:
         result = payload.get("result")
         if isinstance(result, dict):
             return _normalize_trial_records_payload(result)
-        return []
     if isinstance(payload, list):
         return [dict(row) for row in payload if isinstance(row, dict)]
-    return []
+    raise ValueError('Unexpected Trial records response')
 
 
 def _normalize_trial_finish_payload(payload: object) -> dict:
@@ -169,7 +137,7 @@ def _normalize_trial_finish_payload(payload: object) -> dict:
 def _track_storage_uid(track: dict | None) -> str:
     if not isinstance(track, dict):
         return ""
-    return str(track.get("uid_primary") or track.get("challenge_uid") or "").strip()
+    return str(track.get("storage_uid") or track.get("uid_primary") or track.get("challenge_uid") or "").strip()
 
 
 def _with_local_uid(track: dict | None, uid: str) -> dict | None:
@@ -201,7 +169,7 @@ def _with_local_uid(track: dict | None, uid: str) -> dict | None:
             values.append(text)
 
     for key, value in result.items():
-        if isinstance(key, str) and key.startswith("uid_"):
+        if isinstance(key, str) and key.startswith("uid_") and isinstance(value, str):
             text = str(value or "").strip()
             if text and text not in values:
                 values.append(text)
@@ -219,7 +187,7 @@ def _track_all_uids(track: dict | None) -> set[str]:
         return set()
     result: set[str] = set()
     for key, value in track.items():
-        if key in ("challenge_uid", "uid_primary", "uid_values", "uid_aliases"):
+        if key in ("storage_uid", "challenge_uid", "uid_primary", "uid_values", "uid_aliases"):
             if isinstance(value, list):
                 for item in value:
                     text = str(item or "").strip()
@@ -258,13 +226,13 @@ async def get_trial_track(uid: str) -> dict | None:
         f"{_trial_api_base()}/api/trial-tracks/{urllib.parse.quote(str(uid).strip(), safe='')}"
     )
     row = _normalize_trial_track_payload(payload)
-    if isinstance(row, dict) and row and not _track_matches_uid(row, uid):
+    if isinstance(row, dict) and not _track_matches_uid(row, uid):
         logger.info(
             "[TrialRecords] Ignoring mismatched Trial track for %s; API returned %s",
             uid,
             _track_storage_uid(row) or "?",
         )
-        return None
+        raise ValueError('Trial track identity mismatch')
     row = _with_local_uid(row, uid)
     return row if isinstance(row, dict) and row else None
 
@@ -297,49 +265,30 @@ async def get_trial_record_runs(uid: str, limit: int = 100) -> list[dict]:
 
 
 async def get_current_trial_track(aseco: 'Aseco') -> dict | None:
-    global _current_track, _last_checked_uid
-    challenge = getattr(aseco.server, "challenge", None)
-    uid = str(getattr(challenge, "uid", "") or "").strip()
-    if not uid:
-        _current_track = None
-        _last_checked_uid = ""
-        return None
+    uid = str(getattr(aseco.server.challenge, 'uid', '') or '')
     if _track_matches_uid(_current_track, uid):
-        _last_checked_uid = uid
         return dict(_current_track)
-    if _last_checked_uid == uid and _current_track is None:
-        return None
-    try:
-        row = await get_trial_track(uid)
-    except Exception as exc:
-        logger.debug("[TrialRecords] Trial API track lookup failed for %s: %s", uid, exc)
-        row = None
-    if isinstance(row, dict) and row:
-        _current_track = dict(row)
-        _last_checked_uid = uid
-        return dict(_current_track)
-    _current_track = None
-    _last_checked_uid = uid
+    if _last_checked_uid != uid:
+        await _tr_sync_current_track(aseco)
     return None
 
 
-async def get_current_trial_records(aseco: 'Aseco', limit: int | None = None) -> list[dict]:
-    challenge = getattr(aseco.server, "challenge", None)
-    uid = str(getattr(challenge, "uid", "") or "").strip()
-    if not uid:
+async def get_current_trial_records(aseco: 'Aseco', limit=None) -> list[dict]:
+    if not _track_matches_uid(_current_track, str(aseco.server.challenge.uid)):
         return []
-    try:
-        return await get_trial_records(uid, limit)
-    except Exception as exc:
-        logger.debug("[TrialRecords] Trial API record lookup failed for %s: %s", uid, exc)
-        return []
+    rows = list(_current_records)
+    return rows[:limit] if limit else rows
 
 
 def register(aseco: 'Aseco'):
+    global _runtime_aseco, _current_records, _current_track, _last_checked_uid, _records_revision
+    _runtime_aseco = aseco
+    _current_records, _current_track, _last_checked_uid, _records_revision = [], None, '', 0
     aseco.register_event('onStartup', _tr_load_settings)
     aseco.register_event('onStartup', _tr_connect)
     aseco.register_event('onSync', _tr_sync_current_track)
     aseco.register_event('onNewChallenge', _tr_sync_current_track)
+    aseco.register_event('onRestartChallenge', _tr_sync_current_track)
     aseco.register_event('onPlayerFinish1', _tr_player_finish)
     aseco.register_event('onShutdown', _tr_shutdown)
     aseco.add_chat_command('trialrecs', 'Displays all Trial Records on current track')
@@ -351,6 +300,7 @@ async def _tr_load_settings(aseco: 'Aseco', _param=None):
     _enabled = bool(_trial_api_base())
     if _enabled:
         aseco.console("[TrialRecords] Using Trial API '{1}'", _trial_api_base())
+        _trial_delivery(aseco)
     else:
         aseco.console("[TrialRecords] Disabled - configure TRIAL_API_BASE for app/records_trial")
 
@@ -383,37 +333,57 @@ async def _post_trial_server_heartbeat(aseco: 'Aseco') -> None:
     if not nation:
         nation = "World"
 
-    await _json_post(
-        f"{_trial_api_base()}/api/trial-servers/",
-        {
+    payload = {
             "server_login": server_login,
             "server_name": server_name,
             "game": game,
             "nation": nation,
-        },
-    )
+        }
+    from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy
+    service = aseco.jobs.service('trial_heartbeat', JobPolicy(capacity=1))
+    job = JobEnvelope.capture(aseco.capture_job_context(), payload)
+    async def operation(envelope):
+        return await _json_post(f"{_trial_api_base()}/api/trial-servers/", envelope.payload())
+    async def apply(_result):
+        return
+    service.submit(job, operation, apply, current_map=False, dedupe_key='heartbeat')
+
+
+async def _load_trial_snapshot(uid):
+    track = await get_trial_track(uid)
+    rows = await get_trial_records(uid) if track else []
+    storage_uid = _track_storage_uid(track)
+    if track and not rows and storage_uid and storage_uid != uid:
+        rows = await get_trial_records(storage_uid)
+    return track, rows
 
 
 async def _tr_sync_current_track(aseco: 'Aseco', _param=None):
-    if _enabled:
-        try:
-            await _post_trial_server_heartbeat(aseco)
-        except Exception as exc:
-            logger.debug("[TrialRecords] Could not refresh Trial server heartbeat: %s", exc)
-    current = await get_current_trial_track(aseco)
-    try:
-        aseco.server.trial_records_active = bool(current)
-    except Exception:
-        pass
-    if current:
-        points = current.get("points")
-        suffix = f" (points={points})" if points is not None else ""
-        aseco.console("[TrialRecords] Active on {1}{2}", _track_storage_uid(current) or "?", suffix)
-    else:
-        challenge = getattr(aseco.server, "challenge", None)
-        uid = str(getattr(challenge, "uid", "") or "").strip()
-        if uid:
-            aseco.console("[TrialRecords] Inactive on {1}; fallback to Dedimania", uid)
+    global _current_track, _current_records, _last_checked_uid
+    if not _enabled:
+        return
+    from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy
+    uid = str(aseco.server.challenge.uid)
+    if _last_checked_uid != uid:
+        _current_track, _current_records = None, []
+        aseco.server.trial_records_active = False
+    job = JobEnvelope.capture(aseco.capture_job_context(), {'uid': uid})
+    revision = _records_revision
+    async def operation(envelope):
+        return await _load_trial_snapshot(envelope.payload()['uid'])
+    async def apply(result):
+        global _current_track, _current_records, _last_checked_uid
+        if result.status != 'completed':
+            logger.warning('[TrialRecords] Lookup unavailable (%s)', result.failure_label)
+            return
+        if revision != _records_revision:
+            return
+        _current_track, _current_records = result.value
+        _last_checked_uid = uid
+        aseco.server.trial_records_active = bool(_current_track)
+        await aseco.release_event('onTrialRecordsLoaded', uid)
+    aseco.jobs.service('trial_lookup', JobPolicy(deadline_seconds=120)).submit(
+        job, operation, apply, dedupe_key=f'current:{revision}')
 
 
 async def _announce_trial_record(aseco: 'Aseco', nickname: str, score: int, existing_rank: int, existing_score: int, new_rank: int) -> None:
@@ -446,79 +416,57 @@ async def _announce_trial_record(aseco: 'Aseco', nickname: str, score: int, exis
 
 
 async def _tr_player_finish(aseco: 'Aseco', finish):
-    global _current_track
-    if not is_enabled():
+    if not is_enabled() or not finish or not getattr(finish, 'player', None):
         return
-    if not finish or not getattr(finish, 'player', None) or not getattr(finish, 'challenge', None):
+    score = int(getattr(finish, 'score', 0) or 0)
+    if score <= 0 or aseco.server.gameinfo.mode == Gameinfo.STNT:
         return
-
-    try:
-        score = int(getattr(finish, 'score', 0) or 0)
-    except Exception:
-        score = 0
-    if score <= 0:
-        return
-    if getattr(getattr(aseco.server, 'gameinfo', None), 'mode', -1) == Gameinfo.STNT:
-        return
-
-    challenge = finish.challenge
-    uid = str(getattr(challenge, 'uid', '') or '').strip()
+    uid = str(getattr(getattr(finish, 'challenge', None), 'uid', '') or '')
     if not uid:
         return
-
-    current = _current_track
-    if not current or uid not in _track_all_uids(current):
-        current = await get_current_trial_track(aseco)
-    if not current:
+    if _last_checked_uid == uid and not _current_track:
         return
+    payload = {'uid': uid, 'login': finish.player.login,
+               'nickname': str(finish.player.nickname), 'score': score, 'source': 'online'}
+    await _trial_delivery(aseco).retain(payload, map_uid=uid)
 
-    player = finish.player
-    login = str(getattr(player, 'login', '') or '').strip()
-    nickname = str(getattr(player, 'nickname', '') or login or '?')
-    if not login:
-        return
 
-    payload = {
-        "uid": uid,
-        "login": login,
-        "nickname": nickname,
-        "score": score,
-        "source": "online",
-    }
-
-    try:
-        response = _normalize_trial_finish_payload(
-            await _json_post(f"{_trial_api_base()}/api/trial-finish", payload)
-        )
-    except Exception as exc:
-        logger.warning("[TrialRecords] Could not submit live finish for %s on %s: %s", login, uid, exc)
-        return
-
-    changed = bool(response.get("changed"))
-    returned_track = response.get("track")
-    if isinstance(returned_track, dict):
-        _current_track = dict(_with_local_uid(returned_track, uid) or returned_track)
-
-    if changed:
-        new_rank = int(response.get("new_rank") or 0)
-        existing_rank = int(response.get("existing_rank") or 0)
-        existing_score = int(response.get("existing_score") or 0)
-        new_score = int(response.get("new_score") or score or 0)
-        await _announce_trial_record(
-            aseco,
-            nickname,
-            new_score,
-            existing_rank,
-            existing_score,
-            new_rank,
-        )
-        await aseco.release_event('onTrialRecord', {
-            'challenge_uid': str(response.get("storage_uid") or _track_storage_uid(_current_track) or uid),
-            'login': login,
-            'nickname': nickname,
-            'score': new_score,
-        })
-        aseco.console("[TrialRecords] player {1} finished with {2} → Trial best updated", login, new_score)
+def _trial_delivery(aseco):
+    from pyxaseco.core.retained_delivery import delivery, PreparationRejected
+    async def prepare(data):
+        # The captured map can be active even if its lookup is still loading.
+        if not await get_trial_track(data['uid']):
+            raise PreparationRejected('Captured map is not Trial-enabled')
+        return data
+    async def send(data):
+        response = _normalize_trial_finish_payload(await _json_post(
+            f"{_trial_api_base()}/api/trial-finish", data))
+        if (response.get('ok') is not True or not isinstance(response.get('changed'), bool)
+                or not _track_matches_uid(response.get('track'), data['uid'])
+                or str(response.get('login') or '') != data['login']
+                or int(response.get('score') or 0) != data['score']):
+            raise RuntimeError('Unconfirmed Trial finish response')
+        return response
+    async def apply(data, response, current):
+        global _current_track, _records_revision
+        track = response.get('track')
+        if current and isinstance(track, dict):
+            _current_track = dict(_with_local_uid(track, data['uid']) or track)
+        if not response.get('changed'):
+            return
+        if current:
+            _records_revision += 1
+        new_score = int(response.get('new_score') or data['score'])
+        # Old-map responses stay retained/delivered but cannot redraw current UI.
+        if current:
+            await _announce_trial_record(aseco, data['nickname'], new_score,
+                int(response.get('existing_rank') or 0), int(response.get('existing_score') or 0),
+                int(response.get('new_rank') or 0))
+            await _tr_sync_current_track(aseco)
+            await aseco.release_event('onTrialRecord', {
+                'challenge_uid': str(response.get('storage_uid') or data['uid']),
+                'login': data['login'], 'nickname': data['nickname'], 'score': new_score})
+    return delivery(aseco, 'trial_records', send, apply, prepare=prepare)
 
 
 async def _tr_shutdown(aseco: 'Aseco', _param=None):
@@ -540,39 +488,31 @@ async def chat_trialrecs(aseco: 'Aseco', command: dict):
         await _send_chat(aseco, login, '{#server}> {#error}No current challenge UID available.')
         return
 
-    current = None
-    rows: list[dict] = []
-    cached = get_current_track_cache()
-    if isinstance(cached, dict):
-        cached = _with_local_uid(cached, uid)
-        if uid in _track_all_uids(cached):
-            current = cached
-    try:
-        fetched = await get_trial_track(uid)
-        if isinstance(fetched, dict):
-            current = fetched
-    except Exception as exc:
-        logger.warning("[TrialRecords] /trialrecs track fetch failed for %s: %s", uid, exc)
-    try:
-        rows = await get_trial_records(uid)
-    except Exception as exc:
-        logger.warning("[TrialRecords] /trialrecs record fetch failed for %s: %s", uid, exc)
-    if not rows and isinstance(current, dict):
-        storage_uid = _track_storage_uid(current)
-        if storage_uid and storage_uid != uid:
-            try:
-                rows = await get_trial_records(storage_uid)
-            except Exception as exc:
-                logger.warning(
-                    "[TrialRecords] /trialrecs canonical record fetch failed for %s via %s: %s",
-                    uid,
-                    storage_uid,
-                    exc,
-                )
-    if isinstance(current, dict):
-        global _current_track
-        _current_track = dict(current)
+    if not _enabled:
+        await _send_chat(aseco, login, '{#server}> {#error}Trial records are disabled.')
+        return
+    from pyxaseco.core.background_jobs import Admission, JobEnvelope, JobPolicy
+    job = JobEnvelope.capture(aseco.capture_job_context(), {'uid': uid})
+    async def operation(envelope):
+        return await _load_trial_snapshot(envelope.payload()['uid'])
+    async def apply(result):
+        if aseco.server.players.get_player(login) is not player:
+            return
+        if result.status != 'completed':
+            await _send_chat(aseco, login, '{#server}> {#error}Trial records unavailable; please try again later.')
+            return
+        current, rows = result.value
+        await _show_trialrecs(aseco, player, current, rows)
+    outcome = aseco.jobs.service('trial_lookup', JobPolicy(deadline_seconds=120)).submit(
+        job, operation, apply, dedupe_key=f'command:{id(player)}')
+    if outcome == Admission.ACCEPTED:
+        await _send_chat(aseco, login, '{#server}> Loading fresh Trial records...')
+    elif outcome != Admission.DUPLICATE:
+        await _send_chat(aseco, login, '{#server}> {#error}Trial records busy; please try again shortly.')
 
+
+async def _show_trialrecs(aseco, player, current, rows):
+    login = player.login
     if not current and not rows:
         await _send_chat(aseco, login, '{#server}> {#error}Current track is not Trial-enabled.')
         return

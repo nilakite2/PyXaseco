@@ -45,7 +45,7 @@ _TRACK_ENV_IMAGES = {
 }
 
 _TRACK_ENV_LAYOUT = {
-    'stadium': ('2.95', '-0.38', '2.50', '1.63'),
+    'stadium': ('2.95', '-0.80', '2.50', '1.63'),
     'bay': ('2.95', '-0.50', '1.48', '2.50'),
     'coast': ('2.95', '-0.50', '1.46', '2.50'),
     'desert': ('2.95', '-0.50', '1.55', '2.50'),
@@ -79,8 +79,47 @@ def _score_env_icon_xml(env: str) -> str:
 
 async def _open_challenge_window(aseco: 'Aseco', login: str):
     from .widgets.common import _send
-    xml = await _build_last_current_next_window(aseco, login)
+    player = aseco.server.players.get_player(login)
+    context = _overview_context(aseco)
+    tracks = []
+    xml = await _build_last_current_next_window(aseco, login, tracks=tracks)
+    if not player or aseco.server.players.get_player(login) is not player or context != _overview_context(aseco):
+        return
     await _send(aseco, login, xml)
+    if not hasattr(aseco, '_challenge_overviews'):
+        aseco._challenge_overviews = {}
+    delivery = getattr(aseco, 'ui_delivery', None)
+    aseco._challenge_overviews[login] = {
+        'player': player, 'context': context,
+        'uids': frozenset(str(track.get('uid', '')) for track in tracks if track.get('uid')),
+        'digest': delivery.page_digest(login, ML_WINDOW) if delivery else None,
+    }
+
+
+def _overview_context(aseco):
+    capture = getattr(aseco, 'capture_job_context', None)
+    if callable(capture):
+        context = capture()
+        return context.run_id, context.server_id, context.map_uid, context.map_generation
+    return str(aseco.server.challenge.uid)
+
+
+async def _refresh_open_challenge_windows(aseco, uid=None):
+    windows = getattr(aseco, '_challenge_overviews', {})
+    delivery = getattr(aseco, 'ui_delivery', None)
+    for login, window in list(windows.items()):
+        if (aseco.server.players.get_player(login) is not window['player']
+                or window['context'] != _overview_context(aseco)
+                or (delivery and delivery.page_digest(login, ML_WINDOW) != window['digest'])):
+            windows.pop(login, None)
+            continue
+        if uid is None or str(uid) in window['uids']:
+            await _open_challenge_window(aseco, login)
+
+
+async def _prefetch_next_challenge(aseco):
+    if _state.challenge.enabled:
+        _state.next_challenge = await _get_next_track_info(aseco, _effective_mode(aseco))
 
 
 async def _draw_challenge_player(aseco: 'Aseco', login: str):
@@ -670,7 +709,8 @@ async def _last_track_from_history(aseco: 'Aseco') -> dict:
             logger.debug('[Eyepiece/Challenge] previous track TMX times failed for uid=%s: %r', prev_uid, e)
 
         try:
-            tracks = await aseco.client.query('GetChallengeList', 5000, 0) or []
+            from pyxaseco.core.playlist import playlist
+            tracks = await playlist(aseco).snapshot()
             for t in tracks:
                 tuid = (t.get('UId', '') or t.get('Uid', '') or '').strip()
                 if tuid == prev_uid:
@@ -706,7 +746,7 @@ async def _last_track_from_history(aseco: 'Aseco') -> dict:
     except Exception:
         return {}
 
-async def _build_last_current_next_window(aseco: 'Aseco', login: str) -> str:
+async def _build_last_current_next_window(aseco: 'Aseco', login: str, *, tracks=None) -> str:
     cur = getattr(aseco.server, 'challenge', None)
     mode = _effective_mode(aseco)
 
@@ -736,6 +776,8 @@ async def _build_last_current_next_window(aseco: 'Aseco', login: str) -> str:
         }
 
     next_data = await _get_next_track_info(aseco, mode)
+    if tracks is not None:
+        tracks.extend((last_data, current_data, next_data))
 
     await _enrich_track_with_challenge_info(aseco, current_data, mode, need_times=True, need_env=True)
     await _enrich_track_with_challenge_info(aseco, last_data, mode, need_times=True, need_env=True)

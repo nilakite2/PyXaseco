@@ -28,8 +28,10 @@ Each widget is a standalone async function:
 
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 import logging
-from datetime import datetime
+from datetime import datetime, timezone as datetime_timezone
 from typing import TYPE_CHECKING
 from xml.sax.saxutils import escape
 
@@ -159,12 +161,12 @@ def _scale_bar_geom(cfg, posn: str, sizen: str) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 async def _broadcast(aseco: 'Aseco', xml: str) -> None:
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco, 
         'SendDisplayManialinkPage', xml, 0, False)
 
 
 async def _send_to(aseco: 'Aseco', login: str, xml: str) -> None:
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco, 
         'SendDisplayManialinkPageToLogin', login, xml, 0, False)
 
 
@@ -218,7 +220,8 @@ async def _draw_trackcount_all(aseco: 'Aseco') -> None:
 
     try:
         # Query GBX directly for the authoritative server-wide track count.
-        all_tracks = await aseco.client.query('GetChallengeList', 5000, 0) or []
+        from pyxaseco.core.playlist import playlist
+        all_tracks = await playlist(aseco).snapshot()
         count = len(all_tracks)
         aseco.server._re_trackcount = count
     except Exception:
@@ -494,7 +497,7 @@ async def _hide_ladderlimit(aseco: 'Aseco') -> None:
 # CurrentRankingWidget  (ML 91844, per-player)
 # ---------------------------------------------------------------------------
 
-async def _draw_currentranking_all(aseco: 'Aseco') -> None:
+async def _draw_currentranking_all(aseco: 'Aseco', rankings: list | None = None) -> None:
     cfg = _state.current_ranking
     if not cfg.enabled:
         return
@@ -502,11 +505,19 @@ async def _draw_currentranking_all(aseco: 'Aseco') -> None:
         return
 
     mode = _effective_mode(aseco)
+    if rankings is None and mode != Gameinfo.TEAM:
+        from .live import _fetch_live
+        rankings = await _fetch_live(aseco)
+    rankings = [entry for entry in (rankings or []) if isinstance(entry, dict)]
+    snapshot = ({entry.get('Login'): entry for entry in rankings}, len(rankings))
     for p in aseco.server.players.all():
-        await _draw_currentranking_player(aseco, p.login, mode)
+        await _draw_currentranking_player(aseco, p.login, mode, snapshot=snapshot)
 
 
-async def _draw_currentranking_player(aseco: 'Aseco', login: str, mode: int | None = None) -> None:
+async def _draw_currentranking_player(
+    aseco: 'Aseco', login: str, mode: int | None = None, *,
+    snapshot: tuple[dict, int] | None = None,
+) -> None:
     cfg = _state.current_ranking
     if not cfg.enabled:
         return
@@ -523,16 +534,18 @@ async def _draw_currentranking_player(aseco: 'Aseco', login: str, mode: int | No
     else:
         # Find this player's current server ranking
         try:
-            rankings = await aseco.client.query('GetCurrentRanking', 300, 0)
+            if snapshot is None:
+                from .live import _fetch_live
+                rankings = await _fetch_live(aseco)
+                rankings = [entry for entry in rankings if isinstance(entry, dict)]
+                snapshot = ({entry.get('Login'): entry for entry in rankings}, len(rankings))
             rank = 0
-            total = len(rankings) if rankings else 0
-            for entry in (rankings or []):
-                if entry.get('Login') == login:
-                    bt = entry.get('BestTime', 0) or 0
-                    sc = entry.get('Score', 0) or 0
-                    if bt > 0 or sc > 0:
-                        rank = entry.get('Rank', 0) or 0
-                    break
+            by_login, total = snapshot
+            entry = by_login.get(login, {})
+            bt = entry.get('BestTime', 0) or 0
+            sc = entry.get('Score', 0) or 0
+            if bt > 0 or sc > 0:
+                rank = entry.get('Rank', 0) or 0
             ranks = f'{rank}/{total}'
         except Exception:
             ranks = '0/0'
@@ -803,8 +816,7 @@ async def _draw_clock_all(aseco: 'Aseco') -> None:
 
     for tz, logins in tz_groups.items():
         xml = _build_clock_xml(cfg, tz, at_score)
-        for login in logins:
-            await _send_to(aseco, login, xml)
+        await _send_to(aseco, ','.join(logins), xml)
 
 
 async def _draw_clock_player(aseco: 'Aseco', login: str) -> None:
@@ -821,7 +833,7 @@ async def _draw_clock_player(aseco: 'Aseco', login: str) -> None:
 def _build_clock_xml(cfg, timezone: str, at_score: bool) -> str:
     time_str, tz_abbr = _compute_clock(timezone, cfg.timeformat)
 
-    now = datetime.utcnow()
+    now = datetime.now(datetime_timezone.utc)
     # Swatch Internet Time (beats): (UTC+1 seconds since midnight) / 86.4
     beats = int(((now.hour * 3600 + now.minute * 60 + now.second + 3600) % 86400) / 86.4)
 

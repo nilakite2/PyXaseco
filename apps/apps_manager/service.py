@@ -3,19 +3,48 @@ from __future__ import annotations
 import importlib
 import logging
 import shutil
+from contextvars import ContextVar
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pyxaseco.helpers import display_manialink_multi
 from pyxaseco.models import Gameinfo
-from pyxaseco.toml_tools import move_loadout_entry, read_toml, update_toml_table_scalar
+from pyxaseco.toml_tools import move_loadout_entry, read_toml as _read_toml, update_toml_table_scalar
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
 
 logger = logging.getLogger(__name__)
+
+_config_snapshot: ContextVar[dict[Path, dict[str, Any]] | None] = ContextVar(
+    'apps_manager_config_snapshot', default=None,
+)
+
+
+def read_toml(path: str | Path) -> dict[str, Any]:
+    snapshot = _config_snapshot.get()
+    if snapshot is None:
+        return _read_toml(path)
+    key = Path(path)
+    if key not in snapshot:
+        snapshot[key] = _read_toml(key)
+    return snapshot[key]
+
+
+def _with_config_snapshot(render):
+    @wraps(render)
+    def wrapped(*args, **kwargs):
+        if _config_snapshot.get() is not None:
+            return render(*args, **kwargs)
+        token = _config_snapshot.set({})
+        try:
+            return render(*args, **kwargs)
+        finally:
+            _config_snapshot.reset(token)
+    return wrapped
 
 
 MANAGEABLE_STANDALONE_APPS: dict[str, str] = {
@@ -29,6 +58,7 @@ MANAGEABLE_STANDALONE_APPS: dict[str, str] = {
     'records_trial': 'Trial Records',
     'jfreu': 'JFreu',
     'ztrack': 'ZTrack',
+    'endlesstmxr': 'Endless TMX Random',
 }
 
 CONFIG_APPS: dict[str, dict[str, str]] = {
@@ -72,6 +102,11 @@ CONFIG_APPS: dict[str, dict[str, str]] = {
         'save_mode': 'reload',
         'description': 'Checkpoint live overlay settings',
     },
+    'endlesstmxr': {
+        'label': 'Endless TMX Random',
+        'save_mode': 'reload',
+        'description': 'Auto-skip to a random TMX map after an author-time beat',
+    },
 }
 
 CONFIG_APP_DISCOVERY_EXCLUDE = {
@@ -107,6 +142,8 @@ RELOADABLE_APPS = {
     'bestfinishes',
     'best_cp_times',
     'checkpoint_tools',
+    'flexitime',
+    'endlesstmxr',
 }
 
 _APPS_USAGE = (
@@ -621,13 +658,16 @@ def _current_ui_mode_key(aseco: 'Aseco') -> str | None:
 
 
 def _ui_showing_score(aseco: 'Aseco') -> bool:
+    from pyxaseco.core.widget_delivery import is_score_phase
+    if getattr(aseco, 'score_phase', None) is not None:
+        return is_score_phase(aseco)
     try:
         from apps.ui.config import _state as ui_state
         if bool(getattr(ui_state, 'challenge_show_next', False)):
             return True
     except Exception:
         pass
-    return getattr(getattr(aseco.server, 'gameinfo', None), 'state', None) == Gameinfo.SCOR
+    return is_score_phase(aseco)
 
 
 def _current_ui_runtime_mode_key(aseco: 'Aseco', base_table: dict[str, Any]) -> str | None:
@@ -1235,7 +1275,7 @@ def _config_save_mode(aseco: 'Aseco', app_key: str) -> str:
     return 'reload' if _can_reload_app(aseco, app_key) else 'restart'
 
 
-async def _reload_app_runtime(aseco: 'Aseco', app_key: str) -> bool:
+async def _reload_app_runtime(aseco: 'Aseco', app_key: str, item_key: str | None = None) -> bool:
     if not _can_reload_app(aseco, app_key):
         return False
     from pyxaseco.app_config import clear_app_defaults_cache as clear_app_catalog_cache
@@ -1243,6 +1283,10 @@ async def _reload_app_runtime(aseco: 'Aseco', app_key: str) -> bool:
 
     clear_app_catalog_cache(getattr(aseco, '_base_dir', None))
     clear_settings_defaults_cache()
+    if app_key == 'ui' and item_key:
+        from apps.ui.runtime_reload import reload_ui_item_runtime
+        await reload_ui_item_runtime(aseco, item_key)
+        return True
 
     try:
         app_module = importlib.import_module(f'apps.{app_key}.app')
@@ -1258,6 +1302,7 @@ async def _reload_app_runtime(aseco: 'Aseco', app_key: str) -> bool:
     return True
 
 
+@_with_config_snapshot
 def _show_apps_manager_window(aseco: 'Aseco', admin) -> None:
     _reset_apps_action_map(admin)
     rows: list[list[Any]] = []
@@ -1319,6 +1364,7 @@ def _show_apps_manager_window(aseco: 'Aseco', admin) -> None:
     )
 
 
+@_with_config_snapshot
 def _show_app_config_window(aseco: 'Aseco', admin, app_key: str) -> None:
     spec = _discover_config_apps(aseco).get(app_key)
     if not spec:
@@ -1328,7 +1374,6 @@ def _show_app_config_window(aseco: 'Aseco', admin, app_key: str) -> None:
     rows: list[list[Any]] = []
     last_group = ''
     items = _config_items_for_app(aseco, app_key)
-    file_cache: dict[Path, dict[str, Any]] = {}
     if app_key == 'ui':
         items = sorted(items, key=lambda item: (_ui_group_index(_ui_config_group_for(item['key'])), _ui_config_group_for(item['key']), item['label']))
     for item in items:
@@ -1341,7 +1386,7 @@ def _show_app_config_window(aseco: 'Aseco', admin, app_key: str) -> None:
                 rows.append([f'{{#highlite}}{group}', '', '', '', '', ''])
                 last_group = group
         file_path = _root_dir(aseco) / item['file']
-        data = file_cache.setdefault(file_path, read_toml(file_path))
+        data = read_toml(file_path)
         info = _config_item_target_info_from_data(aseco, item, data, file_path=file_path)
         state = _config_item_state_from_info(item, info)
         summary = _config_item_summary_from_info(aseco, item, info)
@@ -1372,6 +1417,7 @@ def _show_app_config_window(aseco: 'Aseco', admin, app_key: str) -> None:
     )
 
 
+@_with_config_snapshot
 def _show_item_edit_window(aseco: 'Aseco', admin, app_key: str, item_key: str) -> None:
     item = next((entry for entry in _config_items_for_app(aseco, app_key) if entry['key'] == item_key), None)
     if not item:
@@ -1453,7 +1499,7 @@ async def _apply_config_toggle(
     write_path = _config_field_write_path(item, info, 'enabled')
     update_toml_table_scalar(info['file_path'], write_path, 'enabled', enabled)
 
-    if _config_save_mode(aseco, app_key) == 'reload' and await _reload_app_runtime(aseco, app_key):
+    if _config_save_mode(aseco, app_key) == 'reload' and await _reload_app_runtime(aseco, app_key, item_key):
         return _reload_done_message(f'{app_key}.{item_key}.enabled = {str(enabled).lower()}')
     return _restart_required_message(f'{app_key}.{item_key}.enabled = {str(enabled).lower()}')
 
@@ -1536,7 +1582,7 @@ async def handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
             return True
 
         action_text = _update_config_field(aseco, item, field_key, delta)
-        if _config_save_mode(aseco, app_key) == 'reload' and await _reload_app_runtime(aseco, app_key):
+        if _config_save_mode(aseco, app_key) == 'reload' and await _reload_app_runtime(aseco, app_key, item_key):
             await _reply(aseco, login, _reload_done_message(action_text))
         else:
             await _reply(aseco, login, _restart_required_message(action_text))

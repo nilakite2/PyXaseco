@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 PLUGIN_NAME = 'app/ui'
-PLUGIN_VERSION = '1.2-DEV'
+PLUGIN_VERSION = CORE_PYXASECO_VERSION
 PLUGIN_MANIALINK_PREFIX = '918'
 PLUGIN_LINE_HEIGHT = 1.8
 MIN_PYXASECO_VERSION = CORE_PYXASECO_VERSION
@@ -378,13 +378,13 @@ def _parse_gm_widgets(root, key: str, default_title: str, *, live: bool = False)
         width = max(15.5, _get_float(block, 'WIDTH', 15.5))
         height = max(0.0, _get_float(block, 'HEIGHT', 0.0))
         entries = max(1, _get_int(sub, 'ENTRIES', 8))
-        topcount = max(1, _get_int(sub, 'TOPCOUNT', 3))
+        topcount = max(0, _get_int(sub, 'TOPCOUNT', 3))
         row_height = max(1.0, _get_float(sub, 'ROW_HEIGHT', PLUGIN_LINE_HEIGHT))
         if live and mode == Gameinfo.TEAM:
             entries = 2
             topcount = 2
         elif topcount >= entries:
-            topcount = max(1, entries - 1)
+            topcount = max(0, entries - 1)
 
         cfg = WidgetCfg(
             enabled=_get_bool(sub, 'ENABLED', False),

@@ -12,6 +12,8 @@ Two tables are maintained:
 
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 import logging
 import re
 from dataclasses import dataclass
@@ -343,6 +345,25 @@ async def _load_all_from_db(challenge_id: int) -> None:
         logger.error("[BestSecs] Load secrecs_all failed: %s", exc)
 
 
+async def _load_own_all_from_db(aseco, challenge_id):
+    players = {int(p.id): p.login for p in aseco.server.players.all() if p.id > 0}
+    for login in players.values():
+        _tab_own_recs[login] = {}
+    pool = await _get_pool()
+    if not pool or challenge_id <= 0 or not players:
+        return
+    ids = list(players)
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            for offset in range(0, len(ids), 256):
+                chunk = ids[offset:offset + 256]
+                await cur.execute('SELECT PlayerId, Sector, Time FROM secrecs_own WHERE ChallengeId=%s '
+                                  'AND PlayerId IN (' + ','.join(['%s'] * len(chunk)) + ') ORDER BY Sector',
+                                  (challenge_id, *chunk))
+                for pid, sector, elapsed in await cur.fetchall():
+                    _tab_own_recs[players[pid]][int(sector)] = SecRec(int(elapsed), players[pid], int(sector))
+
+
 async def _load_own_from_db(challenge_id: int, player: "Player") -> None:
     _tab_own_recs[player.login] = {}
     pool = await _get_pool()
@@ -416,14 +437,14 @@ async def _send_button(aseco: "Aseco", login: str | None = None) -> None:
         "</manialink>"
     )
     if login:
-        await aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, 0, False)
+        await deliver_ui(aseco, "SendDisplayManialinkPageToLogin", login, xml, 0, False)
     else:
-        await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+        await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
 async def _hide_button(aseco: "Aseco") -> None:
     xml = f'<manialink id="{ML_BUTTON_ID}"></manialink>'
-    await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+    await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
 async def bestsecs_sync(aseco: "Aseco", _data=None) -> None:
@@ -442,8 +463,7 @@ async def bestsecs_sync(aseco: "Aseco", _data=None) -> None:
         _challenge_id = int(getattr(challenge, "id", 0) or 0)
         if _challenge_id > 0:
             await _load_all_from_db(_challenge_id)
-            for player in aseco.server.players.all():
-                await _load_own_from_db(_challenge_id, player)
+            await _load_own_all_from_db(aseco, _challenge_id)
 
     _update_show_secrecs(aseco)
     await _send_button(aseco)
@@ -458,8 +478,7 @@ async def bestsecs_new_challenge(aseco: "Aseco", challenge) -> None:
     _last_cp = {}
 
     await _load_all_from_db(_challenge_id)
-    for player in aseco.server.players.all():
-        await _load_own_from_db(_challenge_id, player)
+    await _load_own_all_from_db(aseco, _challenge_id)
 
     try:
         info = await aseco.client.query("GetCurrentChallengeInfo")
@@ -752,8 +771,7 @@ async def chat_delsecs(aseco: "Aseco", command: dict) -> None:
     _tab_sec_recs.clear()
     _tab_own_recs.clear()
     await _load_all_from_db(_challenge_id)
-    for player in aseco.server.players.all():
-        await _load_own_from_db(_challenge_id, player)
+    await _load_own_all_from_db(aseco, _challenge_id)
 
     await aseco.client.query_ignore_result(
         "ChatSendServerMessageToLogin",
@@ -778,8 +796,7 @@ async def _delete_sectors(aseco: "Aseco", lo: int, hi: int) -> None:
                     )
 
     await _load_all_from_db(_challenge_id)
-    for player in aseco.server.players.all():
-        await _load_own_from_db(_challenge_id, player)
+    await _load_own_all_from_db(aseco, _challenge_id)
 
 
 async def chat_delsec(aseco: "Aseco", command: dict) -> None:

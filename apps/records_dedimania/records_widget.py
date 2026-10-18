@@ -246,7 +246,6 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
     digest = _digest_entries(entries, login)
     if _state.player_dedi_digest.get(login) == digest:
         return
-    _state.player_dedi_digest[login] = digest
 
     xml = _build_record_widget(
         ml_id=ML_DEDI,
@@ -258,6 +257,7 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
         click_action=91804,
     )
     await _send(aseco, login, xml)
+    _state.player_dedi_digest[login] = digest
 
 
 def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | None = None) -> str:

@@ -1,6 +1,6 @@
 """Thin widget entry point for the Trial Records app records widget."""
 
-from apps.records_trial.records_widget import (
+from ..record_views import (
     ML_DEDI,
     ML_SUBWIN,
     ML_WINDOW,

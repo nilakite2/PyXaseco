@@ -151,6 +151,8 @@ def reload_config(aseco: 'Aseco') -> None:
 
 
 async def reload_runtime(aseco: 'Aseco') -> None:
+    if getattr(aseco, 'ui_delivery', None):
+        aseco.ui_delivery.invalidate()
     from .handlers.command_handlers import reload_ui_layout_runtime
 
     await reload_ui_layout_runtime(aseco)

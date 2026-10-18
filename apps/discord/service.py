@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -82,11 +83,17 @@ class DiscordWebhookState:
     def __init__(self, aseco: "Aseco", cfg: DiscordWebhookConfig):
         self.aseco = aseco
         self.cfg = cfg
-        self.queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
+        self.queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue(maxsize=256)
+        self.dropped = 0
+        self._overflow_warning_at = 0.0
         self.pending: deque[tuple[str, str]] = deque()
         self.session: aiohttp.ClientSession | None = None
         self.worker_task: asyncio.Task | None = None
         self.log_handler: _DiscordLogHandler | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.failures = 0
+        self._failure_warning_at = 0.0
+        self._cooldown_until: dict[str, float] = {}
 
     def enabled_for(self, channel: str) -> bool:
         if not self.cfg.enabled:
@@ -100,17 +107,31 @@ class DiscordWebhookState:
     def enqueue_sync(self, channel: str, content: str):
         if not self.enabled_for(channel):
             return
+        if self.loop is not None:
+            try:
+                current = asyncio.get_running_loop()
+            except RuntimeError:
+                current = None
+            if current is not self.loop:
+                if not self.loop.is_closed():
+                    self.loop.call_soon_threadsafe(self.enqueue_sync, channel, content)
+                return
         try:
+            if channel == 'chat' and self.queue.qsize() >= 224:
+                raise asyncio.QueueFull
             self.queue.put_nowait((channel, content))
-        except Exception:
-            logger.debug("[DiscordWebhook] Failed to queue sync message", exc_info=True)
+        except asyncio.QueueFull:
+            self.dropped += 1
+            now = time.monotonic()
+            if now - self._overflow_warning_at >= 60:
+                self._overflow_warning_at = now
+                logger.warning('[DiscordWebhook] Mirror queue full; %s optional messages omitted', self.dropped)
 
     async def enqueue(self, channel: str, content: str):
-        if not self.enabled_for(channel):
-            return
-        await self.queue.put((channel, content))
+        self.enqueue_sync(channel, content)
 
     async def start(self):
+        self.loop = asyncio.get_running_loop()
         timeout = aiohttp.ClientTimeout(total=max(1, int(self.cfg.request_timeout or 10)))
         self.session = aiohttp.ClientSession(timeout=timeout)
         self.worker_task = asyncio.create_task(self._worker(), name="discord-webhook-worker")
@@ -169,6 +190,7 @@ class DiscordWebhookState:
         if self.session is not None:
             await self.session.close()
             self.session = None
+        self.loop = None
 
     async def _worker(self):
         while True:
@@ -199,14 +221,26 @@ class DiscordWebhookState:
                     await self._send(channel, content)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.debug("[DiscordWebhook] Send failed", exc_info=True)
+            except Exception as exc:
+                self._failed(channel, type(exc).__name__)
             finally:
                 for _ in range(queue_items):
                     self.queue.task_done()
 
+    def _failed(self, channel: str, reason: str):
+        self.failures += 1
+        now = time.monotonic()
+        self._cooldown_until[channel] = now + 10
+        if now - self._failure_warning_at >= 60:
+            self._failure_warning_at = now
+            logger.warning('[DiscordWebhook] %s mirror unavailable (%s); %s optional deliveries failed',
+                           channel, reason, self.failures)
+
     async def _send(self, channel: str, content: str):
         if not self.session:
+            return
+        if time.monotonic() < self._cooldown_until.get(channel, 0):
+            self.dropped += 1
             return
 
         url = self.cfg.admin_webhook_url if channel == "admin" else self.cfg.chat_webhook_url
@@ -219,13 +253,13 @@ class DiscordWebhookState:
         }
         async with self.session.post(url, json=body) as resp:
             if resp.status >= 400:
-                text = await resp.text()
-                logger.warning(
-                    "[DiscordWebhook] POST to %s webhook failed: %s %s",
-                    channel,
-                    resp.status,
-                    text[:300],
-                )
+                self._failed(channel, str(resp.status))
+                if resp.status == 429:
+                    try:
+                        delay = float(resp.headers.get('Retry-After', 10))
+                    except (TypeError, ValueError):
+                        delay = 10
+                    self._cooldown_until[channel] = time.monotonic() + min(300, max(1, delay))
 
 
 _state: DiscordWebhookState | None = None

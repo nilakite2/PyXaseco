@@ -23,6 +23,7 @@ The popup windows (opened by clicking bar widgets) are also here.
 from __future__ import annotations
 
 import logging
+from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING
 import tomllib
@@ -33,6 +34,7 @@ from pyxaseco.core.base import Component
 from pyxaseco.models import Gameinfo
 from pyxaseco.helpers import format_time
 from pyxaseco.app_services import localdb_get_pool
+from pyxaseco.core.widget_delivery import deliver_ui
 
 from .hud import append_window_start, append_window_end, append_four_player_columns
 from .config import _state, _effective_mode
@@ -42,6 +44,7 @@ if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
 logger = logging.getLogger(__name__)
+_score_queries = ContextVar('ui_score_queries', default=None)
 
 # ---------------------------------------------------------------------------
 # Manialink IDs - score-screen column widgets
@@ -120,6 +123,13 @@ def _flag_path(code: str) -> str:
 
 async def _db_query(sql: str, params: tuple = ()) -> list[tuple]:
     """Run a SELECT and return rows as list of tuples. Returns [] on error."""
+    context = _score_queries.get()
+    if context is not None:
+        from .score_data import score_data
+        rows = score_data(context['aseco']).request(sql, params)
+        if rows is None:
+            context['loading'] = True
+        return rows or []
     try:
         pool = await localdb_get_pool(getattr(_state, 'aseco', None))
         if not pool:
@@ -134,73 +144,12 @@ async def _db_query(sql: str, params: tuple = ()) -> list[tuple]:
 
 
 async def _query_ranked_record_counts(aseco: 'Aseco', limit: int) -> list[tuple]:
-    """
-    Match the local records /toprecs logic:
-    count ranked entries from the records table across the active challenge list,
-    limited per challenge by rasp.maxrecs and ordered by score/date.
-    Returns rows shaped like: (login, nickname, count)
-    """
-    try:
-        from apps.records_local.chat_records2 import _get_challenge_list
-    except Exception as exc:
-        logger.warning('[Records-Eyepiece] Ranked-record helper import failed: %r', exc)
-        return []
-
-    pool = await localdb_get_pool(aseco)
-    if not pool:
-        return []
-
-    maxrecs = 0
-    try:
-        from apps.players.rankings import maxrecs as _mr
-        maxrecs = int(_mr or 0)
-    except Exception:
-        maxrecs = 0
-    if maxrecs <= 0:
-        maxrecs = 500
-
-    is_stnt = getattr(getattr(aseco.server, 'gameinfo', None), 'mode', -1) == Gameinfo.STNT
-    order = 'DESC' if is_stnt else 'ASC'
-    newlist = await _get_challenge_list(aseco)
-
-    async with pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute('SELECT Id, Uid FROM challenges')
-            chal_rows = await cur.fetchall()
-            tid_list = [row[0] for row in chal_rows if row[1] in newlist]
-
-    if not tid_list:
-        return []
-
-    recs: dict[str, int] = {}
-    async with pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            for tid in tid_list:
-                await cur.execute(
-                    f'SELECT players.Login '
-                    f'FROM players, records '
-                    f'WHERE players.Id=records.playerid AND challengeid=%s '
-                    f'ORDER BY score {order}, date ASC LIMIT %s',
-                    (tid, maxrecs),
-                )
-                for row in await cur.fetchall():
-                    login = str(row[0] or '')
-                    if login:
-                        recs[login] = recs.get(login, 0) + 1
-
-    if not recs:
-        return []
-
-    sorted_recs = sorted(recs.items(), key=lambda x: (-x[1], x[0].lower()))[:limit]
-    out: list[tuple] = []
-    async with pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            for login, count in sorted_recs:
-                await cur.execute('SELECT NickName FROM players WHERE Login=%s', (login,))
-                nrow = await cur.fetchone()
-                nick = nrow[0] if nrow else login
-                out.append((login, nick, count))
-    return out
+    from apps.records_local.ranked_counts import ranked_counts
+    service = ranked_counts(aseco)
+    rows = await service.snapshot(deferred=_score_queries.get() is not None)
+    if _score_queries.get() is not None and service.loading:
+        _score_queries.get()['loading'] = True
+    return sorted(rows, key=lambda row: (-row[2], row[0].lower()))[:limit]
 
 
 # ---------------------------------------------------------------------------
@@ -643,23 +592,43 @@ async def build_top_active_players_widget(aseco: 'Aseco') -> str:
 # ---------------------------------------------------------------------------
 
 async def draw_all_score_columns(aseco: 'Aseco') -> None:
-    """Send all enabled score-screen toplist column widgets to everyone."""
-    async def _bc(xml: str) -> None:
-        await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
-
-    await _bc(await build_top_rankings_widget(aseco))
-    await _bc(await build_top_winners_widget(aseco))
-    await _bc(await build_most_records_widget(aseco))
-    await _bc(await build_most_finished_widget(aseco))
-    await _bc(await build_top_playtime_widget(aseco))
-    await _bc(await build_top_donators_widget(aseco))
-    await _bc(await build_top_nations_widget(aseco))
-    await _bc(await build_top_tracks_widget(aseco))
-    await _bc(await build_top_voters_widget(aseco))
-    await _bc(await build_top_visitors_widget(aseco))
-    await _bc(await build_top_roundscore_widget(aseco))
-    await _bc(await build_top_winning_payouts_widget(aseco))
-    await _bc(await build_top_active_players_widget(aseco))
+    """Queue score SELECTs, then group the available/explicit-loading pages."""
+    builders = (
+        (build_top_rankings_widget, 'stl_top_rankings', ML_TOP_RANKINGS),
+        (build_top_winners_widget, 'stl_top_winners', ML_TOP_WINNERS),
+        (build_most_records_widget, 'stl_most_records', ML_MOST_RECORDS),
+        (build_most_finished_widget, 'stl_most_finished', ML_MOST_FINISHED),
+        (build_top_playtime_widget, 'stl_top_playtime', ML_TOP_PLAYTIME),
+        (build_top_donators_widget, 'stl_top_donators', ML_TOP_DONATORS),
+        (build_top_nations_widget, 'stl_top_nations', ML_TOP_NATIONS),
+        (build_top_tracks_widget, 'stl_top_tracks', ML_TOP_TRACKS),
+        (build_top_voters_widget, 'stl_top_voters', ML_TOP_VOTERS),
+        (build_top_visitors_widget, 'stl_top_visitors', ML_TOP_VISITORS),
+        (build_top_roundscore_widget, 'stl_top_roundscore', ML_TOP_ROUNDSCORE),
+        (build_top_winning_payouts_widget, 'stl_top_winning_payouts', ML_TOP_WINNING_PAYOUTS),
+        (build_top_active_players_widget, 'stl_top_active_players', ML_TOP_ACTIVE_PLAYERS),
+    )
+    pages, size = [], 0
+    for builder, attribute, page_id in builders:
+        context = {'aseco': aseco, 'loading': False}
+        token = _score_queries.set(context)
+        try:
+            xml = await builder(aseco)
+        finally:
+            _score_queries.reset(token)
+        if context['loading']:
+            cfg = getattr(_state, attribute)
+            xml = (_stl_header(page_id, cfg, 1) +
+                   _stl_row_score_nick(0, '', 'Loading...', _state.line_height, '', 'DDDF') +
+                   _stl_footer())
+        encoded_size = len(xml.encode('utf-8'))
+        if pages and size + encoded_size > 60000:
+            await deliver_ui(aseco, 'SendDisplayManialinkPage', '<manialinks>' + ''.join(pages) + '</manialinks>', 0, False)
+            pages, size = [], 0
+        pages.append(xml)
+        size += encoded_size
+    if pages:
+        await deliver_ui(aseco, 'SendDisplayManialinkPage', '<manialinks>' + ''.join(pages) + '</manialinks>', 0, False)
 
 
 async def hide_all_score_columns(aseco: 'Aseco') -> None:
@@ -669,7 +638,7 @@ async def hide_all_score_columns(aseco: 'Aseco') -> None:
            ML_TOP_VOTERS, ML_TOP_VISITORS, ML_TOP_ROUNDSCORE,
            ML_TOP_WINNING_PAYOUTS, ML_TOP_ACTIVE_PLAYERS)
     combined = ''.join(f'<manialink id="{mid}"></manialink>' for mid in ids)
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', combined, 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', combined, 0, False)
 
 
 # ---------------------------------------------------------------------------

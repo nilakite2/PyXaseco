@@ -3,7 +3,7 @@
 [discord_webhook.config]
 
 [discord_webhook.config.discord_webhook]
-enabled = "true"
+enabled = "false"
 mirror_player_chat = "true"
 mirror_server_chat = "false"
 mirror_admin_commands = "true"

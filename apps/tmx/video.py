@@ -10,11 +10,9 @@ or in a multi-page ManiaLink window.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
 
 from pyxaseco.helpers import display_manialink, display_manialink_multi
 from pyxaseco.app_services import get_tmx_service
@@ -37,7 +35,7 @@ _current_uid: str = ""
 _current_tmx_id: int = 0
 _current_tmx_prefix: str = ""
 _videos: list[dict] = []
-_load_lock = asyncio.Lock()
+_loading = False
 
 
 def _tmx_service(aseco):
@@ -101,122 +99,6 @@ def _current_challenge(aseco: "Aseco"):
     return getattr(getattr(aseco, "server", None), "challenge", None)
 
 
-def _host_from_url(value: str) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    parsed = urlparse(raw if "://" in raw else f"http://{raw}")
-    return str(parsed.netloc or "").strip()
-
-
-async def _resolve_current_tmx_ref(aseco: "Aseco", challenge=None) -> tuple[int, str]:
-    ch = challenge if challenge is not None else _current_challenge(aseco)
-    if ch is None:
-        return 0, ""
-
-    section = ""
-    try:
-        service = _tmx_service(aseco)
-        impl = getattr(service, 'get_tmx_section', None) if service is not None else None
-        section = await impl(aseco) if callable(impl) else ""
-    except Exception:
-        section = ""
-
-    prefix = str(getattr(ch, "tmx_prefix", "") or "").strip()
-
-    try:
-        direct = int(getattr(ch, "tmx_id", 0) or 0)
-    except Exception:
-        direct = 0
-    if direct > 0:
-        if prefix:
-            return direct, prefix
-        try:
-            service = _tmx_service(aseco)
-            impl = getattr(service, 'tmx_prefix_for_section', None) if service is not None else None
-            return direct, impl(section) if callable(impl) else ""
-        except Exception:
-            return direct, ""
-
-    tmx_obj = getattr(ch, "tmx", None)
-    if prefix == "":
-        prefix = str(getattr(tmx_obj, "prefix", "") or "").strip()
-    try:
-        nested = int(getattr(tmx_obj, "id", 0) or 0)
-    except Exception:
-        nested = 0
-    if nested > 0:
-        if prefix:
-            return nested, prefix
-        page_host = _host_from_url(getattr(tmx_obj, "pageurl", "") or "")
-        try:
-            service = _tmx_service(aseco)
-            hosts = getattr(service, 'TMX_HOST_ALIASES', {}) if service is not None else {}
-            prefix_for_section = getattr(service, 'tmx_prefix_for_section', None) if service is not None else None
-            for site, host in hosts.items():
-                if page_host.lower() == str(host).lower():
-                    return nested, prefix_for_section(site) if callable(prefix_for_section) else ""
-            return nested, prefix_for_section(section) if callable(prefix_for_section) else ""
-        except Exception:
-            return nested, ""
-
-    uid = str(getattr(ch, "uid", "") or "").strip()
-    if not uid:
-        return 0, ""
-
-    try:
-        service = _tmx_service(aseco)
-        impl = getattr(service, 'resolve_tmx_track_id', None) if service is not None else None
-        track_id, prefix = await impl(uid, section) if callable(impl) else (None, "")
-        if track_id:
-            try:
-                ch.tmx_id = int(track_id)
-                if prefix:
-                    ch.tmx_prefix = prefix
-            except Exception:
-                pass
-            return int(track_id), str(prefix or "")
-    except Exception as exc:
-        logger.debug("[TMXVideo] Could not resolve TMX track id for uid=%s: %s", uid, exc)
-
-    return 0, ""
-
-
-async def _fetch_json(url: str):
-    try:
-        import aiohttp
-
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    logger.debug("[TMXVideo] HTTP %s for %s", resp.status, url)
-                    return None
-                return await resp.json(content_type=None)
-    except Exception as exc:
-        logger.debug("[TMXVideo] Request failed for %s: %s", url, exc)
-        return None
-
-
-async def _load_videos_for_track(aseco: "Aseco", uid: str, tmx_id: int, prefix: str):
-    global _videos
-    _msg_console(aseco, f"Requesting videos for track with TMX ID {tmx_id}")
-    host = await _resolve_video_host(aseco, prefix)
-
-    url = f"https://{host}/api/videos?fields=LinkId%2CTitle%2CPublishedAt&trackid={int(tmx_id)}"
-    _msg_console(aseco, f"Requesting {url}")
-
-    data = await _fetch_json(url)
-    results = data.get("Results") if isinstance(data, dict) else None
-    if isinstance(results, list):
-        _videos = [dict(item) for item in results if isinstance(item, dict) and str(item.get("LinkId") or "").strip()]
-        _videos.sort(key=_published_sort_key, reverse=True)
-    else:
-        _videos = []
-
-    _msg_console(aseco, f"Found {len(_videos)} videos for track with TMX ID {tmx_id}")
-
-
 async def _resolve_server_section(aseco: "Aseco") -> str:
     try:
         service = _tmx_service(aseco)
@@ -235,58 +117,48 @@ async def _resolve_server_section(aseco: "Aseco") -> str:
         return game or "TMNF"
 
 
-async def _resolve_video_host(aseco: "Aseco", prefix: str) -> str:
-    pref = str(prefix or "").strip().lower()
-    if pref in TMX_VIDEO_HOSTS_BY_PREFIX:
-        return TMX_VIDEO_HOSTS_BY_PREFIX[pref]
-
-    try:
-        service = _tmx_service(aseco)
-        impl = getattr(service, 'tmx_public_host_for_section', None) if service is not None else None
-        return impl(await _resolve_server_section(aseco)) if callable(impl) else "tmnf.exchange"
-    except Exception:
-        section = (await _resolve_server_section(aseco)).upper()
-        if section == "TMU":
-            return "tmuf.exchange"
-        if section == "TMN":
-            return "nations.tm-exchange.com"
-        if section == "TMO":
-            return "original.tm-exchange.com"
-        if section == "TMS":
-            return "sunrise.tm-exchange.com"
-        return "tmnf.exchange"
 
 
-async def _ensure_current_videos(aseco: "Aseco", challenge=None, *, force: bool = False):
-    global _current_uid, _current_tmx_id, _current_tmx_prefix, _videos
-    ch = challenge if challenge is not None else _current_challenge(aseco)
-    if ch is None:
-        _current_uid = ""
-        _current_tmx_id = 0
-        _current_tmx_prefix = ""
-        _videos = []
+
+async def _ensure_current_videos(aseco: "Aseco", challenge=None, *, force=False):
+    global _current_uid, _videos, _loading
+    ch = challenge or _current_challenge(aseco)
+    uid = str(getattr(ch, 'uid', '') or '')
+    if not uid or (not force and uid == _current_uid and not _loading):
         return
-
-    uid = str(getattr(ch, "uid", "") or "").strip()
-    if not uid:
-        _current_uid = ""
-        _current_tmx_id = 0
-        _current_tmx_prefix = ""
-        _videos = []
-        return
-
-    async with _load_lock:
-        if not force and uid == _current_uid:
-            return
-
-        _current_uid = uid
-        _videos = []
-        _current_tmx_id, _current_tmx_prefix = await _resolve_current_tmx_ref(aseco, ch)
-        if _current_tmx_id <= 0:
-            _msg_console(aseco, f"No TMX ID available for track uid {uid}")
-            return
-
-        await _load_videos_for_track(aseco, uid, _current_tmx_id, _current_tmx_prefix)
+    from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy
+    from pyxaseco.core.external_io import request_json
+    _current_uid, _videos, _loading = uid, [], True
+    section = await _resolve_server_section(aseco)
+    service = _tmx_service(aseco)
+    job = JobEnvelope.capture(aseco.capture_job_context(), {
+        'uid': uid, 'id': int(getattr(ch, 'tmx_id', 0) or 0),
+        'prefix': str(getattr(ch, 'tmx_prefix', '') or ''), 'section': section})
+    async def operation(envelope):
+        p = envelope.payload()
+        track_id, prefix = p['id'], p['prefix']
+        if not track_id:
+            track_id, prefix = await service.resolve_tmx_track_id(p['uid'], p['section'])
+        if not track_id:
+            return 0, '', []
+        host = TMX_VIDEO_HOSTS_BY_PREFIX.get(prefix, 'tmnf.exchange')
+        data = await request_json(aseco, 'tmx_video', 'GET',
+            f'https://{host}/api/videos?fields=LinkId,Title,PublishedAt&trackid={track_id}')
+        rows = [dict(row) for row in (data or {}).get('Results', [])
+                if isinstance(row, dict) and row.get('LinkId')]
+        return track_id, prefix, sorted(rows, key=_published_sort_key, reverse=True)
+    async def apply(result):
+        global _current_tmx_id, _current_tmx_prefix, _videos, _loading, _current_uid
+        _loading = False
+        if result.status == 'completed':
+            _current_tmx_id, _current_tmx_prefix, _videos = result.value
+        else:
+            _current_uid = ''  # an outage is retryable, not a cached empty list
+    admitted = aseco.jobs.service('tmx_video', JobPolicy(deadline_seconds=60)).submit(
+        job, operation, apply, dedupe_key='current')
+    from pyxaseco.core.background_jobs import Admission
+    if admitted not in (Admission.ACCEPTED, Admission.DUPLICATE):
+        _current_uid, _loading = '', False
 
 
 def _has_videos() -> bool:
@@ -369,7 +241,7 @@ async def chat_gps(aseco: "Aseco", command: dict):
 
     await _ensure_current_videos(aseco)
     if not _has_videos():
-        await _msg_player(aseco, login, "{#error}No videos found for this track.")
+        await _msg_player(aseco, login, "Video lookup loading; try /gps shortly." if _loading else "{#error}No videos found for this track.")
         return
 
     if subcmd == "list":

@@ -9,12 +9,21 @@ TMX HTTP calls are made with aiohttp.
 
 from __future__ import annotations
 
+import asyncio
+from hashlib import sha256
+import html
 import logging
+import re
 import sys
+import urllib.parse
+from aiohttp import ClientError
 from typing import TYPE_CHECKING
 
-from pyxaseco.helpers import format_text, format_time, display_manialink, validate_utf8
+from pyxaseco.helpers import clean_tm_text, format_text, format_time, display_manialink, validate_utf8
 from pyxaseco.models import Gameinfo
+from pyxaseco.core.bounded_cache import BoundedCache
+from pyxaseco.core.external_io import request_json
+from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -26,6 +35,20 @@ PLUGIN_METADATA = {
     'description': 'Provides TMX site resolution, metadata lookups, and public TMX helpers.',
     'provides': ['service/tmx', 'tmx'],
 }
+
+
+def _decode_tmx_legacy_text(value: object) -> str:
+    text = html.unescape(str(value or '')).strip()
+    if not text:
+        return ''
+
+    decoded = text
+    if re.search(r'%[0-9A-Fa-f]{2}', decoded):
+        decoded = urllib.parse.unquote_plus(decoded)
+        if re.search(r'%[0-9A-Fa-f]{2}', decoded):
+            decoded = urllib.parse.unquote(decoded)
+
+    return clean_tm_text(html.unescape(decoded).strip(), keep_colors=True)
 
 
 def _literal_ml_text(value):
@@ -179,15 +202,14 @@ TMX_SITE_ORDER = ["TMNF", "TMU", "TMN", "TMO", "TMS"]
 
 _tmxdata = None  # cached TMX data for current track
 _tmx_worldrec_cached_msg = ""
-_tmx_helper_cache: dict[str, dict] = {
-    "trackid": {},
-    "trackinfo": {},
-    "image": {},
-    "trackmeta": {},
-}
+_tmx_helper_cache = {key: BoundedCache() for key in ('trackid', 'trackinfo', 'image', 'trackmeta')}
+_tmx_wr_cache = BoundedCache(ttl=60, negative_ttl=15)
+_runtime_aseco = None
 
 
 def register(aseco: "Aseco"):
+    global _runtime_aseco
+    _runtime_aseco = aseco
     aseco.register_service(
         'service/tmx',
         sys.modules[__name__],
@@ -299,28 +321,20 @@ def build_public_tmx_track_url(
 
 
 async def _tmx_get_json(url: str):
-    try:
-        import aiohttp
+    if _runtime_aseco is None:
+        raise RuntimeError('TMX runtime is not registered')
+    return await request_json(_runtime_aseco, 'tmx_metadata', 'GET', url, timeout=10)
 
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url) as resp:
-                text = await resp.text(errors="replace")
 
-                if resp.status != 200:
-                    logger.debug("[TMXInfo] HTTP %s for %s", resp.status, url)
-                    logger.debug("[TMXInfo] Response preview: %s", text[:800])
-                    return None
-
-                try:
-                    return await resp.json(content_type=None)
-                except Exception:
-                    logger.debug("[TMXInfo] Non-JSON response for %s", url)
-                    logger.debug("[TMXInfo] Response preview: %s", text[:800])
-                    return None
-    except Exception as e:
-        logger.debug("[TMXInfo] Request failed for %s: %r (%s)", url, e, type(e).__name__)
-        return None
+def _tmx_results(data):
+    if data is None:
+        return []
+    if not isinstance(data, dict) or not isinstance(data.get('Results'), list):
+        raise ValueError('Invalid TMX results response')
+    results = data['Results']
+    if any(not isinstance(row, dict) for row in results):
+        raise ValueError('Invalid TMX result row')
+    return results
 
 
 async def _resolve_tmx_track_id(uid: str, preferred_section: str | None = None) -> tuple[int | None, str | None]:
@@ -331,6 +345,10 @@ async def _resolve_tmx_track_id(uid: str, preferred_section: str | None = None) 
     uid = str(uid or "").strip()
     if not uid:
         return None, None
+    cache_key = (uid, (preferred_section or '').upper())
+    cached = _tmx_helper_cache['trackid'].get(cache_key)
+    if cached is not None:
+        return cached if cached else (None, None)
 
     order: list[str] = []
     pref = (preferred_section or "").upper()
@@ -340,25 +358,36 @@ async def _resolve_tmx_track_id(uid: str, preferred_section: str | None = None) 
         if site not in order:
             order.append(site)
 
+    last_error = None
     for site in order:
         prefix = _tmx_prefix_for_section(site)
-        url = f"https://{prefix}.tm-exchange.com/api/tracks?fields=TrackId&uid={uid}"
+        url = f"https://{prefix}.tm-exchange.com/api/tracks?fields=TrackId&uid={urllib.parse.quote(uid, safe='')}"
 
         logger.debug("[TMXInfo] UID resolve section=%s prefix=%s uid=%s", site, prefix, uid)
         logger.debug("[TMXInfo] URL: %s", url)
 
-        data = await _tmx_get_json(url)
-        if not data or not isinstance(data, dict):
-            continue
+        try:
+            async with asyncio.timeout(5):
+                data = await _tmx_get_json(url)
+            results = _tmx_results(data)
+            if results:
+                track_id = int(results[0].get('TrackId', 0) or 0)
+                if track_id <= 0:
+                    raise ValueError('Invalid TMX identity')
+                answer = track_id, prefix
+                _tmx_helper_cache['trackid'][cache_key] = answer
+                return answer
+        except (ClientError, OSError, ValueError, TypeError) as error:
+            last_error = error
+            logger.debug('[TMXInfo] UID lookup failed on %s (%s); trying next site', site, type(error).__name__)
 
-        results = data.get("Results", [])
-        if results and isinstance(results[0], dict) and results[0].get("TrackId") is not None:
-            try:
-                return int(results[0]["TrackId"]), prefix
-            except Exception:
-                continue
+    if last_error is not None:
+        # A failed site may hold the map. Do not turn an outage into a cached miss.
+        raise last_error
 
     logger.debug("[TMXInfo] Could not resolve TMX TrackId from UID: %s", uid)
+    # Use a false value for short-lived confirmed negatives.
+    _tmx_helper_cache['trackid'][cache_key] = False
     return None, None
 
 
@@ -372,12 +401,12 @@ async def _fetch_tmx_replays(track_id: int, prefix: str) -> list[dict]:
     logger.debug("[TMXInfo] Replays URL: %s", url)
 
     data = await _tmx_get_json(url)
-    if not data or not isinstance(data, dict):
+    if data is None:
         return []
 
-    results = data.get("Results", [])
-    if not isinstance(results, list):
-        return []
+    if not isinstance(data, dict) or not isinstance(data.get('Results'), list):
+        raise ValueError('Invalid TMX replay response')
+    results = data['Results']
 
     public_host = _tmx_public_host_for_prefix(prefix)
 
@@ -391,7 +420,7 @@ async def _fetch_tmx_replays(track_id: int, prefix: str) -> list[dict]:
 
         replays.append({
             "id": replay_id,
-            "name": user.get("Name", "?"),
+            "name": _decode_tmx_legacy_text(user.get("Name", "?")) or "?",
             "time": int(r.get("ReplayTime", 0) or 0),
             "score": r.get("ReplayScore"),
             "leaderboard_score": r.get("Score"),
@@ -409,7 +438,7 @@ def _parse_tmx_track_result(t: dict, prefix: str, replays: list[dict]) -> dict:
     if authors and isinstance(authors[0], dict):
         user = authors[0].get("User", {})
         if isinstance(user, dict):
-            author_name = user.get("Name", "?")
+            author_name = _decode_tmx_legacy_text(user.get("Name", "?")) or "?"
 
     type_map = {
         0: "Race",
@@ -467,7 +496,7 @@ def _parse_tmx_track_result(t: dict, prefix: str, replays: list[dict]) -> dict:
     return {
         "id": track_id,
         "uid": t.get("UId", ""),
-        "name": t.get("TrackName", ""),
+        "name": _decode_tmx_legacy_text(t.get("TrackName", "")),
         "author": author_name,
         "uploaded": str(t.get("UploadedAt", "") or "")[:16],
         "updated": str(t.get("UpdatedAt", "") or "")[:16],
@@ -518,12 +547,11 @@ async def _fetch_tmx_info(uid_or_id: str, section: str, with_records: bool) -> d
         logger.debug("[TMXInfo] URL: %s", url)
 
         data = await _tmx_get_json(url)
-        if not data or not isinstance(data, dict):
-            return None
-
-        results = data.get("Results", [])
+        results = _tmx_results(data)
         if not results or not isinstance(results[0], dict):
             return None
+        if int(results[0].get('TrackId', 0) or 0) != track_id:
+            raise ValueError('TMX metadata does not match requested track ID')
 
         replays = await _fetch_tmx_replays(track_id, prefix) if with_records else []
         return _parse_tmx_track_result(results[0], prefix, replays)
@@ -545,18 +573,19 @@ async def _fetch_tmx_info(uid_or_id: str, section: str, with_records: bool) -> d
     logger.debug("[TMXInfo] URL: %s", url)
 
     data = await _tmx_get_json(url)
-    if not data or not isinstance(data, dict):
-        return None
-
-    results = data.get("Results", [])
+    results = _tmx_results(data)
     if not results or not isinstance(results[0], dict):
         return None
+    if int(results[0].get('TrackId', 0) or 0) != track_id:
+        raise ValueError('TMX metadata does not match resolved track ID')
+    if str(results[0].get('UId', '')) != arg:
+        raise ValueError('TMX metadata UID does not match requested map')
 
     replays = await _fetch_tmx_replays(track_id, prefix) if with_records else []
     return _parse_tmx_track_result(results[0], prefix, replays)
 
 
-async def get_tmx_image_for_uid(aseco: "Aseco", uid: str) -> str:
+async def _load_tmx_image_for_uid(aseco: "Aseco", uid: str) -> str:
     key = str(uid or "").strip()
     if not key:
         return ""
@@ -574,7 +603,7 @@ async def get_tmx_image_for_uid(aseco: "Aseco", uid: str) -> str:
     return image
 
 
-async def get_tmx_trackinfo_for_uid(aseco: "Aseco", uid: str, mode: int) -> dict:
+async def _load_tmx_trackinfo_for_uid(aseco: "Aseco", uid: str, mode: int) -> dict:
     key = (str(uid or "").strip(), int(mode))
     if not key[0]:
         return {}
@@ -616,7 +645,7 @@ async def get_tmx_trackinfo_for_uid(aseco: "Aseco", uid: str, mode: int) -> dict
     return out
 
 
-async def get_tmx_trackmeta_for_uid(aseco: "Aseco", uid: str) -> dict:
+async def _load_tmx_trackmeta_for_uid(aseco: "Aseco", uid: str) -> dict:
     key = str(uid or "").strip()
     if not key:
         return {}
@@ -641,6 +670,74 @@ async def get_tmx_trackmeta_for_uid(aseco: "Aseco", uid: str) -> dict:
     return out
 
 
+async def _cached_helper(aseco, kind, uid, mode=None):
+    if not uid:
+        return '' if kind == 'image' else {}
+    key = (str(uid), int(mode)) if kind == 'trackinfo' else str(uid)
+    cached = _tmx_helper_cache[kind].get(key)
+    if cached is not None:
+        return cached.copy() if isinstance(cached, dict) else cached
+    job = JobEnvelope.capture(aseco.capture_job_context(), {'uid': str(uid), 'mode': mode})
+    loaders = {'image': _load_tmx_image_for_uid, 'trackinfo': _load_tmx_trackinfo_for_uid,
+               'trackmeta': _load_tmx_trackmeta_for_uid}
+    async def operation(envelope):
+        data = envelope.payload()
+        args = (aseco, data['uid'], data['mode']) if kind == 'trackinfo' else (aseco, data['uid'])
+        return await loaders[kind](*args)
+    async def apply(result):
+        if result.status == 'completed':
+            await aseco.release_event('onTmxMetadataLoaded', str(uid))
+    aseco.jobs.service('tmx_metadata', JobPolicy(deadline_seconds=60)).submit(
+        job, operation, apply, dedupe_key=kind + ':' + str(key))
+    return '' if kind == 'image' else {}
+
+
+async def get_tmx_image_for_uid(aseco, uid):
+    return await _cached_helper(aseco, 'image', uid)
+
+
+async def get_tmx_trackinfo_for_uid(aseco, uid, mode):
+    return await _cached_helper(aseco, 'trackinfo', uid, mode)
+
+
+async def get_tmx_trackmeta_for_uid(aseco, uid):
+    return await _cached_helper(aseco, 'trackmeta', uid)
+
+
+async def get_tmx_world_record_for_uid(aseco: "Aseco", uid: str) -> dict:
+    key = str(uid or "").strip()
+    if not key:
+        return {}
+
+    section = await _get_tmx_section(aseco)
+    cached = _tmx_wr_cache.get((key, section))
+    if cached is not None:
+        return dict(cached)
+    data = await _fetch_tmx_info(key, section, True)
+    if not data:
+        _tmx_wr_cache[(key, section)] = {}
+        return {}
+
+    records = data.get("recordlist", [])
+    if not isinstance(records, list) or not records:
+        _tmx_wr_cache[(key, section)] = {}
+        return {}
+
+    rec = records[0] if isinstance(records[0], dict) else {}
+    if not rec:
+        return {}
+
+    answer = {
+        "score": int(rec.get("time", 0) or 0),
+        "name": str(rec.get("name", "") or ""),
+        "url": str(rec.get("url", "") or ""),
+        "track_id": int(data.get("id", 0) or 0),
+        "section": str(data.get("section", "") or ""),
+    }
+    _tmx_wr_cache[(key, section)] = answer
+    return dict(answer)
+
+
 async def _tmx_worldrec_player_connect(aseco: "Aseco", player):
     show = int(getattr(aseco.settings, "show_tmxrec", 0) or 0)
     if show <= 0 or not _tmx_worldrec_cached_msg:
@@ -654,94 +751,90 @@ async def _tmx_worldrec_player_connect(aseco: "Aseco", player):
 
 async def _tmx_worldrec(aseco: "Aseco", challenge):
     global _tmx_worldrec_cached_msg
-    tmx_value = "---.--"
     _tmx_worldrec_cached_msg = ""
-    mode = getattr(aseco.server.gameinfo, "mode", -1)
-
-    try:
-        uid = getattr(challenge, "uid", "") or getattr(aseco.server.challenge, "uid", "")
-        if not uid:
-            logger.debug("[TMXInfo] No challenge UID available for TMX world record")
-            return
-
-        section = await _get_tmx_section(aseco)
-
-        track_id, prefix = await _resolve_tmx_track_id(uid, section)
-        if not track_id or not prefix:
-            logger.debug("[TMXInfo] Could not resolve UID %s to TMX track id", uid)
-            tmx_value = "  ---" if mode == Gameinfo.STNT else "---.--"
-        else:
-            logger.debug("[TMXInfo] Using track_id=%s prefix=%s for WR fetch", track_id, prefix)
-
-            try:
-                challenge.tmx_id = track_id
-                challenge.tmx_prefix = prefix
-            except Exception:
-                pass
-
-            replays = await _fetch_tmx_replays(track_id, prefix)
-            if replays:
-                rec = replays[0]
-                rec_time = int(rec.get("time", 0) or 0)
-                rec_name = str(rec.get("name", "?") or "?")
-
-                if mode == Gameinfo.STNT:
-                    wr_text = str(rec_time)
-                    tmx_value = str(rec_time).rjust(5)
-                else:
-                    wr_text = format_time(rec_time)
-                    tmx_value = wr_text
-
-                show = getattr(aseco.settings, "show_tmxrec", 0)
-                if show > 0:
-                    msg = format_text(
-                        aseco.get_chat_message("TMXREC"),
-                        wr_text,
-                        rec_name,
-                    )
-                    _tmx_worldrec_cached_msg = msg
-                    await aseco.client.query_ignore_result(
-                        "ChatSendServerMessage",
-                        aseco.format_colors(msg),
-                    )
-            else:
-                tmx_value = "  ---" if mode == Gameinfo.STNT else "---.--"
-
-    except Exception as e:
-        logger.debug("[TMXInfo] WR fetch failed: %s", e)
-        tmx_value = "  ---" if mode == Gameinfo.STNT else "---.--"
-
-    try:
-        panel_service = (
-            sys.modules.get("apps.platform_ui.panels")
-            or sys.modules.get("apps.platform_ui.panels")
-        )
-        if panel_service is None:
-            logger.debug("[TMXInfo] Could not update records panel: panel service not loaded")
-        else:
-            panel_service.set_records_panel("tmx", tmx_value)
-            await panel_service.update_allrecpanels(aseco)
-    except Exception as e:
-        logger.debug("[TMXInfo] Could not update records panel: %s", e)
-
-
-async def chat_tmxinfo(aseco: "Aseco", command: dict):
-    player = command["author"]
-    login = player.login
-    params = (command.get("params") or "").split()
+    uid = str(getattr(challenge, 'uid', '') or '')
+    if not uid:
+        return
     section = await _get_tmx_section(aseco)
+    mode = aseco.server.gameinfo.mode
+    panel = sys.modules.get('apps.platform_ui.panels')
+    if panel:
+        panel.set_records_panel('tmx', '  ---' if mode == Gameinfo.STNT else '---.--')
+        await panel.update_allrecpanels(aseco)
+    job = JobEnvelope.capture(aseco.capture_job_context(), {'uid': uid, 'section': section})
+    async def operation(envelope):
+        p = envelope.payload()
+        return await _fetch_tmx_info(p['uid'], p['section'], True)
+    async def apply(result):
+        global _tmx_worldrec_cached_msg
+        if result.status != 'completed':
+            return
+        data = result.value or {}
+        if data:
+            challenge.tmx_id = data['id']
+            challenge.tmx_prefix = _tmx_prefix_for_section(data['section'])
+        records = data.get('recordlist', [])
+        value = '  ---' if mode == Gameinfo.STNT else '---.--'
+        if records:
+            rec = records[0]
+            value = str(rec['time']) if mode == Gameinfo.STNT else format_time(rec['time'])
+            if int(getattr(aseco.settings, 'show_tmxrec', 0) or 0) > 0:
+                msg = format_text(aseco.get_chat_message('TMXREC'), value, rec['name'])
+                _tmx_worldrec_cached_msg = msg
+                await aseco.client.query_ignore_result('ChatSendServerMessage', aseco.format_colors(msg))
+        if panel:
+            panel.set_records_panel('tmx', value)
+            await panel.update_allrecpanels(aseco)
+    aseco.jobs.service('tmx_metadata', JobPolicy(deadline_seconds=60)).submit(
+        job, operation, apply, dedupe_key='worldrec')
 
-    uid_or_id = aseco.server.challenge.uid
-    if params:
-        uid_or_id = params[0]
-        if len(params) > 1:
-            section = params[1].upper()
 
-    data = await _fetch_tmx_info(uid_or_id, section, True)
+async def _queue_tmx_command(aseco, command, render):
+    player = command['author']
+    login = player.login
+    params = (command.get('params') or '').split()
+    section = params[1].upper() if len(params) > 1 else await _get_tmx_section(aseco)
+    if section not in TMX_PREFIXES:
+        await aseco.client.query_ignore_result('ChatSendServerMessageToLogin',
+            aseco.format_colors('{#server}> {#error}Unknown TMX section; use TMNF, TMU, TMN, TMO or TMS.'), login)
+        return
+    ref = params[0] if params else aseco.server.challenge.uid
+    mode = aseco.server.gameinfo.mode
+    job = JobEnvelope.capture(aseco.capture_job_context(login=login),
+                              {'ref': ref, 'section': section})
+    async def operation(envelope):
+        p = envelope.payload()
+        return await _fetch_tmx_info(p['ref'], p['section'], True)
+    async def apply(result):
+        if aseco.server.players.get_player(login) is not player:
+            return
+        if result.status != 'completed':
+            await aseco.client.query_ignore_result('ChatSendServerMessageToLogin',
+                aseco.format_colors('{#server}> {#error}TMX lookup unavailable; try again later.'), login)
+            return
+        data = dict(result.value, _requested_mode=mode) if result.value else None
+        await render(aseco, login, data)
+    key = sha256(f'{render.__name__}:{section}:{ref}:{id(player)}'.encode()).hexdigest()
+    admitted = aseco.jobs.service('tmx_commands', JobPolicy(capacity=8, workers=2, deadline_seconds=60)).submit(
+        job, operation, apply, dedupe_key=key, current_map=not bool(params))
+    from pyxaseco.core.background_jobs import Admission
+    message = '{#server}> Loading TMX data...' if admitted in (Admission.ACCEPTED, Admission.DUPLICATE) else '{#server}> {#error}TMX lookup busy; retry shortly.'
+    await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', aseco.format_colors(message), login)
+
+
+async def chat_tmxinfo(aseco, command):
+    await _queue_tmx_command(aseco, command, _render_tmxinfo)
+
+
+async def chat_tmxrecs(aseco, command):
+    await _queue_tmx_command(aseco, command, _render_tmxrecs)
+
+
+async def _render_tmxinfo(aseco, login, data):
     if not data:
         await aseco.client.query_ignore_result(
             "ChatSendServerMessageToLogin",
-            aseco.format_colors("{#server}> {#error}Track not found on TMX or TMX is down!"),
+            aseco.format_colors("{#server}> {#error}Track not found on TMX!"),
             login,
         )
         return
@@ -793,23 +886,11 @@ async def chat_tmxinfo(aseco: "Aseco", command: dict):
     )
 
 
-async def chat_tmxrecs(aseco: "Aseco", command: dict):
-    player = command["author"]
-    login = player.login
-    params = (command.get("params") or "").split()
-    section = await _get_tmx_section(aseco)
-
-    uid_or_id = aseco.server.challenge.uid
-    if params:
-        uid_or_id = params[0]
-        if len(params) > 1:
-            section = params[1].upper()
-
-    data = await _fetch_tmx_info(uid_or_id, section, True)
+async def _render_tmxrecs(aseco, login, data):
     if not data:
         await aseco.client.query_ignore_result(
             "ChatSendServerMessageToLogin",
-            aseco.format_colors("{#server}> {#error}Track not found on TMX or TMX is down!"),
+            aseco.format_colors("{#server}> {#error}Track not found on TMX!"),
             login,
         )
         return
@@ -823,7 +904,7 @@ async def chat_tmxrecs(aseco: "Aseco", command: dict):
         )
         return
 
-    is_stunts = getattr(aseco.server.gameinfo, "mode", -1) == Gameinfo.STNT
+    is_stunts = data.get('_requested_mode', getattr(aseco.server.gameinfo, 'mode', -1)) == Gameinfo.STNT
 
     header = f'{_literal_ml_text("TMX Top-10 Records:")} {{#black}}{data["name"]}'
     rows = [

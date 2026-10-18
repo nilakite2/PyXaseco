@@ -19,15 +19,13 @@ It reports:
 - last 5 local-record events
 """
 
-import asyncio
-import json
 import logging
 import time
-import urllib.request
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from pyxaseco.core.aseco import PYXASECO_VERSION
+from pyxaseco.core.config import _env
 from pyxaseco.helpers import strip_colors
 
 if TYPE_CHECKING:
@@ -43,7 +41,7 @@ PLUGIN_VERSION = "1.0.0"
 # Public Stats API configuration
 # ---------------------------------------------------------------------------
 
-PUBLIC_STATS_API_BASE = "https://tmtrialgy.com"
+PUBLIC_STATS_API_BASE = ""
 PUBLIC_STATS_API_TOKEN = ""
 PUBLIC_STATS_HEARTBEAT_PATH = "/api/public-stats/heartbeat"
 PUBLIC_STATS_RECENT_RECORD_PATH = "/api/public-stats/recent-record"
@@ -56,14 +54,15 @@ PUBLIC_STATS_REQUEST_TIMEOUT = 20
 _enabled: bool = False
 _recent_local_records: list[dict] = []
 _last_heartbeat_sent: float = 0.0
+_pending_heartbeat = None
 
 
 def _api_base() -> str:
-    return str(PUBLIC_STATS_API_BASE or "").rstrip("/")
+    return str(_env('PUBLIC_STATS_API_BASE', PUBLIC_STATS_API_BASE) or "").strip().rstrip("/")
 
 
 def _api_token() -> str:
-    return str(PUBLIC_STATS_API_TOKEN or "").strip()
+    return str(_env('PUBLIC_STATS_API_TOKEN', PUBLIC_STATS_API_TOKEN) or "").strip()
 
 
 def _build_headers() -> dict[str, str]:
@@ -78,26 +77,7 @@ def _build_headers() -> dict[str, str]:
     return headers
 
 
-def _json_post_sync(url: str, payload: dict) -> object:
-    body = json.dumps(payload).encode("utf-8")
-    headers = _build_headers()
-    headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    last_error = None
-    for attempt in range(2):
-        try:
-            with urllib.request.urlopen(req, timeout=PUBLIC_STATS_REQUEST_TIMEOUT) as resp:
-                raw = resp.read().decode("utf-8", errors="replace").strip()
-            return json.loads(raw) if raw else {}
-        except Exception as exc:
-            last_error = exc
-            if attempt == 0:
-                time.sleep(1.0)
-    raise last_error or RuntimeError(f"Could not POST JSON to {url}")
 
-
-async def _json_post(url: str, payload: dict) -> object:
-    return await asyncio.to_thread(_json_post_sync, url, payload)
 
 
 def _is_enabled() -> bool:
@@ -213,7 +193,7 @@ def _heartbeat_payload(aseco: "Aseco", *, is_online: bool = True) -> dict:
 
 
 def _recent_record_payload(aseco: "Aseco", rec) -> dict:
-    challenge = getattr(getattr(aseco, "server", None), "challenge", None)
+    challenge = getattr(rec, 'challenge', None) or getattr(getattr(aseco, "server", None), "challenge", None)
     player = getattr(rec, "player", None)
     nickname, nickname_raw = _display_and_raw(getattr(player, "nickname", ""))
     map_name, map_name_raw = _display_and_raw(getattr(challenge, "name", ""))
@@ -240,39 +220,64 @@ def _remember_recent_record(payload: dict):
     _recent_local_records = _recent_local_records[:PUBLIC_STATS_RECENT_KEEP]
 
 
-async def _post_heartbeat(aseco: "Aseco", *, force: bool = False, is_online: bool = True):
-    global _last_heartbeat_sent
+async def _post_heartbeat(aseco: "Aseco", *, force=False, is_online=True):
+    global _last_heartbeat_sent, _pending_heartbeat
     if not _is_enabled():
         return
-    now = time.time()
-    if not force and (now - _last_heartbeat_sent) < float(PUBLIC_STATS_HEARTBEAT_SECONDS):
+    now = time.monotonic()
+    if force or now - _last_heartbeat_sent >= float(PUBLIC_STATS_HEARTBEAT_SECONDS):
+        _pending_heartbeat = _heartbeat_payload(aseco, is_online=is_online)
+    if not _pending_heartbeat or not _pending_heartbeat.get('server_login'):
         return
-    payload = _heartbeat_payload(aseco, is_online=is_online)
-    if not _clean_text(payload.get("server_login")):
-        logger.warning("[PublicStats] Skipping heartbeat: server_login is empty")
+    from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy, Admission
+    from pyxaseco.core.external_io import request_legacy_json
+    service = aseco.jobs.service('public_stats_heartbeat', JobPolicy(capacity=1))
+    if service.outstanding:
         return
-    try:
-        await _json_post(f"{_api_base()}{PUBLIC_STATS_HEARTBEAT_PATH}", payload)
+    payload = _pending_heartbeat
+    url, headers = f"{_api_base()}{PUBLIC_STATS_HEARTBEAT_PATH}", _build_headers()
+    job = JobEnvelope.capture(aseco.capture_job_context(), payload)
+    async def operation(envelope):
+        return await request_legacy_json(aseco, 'POST', url,
+                                  payload=envelope.payload(), headers=headers,
+                                  timeout=PUBLIC_STATS_REQUEST_TIMEOUT)
+    async def apply(result):
+        if result.status != 'completed':
+            logger.warning('[PublicStats] Heartbeat unavailable (%s)', result.failure_label)
+    if service.submit(job, operation, apply, current_map=False) == Admission.ACCEPTED:
+        _pending_heartbeat = None
         _last_heartbeat_sent = now
-    except Exception as exc:
-        logger.warning("[PublicStats] Heartbeat failed: %s", exc)
 
 
 async def _post_recent_record(aseco: "Aseco", rec):
     if not _is_enabled():
         return
     payload = _recent_record_payload(aseco, rec)
-    if not _clean_text(payload.get("server_login")):
-        logger.warning("[PublicStats] Skipping recent-record POST: server_login is empty")
+    if not payload.get('server_login'):
         return
     _remember_recent_record(payload)
-    try:
-        await _json_post(f"{_api_base()}{PUBLIC_STATS_RECENT_RECORD_PATH}", payload)
-    except Exception as exc:
-        logger.warning("[PublicStats] Recent-record POST failed: %s", exc)
+    await _stats_delivery(aseco).retain(payload, map_uid=payload['map_uid'])
+
+
+def _stats_delivery(aseco):
+    from pyxaseco.core.retained_delivery import delivery
+    from pyxaseco.core.external_io import request_legacy_json
+    async def send(data):
+        response = await request_legacy_json(aseco, 'POST',
+                                  f"{_api_base()}{PUBLIC_STATS_RECENT_RECORD_PATH}",
+                                  payload=data, headers=_build_headers(),
+                                  timeout=PUBLIC_STATS_REQUEST_TIMEOUT)
+        if not isinstance(response, dict) or response.get('ok') is not True:
+            raise RuntimeError('Unconfirmed public stats record response')
+        return response
+    async def apply(_data, _reply, _current):
+        return
+    return delivery(aseco, 'public_stats_records', send, apply)
 
 
 def register(aseco: "Aseco"):
+    global _pending_heartbeat
+    _pending_heartbeat = None
     aseco.register_event("onStartup", public_stats_startup)
     aseco.register_event("onSync", public_stats_sync)
     aseco.register_event("onEverySecond", public_stats_tick)
@@ -291,6 +296,7 @@ async def public_stats_startup(aseco: "Aseco", _param=None):
         logger.info("[PublicStats] Disabled (PUBLIC_STATS_API_BASE is empty)")
         return
     logger.info("[PublicStats] Using API '%s'", _api_base())
+    _stats_delivery(aseco)
     try:
         versions = getattr(aseco, "app_versions", None)
         if isinstance(versions, list):

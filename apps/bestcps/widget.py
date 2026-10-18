@@ -7,6 +7,8 @@ with a per-player toggle via `/bestcps`.
 
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 import html
 import logging
 from dataclasses import dataclass
@@ -46,6 +48,8 @@ class BestCpsConfig:
 _tab_cp_time: dict[int, CpTime] = {}
 _hidden_for: set[str] = set()
 _config = BestCpsConfig()
+_last_widget_xml: dict[str, str] = {}
+_widget_dirty = False
 
 BESTCPS_SETTINGS_SCHEMA = AppSettingsSchema(
     app_id="bestcps",
@@ -67,9 +71,11 @@ def register(aseco: 'Aseco'):
     _load_config(aseco)
     aseco.register_event('onSync', _bestcps_sync)
     aseco.register_event('onPlayerConnect', _bestcps_player_connect)
+    aseco.register_event('onPlayerDisconnect', _bestcps_player_disconnect)
     aseco.register_event('onCheckpoint', _bestcps_checkpoint)
     aseco.register_event('onCheckpoint', _bestcps_refresh)
     aseco.register_event('onBeginRound', _bestcps_begin_round)
+    aseco.register_event('onRestartChallenge', _bestcps_begin_round)
     aseco.register_event('onEndRace', _bestcps_end_race)
     aseco.register_event('onNewChallenge', _bestcps_new_challenge)
     aseco.register_event('onPlayerFinish', _bestcps_player_finish)
@@ -132,17 +138,20 @@ def _esc(value: str) -> str:
 
 
 def _is_score_mode(aseco: 'Aseco') -> bool:
-    return getattr(getattr(aseco.server, 'gameinfo', None), 'mode', -1) == getattr(Gameinfo, 'SCOR', 7)
+    from pyxaseco.core.widget_delivery import is_score_phase
+    return is_score_phase(aseco)
 
 
 async def _send_widget_xml(aseco: 'Aseco', login: str, xml: str):
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco, 
         'SendDisplayManialinkPageToLogin',
         login,
         aseco.format_colors(xml),
         0,
         False,
     )
+    for recipient in login.split(','):
+        _last_widget_xml[recipient] = xml
 
 
 async def _hide_widget_for_user(aseco: 'Aseco', login: str):
@@ -236,7 +245,8 @@ def _build_widget_xml() -> str:
 
 async def _broadcast_widget(aseco: 'Aseco'):
     if _is_score_mode(aseco):
-        await aseco.client.query_ignore_result(
+        _last_widget_xml.clear()
+        await deliver_ui(aseco, 
             'SendDisplayManialinkPage',
             f'<manialink id="{WIDGET_ID}"></manialink>',
             0,
@@ -244,19 +254,23 @@ async def _broadcast_widget(aseco: 'Aseco'):
         )
         return
     xml = _build_widget_xml()
-    for player in aseco.server.players.all():
-        if player.login in _hidden_for:
-            continue
-        await _send_widget_xml(aseco, player.login, xml)
+    recipients = [
+        player.login for player in aseco.server.players.all()
+        if player.login not in _hidden_for and _last_widget_xml.get(player.login) != xml
+    ]
+    if recipients:
+        await _send_widget_xml(aseco, ','.join(recipients), xml)
 
 
 async def _bestcps_sync(aseco: 'Aseco', _param=None):
+    _last_widget_xml.clear()
     _load_config(aseco)
     if _tab_cp_time:
         await _broadcast_widget(aseco)
 
 
 async def _bestcps_player_connect(aseco: 'Aseco', player: 'Player'):
+    _last_widget_xml.pop(player.login, None)
     _load_config(aseco)
     if _is_score_mode(aseco):
         await _hide_widget_for_user(aseco, player.login)
@@ -265,10 +279,18 @@ async def _bestcps_player_connect(aseco: 'Aseco', player: 'Player'):
         await _send_widget_xml(aseco, player.login, _build_widget_xml())
 
 
+async def _bestcps_player_disconnect(aseco: 'Aseco', player: 'Player'):
+    _last_widget_xml.pop(player.login, None)
+    _hidden_for.discard(player.login)
+
+
 async def _bestcps_new_challenge(aseco: 'Aseco', challenge):
+    global _widget_dirty
+    _widget_dirty = False
+    _last_widget_xml.clear()
     _load_config(aseco)
     _tab_cp_time.clear()
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco, 
         'SendDisplayManialinkPage',
         f'<manialink id="{WIDGET_ID}"></manialink>',
         1,
@@ -280,12 +302,14 @@ async def _bestcps_player_finish(aseco: 'Aseco', record):
 
 
 async def _bestcps_begin_round(aseco: 'Aseco', _param=None):
+    _last_widget_xml.clear()
     if _tab_cp_time:
         await _broadcast_widget(aseco)
 
 
 async def _bestcps_end_race(aseco: 'Aseco', _param=None):
-    await aseco.client.query_ignore_result(
+    _last_widget_xml.clear()
+    await deliver_ui(aseco, 
         'SendDisplayManialinkPage',
         f'<manialink id="{WIDGET_ID}"></manialink>',
         0,
@@ -294,6 +318,7 @@ async def _bestcps_end_race(aseco: 'Aseco', _param=None):
 
 
 async def _bestcps_checkpoint(aseco: 'Aseco', param: list):
+    global _widget_dirty
     if len(param) < 5:
         return
 
@@ -319,30 +344,30 @@ async def _bestcps_checkpoint(aseco: 'Aseco', param: list):
     current = _tab_cp_time.get(cp_index)
     if current is None or time_ms < current.time:
         _tab_cp_time[cp_index] = CpTime(time=time_ms, nickname=player.nickname)
+        _widget_dirty = True
 
 
 async def _bestcps_refresh(aseco: 'Aseco', _record):
+    global _widget_dirty
     if _is_score_mode(aseco):
-        await aseco.client.query_ignore_result(
+        _last_widget_xml.clear()
+        await deliver_ui(aseco, 
             'SendDisplayManialinkPage',
             f'<manialink id="{WIDGET_ID}"></manialink>',
             0,
             False,
         )
         return
-    if _tab_cp_time:
+    if _tab_cp_time and _widget_dirty:
         await _broadcast_widget(aseco)
+        _widget_dirty = False
 
 
 async def reload_bestcps_runtime(aseco: 'Aseco') -> None:
+    _last_widget_xml.clear()
     _load_config(aseco)
     if _is_score_mode(aseco) or not _tab_cp_time:
-        await aseco.client.query_ignore_result(
-            'SendDisplayManialinkPage',
-            f'<manialink id="{WIDGET_ID}"></manialink>',
-            0,
-            False,
-        )
+        await _bestcps_end_race(aseco)
         return
     await _broadcast_widget(aseco)
 

@@ -40,6 +40,46 @@ def can_handle(sub: str) -> bool:
     return sub in HANDLED_SUBCOMMANDS
 
 
+def _blacklist_filename(aseco: 'Aseco') -> str:
+    return str(getattr(aseco.settings, 'blacklist_file', '') or 'blacklist.txt')
+
+
+async def _sync_blacklist_file(aseco: 'Aseco') -> None:
+    await aseco.client.query_ignore_result('SaveBlackList', _blacklist_filename(aseco))
+
+
+async def _apply_ban_and_black(aseco: 'Aseco', login: str) -> None:
+    last_error: Exception | None = None
+    applied = False
+    for method in ('Ban', 'BlackList'):
+        try:
+            await aseco.client.query_ignore_result(method, login)
+            applied = True
+        except Exception as exc:  # keep combined action idempotent
+            last_error = exc
+    if applied:
+        await _sync_blacklist_file(aseco)
+        return
+    if last_error is not None:
+        raise last_error
+
+
+async def _clear_ban_and_black(aseco: 'Aseco', login: str) -> None:
+    last_error: Exception | None = None
+    cleared = False
+    for method in ('UnBan', 'UnBlackList'):
+        try:
+            await aseco.client.query_ignore_result(method, login)
+            cleared = True
+        except Exception as exc:  # allow clearing either side to clean both records
+            last_error = exc
+    if cleared:
+        await _sync_blacklist_file(aseco)
+        return
+    if last_error is not None:
+        raise last_error
+
+
 async def handle_subcommand(
     aseco: 'Aseco',
     command: dict[str, Any],
@@ -107,12 +147,15 @@ async def handle_subcommand(
             if not admin_chat._can_target_player(aseco, admin, target):
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
                 return True
-            aseco.console('{1} [{2}] banned [{3}]', logtitle, login, target.login)
-            await admin_chat._broadcast(
-                aseco,
-                admin_chat._fmt_admin(aseco, admin, chattitle, 'bans', admin_chat.strip_colors(target.nickname))
-            )
-            await aseco.client.query_ignore_result('Ban', target.login)
+            try:
+                await _apply_ban_and_black(aseco, target.login)
+                aseco.console('{1} [{2}] banned+blacklisted [{3}]', logtitle, login, target.login)
+                await admin_chat._broadcast(
+                    aseco,
+                    admin_chat._fmt_admin(aseco, admin, chattitle, 'bans', admin_chat.strip_colors(target.nickname))
+                )
+            except Exception as e:
+                await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{e}')
         return True
 
     if sub == 'unban':
@@ -122,8 +165,8 @@ async def handle_subcommand(
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
                 return True
             try:
-                await aseco.client.query_ignore_result('UnBan', target.login)
-                aseco.console('{1} [{2}] unbanned [{3}]', logtitle, login, target.login)
+                await _clear_ban_and_black(aseco, target.login)
+                aseco.console('{1} [{2}] unbanned+unblacklisted [{3}]', logtitle, login, target.login)
                 await admin_chat._reply(aseco, login, f'{{#server}}> Unbanned: {{#highlite}}{target.login}')
             except Exception as e:
                 await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{e}')
@@ -169,9 +212,8 @@ async def handle_subcommand(
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
                 return True
             try:
-                await aseco.client.query_ignore_result('BlackList', target.login)
-                await aseco.client.query_ignore_result('SaveBlackList', 'blacklist.txt')
-                aseco.console('{1} [{2}] blacklisted [{3}]', logtitle, login, target.login)
+                await _apply_ban_and_black(aseco, target.login)
+                aseco.console('{1} [{2}] banned+blacklisted [{3}]', logtitle, login, target.login)
                 await admin_chat._broadcast(
                     aseco,
                     admin_chat._fmt_admin(aseco, admin, chattitle, 'blacklists', admin_chat.strip_colors(target.nickname))
@@ -189,9 +231,8 @@ async def handle_subcommand(
                 await admin_chat._deny_protected_target(aseco, admin, target.login)
                 return True
             try:
-                await aseco.client.query_ignore_result('UnBlackList', target.login)
-                await aseco.client.query_ignore_result('SaveBlackList', 'blacklist.txt')
-                aseco.console('{1} [{2}] unblacklisted [{3}]', logtitle, login, target.login)
+                await _clear_ban_and_black(aseco, target.login)
+                aseco.console('{1} [{2}] unbanned+unblacklisted [{3}]', logtitle, login, target.login)
                 await admin_chat._reply(aseco, login, f'{{#server}}> UnBlacklisted: {{#highlite}}{target.login}')
             except Exception as e:
                 await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{e}')

@@ -5,7 +5,8 @@ from typing import Any
 
 from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
-from pyxaseco.app_services import get_tmx_service
+from pyxaseco.app_services import get_tmx_service, localdb_get_pool
+from pyxaseco.core.bounded_cache import BoundedCache
 
 from ..config import _state
 
@@ -63,9 +64,48 @@ def _normalise_env_key(value: str) -> str:
 def _helper_cache(aseco) -> dict[str, Any]:
     cache = getattr(aseco, '_records_eyepiece_helper_cache', None)
     if not isinstance(cache, dict):
-        cache = {'tmx_trackinfo': {}, 'tmx_trackid': {}, 'tracklist': {}, 'challenge_info': {}}
+        cache = {'tmx_trackid': {}, 'tracklist': {}, 'challenge_info': {}}
         aseco._records_eyepiece_helper_cache = cache
     return cache
+
+
+async def _enrich_track_with_database(aseco, track, mode):
+    uid = str(track.get('uid') or '').strip()
+    if not uid:
+        return
+    helper_cache = _helper_cache(aseco)
+    cache = helper_cache.get('challenge_metadata')
+    if cache is None:
+        cache = helper_cache['challenge_metadata'] = BoundedCache()
+    data = cache.get(uid)
+    if data is None:
+        try:
+            pool = await localdb_get_pool(aseco)
+            if not pool:
+                return
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        'SELECT c.Name, c.Author, c.Environment, x.AuthorTime, x.GoldTime, x.TMX_UploadDate '
+                        'FROM challenges c LEFT JOIN challenges_extra x ON x.Challenge_Id=c.Id '
+                        'WHERE c.Uid=%s LIMIT 1', (uid,))
+                    row = await cur.fetchone()
+            data = (dict(name=row[0], author=row[1], env=row[2],
+                         author_time=row[3], gold_time=row[4], uploaded=row[5]) if row else {})
+            cache[uid] = data
+        except Exception as error:
+            logger.debug('[Eyepiece/Helpers] Stored challenge metadata unavailable (%s)', type(error).__name__)
+            return
+    for key in ('name', 'author', 'env', 'uploaded'):
+        if str(track.get(key) or '').strip() in ('', '-', 'N/A') and data.get(key):
+            track[key] = str(data[key])
+    if mode != Gameinfo.STNT:
+        for raw, source, display in (('authortime_ms', 'author_time', 'authortime'),
+                                     ('goldtime_ms', 'gold_time', 'goldtime')):
+            value = _safe_int(data.get(source), 0)
+            if not _safe_int(track.get(raw), 0) and value > 0:
+                track[raw] = value
+                track[display] = _fmt_track_value(mode, value)
 
 
 async def _get_tmx_section(aseco) -> str:
@@ -119,13 +159,12 @@ async def _get_tmx_trackinfo_for_uid(aseco, uid: str, mode: int) -> dict:
     uid = str(uid or '').strip()
     if not uid:
         return {}
-    info_cache = _helper_cache(aseco)['tmx_trackinfo']
-    cache_key = (uid, mode)
-    if cache_key not in info_cache:
-        service = _tmx_service(aseco)
-        impl = getattr(service, 'get_tmx_trackinfo_for_uid', None) if service is not None else None
-        info_cache[cache_key] = await impl(aseco, uid, mode) if callable(impl) else {}
-    return dict(info_cache[cache_key])
+    # The service owns the bounded cache. An empty first result can mean that
+    # its background lookup is still running, not that this map has no metadata.
+    service = _tmx_service(aseco)
+    impl = getattr(service, 'get_tmx_trackinfo_for_uid', None) if service is not None else None
+    info = await impl(aseco, uid, mode) if callable(impl) else {}
+    return dict(info) if isinstance(info, dict) else {}
 
 
 async def _get_challenge_info_for_file(aseco, filename: str) -> dict:
@@ -221,6 +260,8 @@ async def _enrich_track_with_tmx(aseco, track: dict[str, Any], mode: int, *, nee
     if not isinstance(track, dict):
         return track
 
+    await _enrich_track_with_database(aseco, track, mode)
+
     uid = str(track.get('uid') or '').strip()
     if not uid:
         return track
@@ -248,14 +289,11 @@ async def _enrich_track_with_tmx(aseco, track: dict[str, Any], mode: int, *, nee
     if missing_mood and info.get('mood'):
         track['mood'] = info.get('mood')
     if missing_times:
-        if info.get('authortime_ms'):
-            track['authortime_ms'] = info.get('authortime_ms')
-        if info.get('goldtime_ms'):
-            track['goldtime_ms'] = info.get('goldtime_ms')
-        if info.get('silvertime_ms'):
-            track['silvertime_ms'] = info.get('silvertime_ms')
-        if info.get('bronzetime_ms'):
-            track['bronzetime_ms'] = info.get('bronzetime_ms')
+        for raw, display in (('authortime_ms', 'authortime'), ('goldtime_ms', 'goldtime'),
+                             ('silvertime_ms', 'silvertime'), ('bronzetime_ms', 'bronzetime')):
+            if info.get(raw):
+                track[raw] = info[raw]
+                track[display] = str(info.get(display) or _fmt_track_value(mode, info[raw]))
     if missing_meta:
         for key in (
             'type', 'style', 'diffic', 'routes', 'awards', 'section',

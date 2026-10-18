@@ -23,8 +23,10 @@ import re
 import time
 from pathlib import Path
 from typing import Any, Optional
+from uuid import uuid4
+from collections import deque
 
-from pyxaseco.core.gbx_client import GbxClient, GbxError
+from pyxaseco.core.gbx_client import GbxClient, GbxError, GbxAuthenticationError, GbxProtocolError
 from pyxaseco.core.app_manager import AppManager
 from pyxaseco.core.app_metadata import AppMetadata
 from pyxaseco.core.event_bus import EventBus
@@ -35,6 +37,10 @@ from pyxaseco.core.config import (
 )
 from pyxaseco.core.drivers import DatabaseDriver, GbxDriver, StorageDriver
 from pyxaseco.core.service_registry import ServiceRegistry
+from pyxaseco.core.performance import PerformanceMetrics
+from pyxaseco.core.background_jobs import BackgroundJobs, JobContext
+from pyxaseco.core.record_outbox import RecordOutbox, create_record_outbox
+from pyxaseco.core.widget_delivery import WidgetDelivery
 from pyxaseco.models import (
     Player, PlayerList, Challenge, Gameinfo, Server, ChatCommand,
     Record, RecordList
@@ -42,7 +48,7 @@ from pyxaseco.models import (
 
 logger = logging.getLogger(__name__)
 
-PYXASECO_VERSION = '1.2-DEV'
+PYXASECO_VERSION = '1.3'
 TMF_BUILD = '2011-02-21'   # minimum required TMF dedicated server build
 
 # Dedicated server callbacks we handle
@@ -74,12 +80,21 @@ _CALLBACK_MAP: dict[str, str] = {
 class Aseco:
     """Main Xaseco controller."""
 
-    def __init__(self, debug: bool = False):
+    def __init__(self, debug: bool = False, performance: bool = False):
         self.debug = debug
-        self.client = GbxClient()
+        self.performance = PerformanceMetrics(enabled=performance)
+        self.client = GbxClient(performance=self.performance)
         self.gbx = GbxDriver(self.client)
         self.events = EventBus()
         self.services = ServiceRegistry()
+        self._run_id = uuid4().hex
+        self._map_generation = 0
+        self._callback_backlog = deque()
+        self._backlog_warning_at = 0.0
+        self.jobs = BackgroundJobs(self.capture_job_context, self.performance)
+        self.record_outbox: RecordOutbox | None = None
+        self.services.register('background_jobs', self.jobs, owner='core')
+        self.ui_delivery = WidgetDelivery(self)
         self.commands = CommandRegistry()
         self.settings = Settings()
         self.server = Server('127.0.0.1', 5000, 'SuperAdmin', 'SuperAdmin')
@@ -95,6 +110,7 @@ class Aseco:
         # Runtime state
         self.startup_phase: bool = True
         self.warmup_phase: bool = False
+        self.score_phase: bool = False
         self.restarting: int = 0       # 0=no, 1=instant, 2=chattime
         self.changingmode: bool = False
         self.currstatus: int = 0
@@ -104,6 +120,7 @@ class Aseco:
         self._shutdown_stop_server: bool = False
         self._restart_requested: bool = False
         self._transport_noise_logged: bool = False
+        self._shutdown_events_fired: bool = False
 
         # Chat commands: name → ChatCommand
         self._chat_commands: dict[str, ChatCommand] = {}
@@ -125,6 +142,29 @@ class Aseco:
     # ------------------------------------------------------------------
     # Public app API
     # ------------------------------------------------------------------
+
+    def capture_job_context(self, *, login: str = '', nickname: str = '') -> JobContext:
+        """Snapshot identity, never hand workers mutable Player/Challenge objects."""
+        return JobContext(
+            self._run_id, self.server.serverlogin,
+            getattr(self.server.challenge, 'uid', ''), self._map_generation,
+            login, nickname,
+        )
+
+    async def close_background(self) -> None:
+        """Also used by main's fatal/cancelled-run cleanup; safe to call twice."""
+        try:
+            await self._notify_shutdown()
+        finally:
+            try:
+                await self.jobs.stop()
+            finally:
+                try:
+                    if self._app_manager is not None:
+                        await self._app_manager.shutdown_all(self)
+                finally:
+                    if self.record_outbox is not None:
+                        await self.record_outbox.close()
 
     def register_event(self, event_type: str, handler):
         """Register a handler for a named event (e.g. 'onChat')."""
@@ -410,10 +450,18 @@ class Aseco:
 
     def _do_log(self, text: str):
         """Write to the log file."""
-        try:
-            Path('logfile.txt').open('a').write(text)
-        except Exception:
-            pass
+        logging.getLogger('pyxaseco.console.file').info(
+            text.rstrip('\n'), extra={'console_text': True})
+
+    async def _notify_shutdown(self) -> None:
+        """Retain app-owned work once, including fatal/transport exits."""
+        if self._shutdown_events_fired:
+            return
+        self._shutdown_events_fired = True
+        await self.release_event('onShutdown', {
+            'stop_server': self._shutdown_stop_server,
+            'restart': self._restart_requested,
+        })
 
     async def shutdown(self, stop_server: bool = False):
         """
@@ -427,7 +475,7 @@ class Aseco:
 
         # Let plugins react if they want to.
         try:
-            await self.release_event('onShutdown', {'stop_server': stop_server})
+            await self._notify_shutdown()
         except Exception as e:
             logger.warning('onShutdown event failed: %s', e)
 
@@ -443,10 +491,7 @@ class Aseco:
         logger.info('Restart requested')
 
         try:
-            await self.release_event('onShutdown', {
-                'stop_server': False,
-                'restart': True,
-            })
+            await self._notify_shutdown()
         except Exception as e:
             logger.warning('onShutdown event failed during restart: %s', e)
 
@@ -467,9 +512,10 @@ class Aseco:
         Final shutdown sequence after main loop exits.
         """
         logger.info('Performing shutdown sequence')
+        await self._notify_shutdown()
+        await self.performance.stop()
 
-        if self._app_manager is not None:
-            await self._app_manager.shutdown_all(self)
+        await self.close_background()
 
         if self._shutdown_stop_server:
             for method_name in ('StopServer', 'QuitServer'):
@@ -482,7 +528,7 @@ class Aseco:
 
         # Best-effort disconnect
         try:
-            close_fn = getattr(self.client, 'close', None)
+            close_fn = getattr(self.client, 'close', None) or getattr(self.client, 'disconnect', None)
             if callable(close_fn):
                 result = close_fn()
                 if asyncio.iscoroutine(result):
@@ -506,11 +552,16 @@ class Aseco:
         self._base_dir = config_path.parent
         self.storage = StorageDriver(self._base_dir)
         self.drivers['storage'] = self.storage
-
         # Load config
         self.console_text('[PyXaseco] Loading settings [{1}]', display_path(config_path))
         if not load_config(config_path, self.settings):
             raise RuntimeError(f'Could not read/parse config file {config_path}')
+
+        self.record_outbox = create_record_outbox(
+            self._base_dir / 'state' / 'record_outbox.sqlite3',
+            self.settings.durable_record_delivery,
+        )
+        self.services.register('record_outbox', self.record_outbox, owner='core')
 
         # Apply server connection settings from config
         self.server.ip       = self.settings.server_ip
@@ -565,6 +616,7 @@ class Aseco:
         setup_manialink_events(self)
 
         # Fire startup event
+        await self.jobs.start()
         await self.release_event('onStartup', None)
 
         # Sync with server state
@@ -583,33 +635,56 @@ class Aseco:
 
     async def _connect(self):
         """Authenticate with the dedicated server and enable callbacks."""
-        await self.gbx.connect(
-            self.server.ip, self.server.port,
-            timeout=float(self.server.timeout or 10)
-        )
         if self.settings.server_password == 'SuperAdmin':
             logger.warning("Insecure password 'SuperAdmin' — change it in dedicated config!")
 
-        await self.gbx.authenticate(self.server.login, self.server.password)
-        await self.gbx.query('EnableCallbacks', True)
+        deadline = time.monotonic() + max(120.0, float(self.server.timeout or 0))
+        try:
+            async with asyncio.timeout_at(deadline):
+                while True:
+                    try:
+                        await self.gbx.connect(
+                            self.server.ip, self.server.port,
+                            timeout=max(1.0, float(self.server.timeout or 10)),
+                        )
+                        await self.gbx.authenticate(self.server.login, self.server.password)
+                        await self.gbx.query('EnableCallbacks', True)
+                        await self._wait_server_ready(deadline)
+                        return
+                    except (GbxAuthenticationError, GbxProtocolError):
+                        raise
+                    except GbxError as error:
+                        if error.code != -32300:
+                            raise
+                        await self.client.disconnect()
+                        logger.warning('Dedicated server connection unavailable; retrying: %s', error)
+                        await asyncio.sleep(2)
+        except TimeoutError as error:
+            self._restart_requested = True
+            self._shutdown_requested = True
+            raise RuntimeError('Timed out waiting for dedicated server to be ready; '
+                               'controller restart will retry the connection') from error
 
-        # Wait for server to reach Running state
-        await self._wait_server_ready()
-
-    async def _wait_server_ready(self):
+    async def _wait_server_ready(self, deadline=None):
         """Poll GetStatus until server is Running - Play (code 4)."""
-        deadline = time.time() + max(120.0, float(self.server.timeout or 0))
+        if deadline is None:
+            deadline = time.monotonic() + max(120.0, float(self.server.timeout or 0))
         last = ''
         last_error: Exception | None = None
 
         while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('Dedicated server readiness deadline expired') from last_error
             try:
-                status = await self.client.query('GetStatus')
+                status = await asyncio.wait_for(self.client.query('GetStatus'), timeout=remaining)
                 last_error = None
             except Exception as e:
                 last_error = e
-                if time.time() > deadline:
-                    raise RuntimeError('Timed out waiting for dedicated server to be ready') from e
+                if not self.client.is_connected():
+                    raise
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Dedicated server readiness deadline expired') from e
                 logger.warning('GetStatus failed while waiting for dedicated server readiness: %s', e)
                 await asyncio.sleep(1)
                 continue
@@ -625,10 +700,8 @@ class Aseco:
                 self.console('[PyXaseco] Server status: {1}', name)
                 last = name
 
-            if time.time() > deadline:
-                if last_error is not None:
-                    raise RuntimeError('Timed out waiting for dedicated server to be ready') from last_error
-                raise RuntimeError('Timed out waiting for dedicated server to be ready')
+            if time.monotonic() >= deadline:
+                raise TimeoutError('Dedicated server readiness deadline expired')
 
             await asyncio.sleep(1)
 
@@ -666,6 +739,7 @@ class Aseco:
         # Status
         status = await self.client.query('GetStatus')
         self.currstatus = status.get('Code', 0)
+        self.score_phase = self.currstatus == 5
 
         # Directories
         self.server.gamedir  = await self.client.query('GameDataDirectory')
@@ -722,7 +796,8 @@ class Aseco:
         """
         Continuously poll callbacks from the GbxRemote client and dispatch them.
         """
-        prev_second = int(time.time())
+        await self.performance.start()
+        prev_second = int(time.monotonic())
         while not self._shutdown_requested:
             if not self.client.is_connected():
                 self._request_transport_restart()
@@ -735,13 +810,20 @@ class Aseco:
             if self._shutdown_requested:
                 break
 
+            # Apply detached results only after authoritative callbacks, never
+            # from a worker. Short handlers must not do external I/O here.
+            if not self._callback_backlog:
+                await self.jobs.drain()
+            if self._shutdown_requested:
+                break
+
             # Fire main loop event
             await self.release_event('onMainLoop', None)
             if self._shutdown_requested:
                 break
 
             # Fire per-second event
-            now = int(time.time())
+            now = int(time.monotonic())
             if now != prev_second:
                 prev_second = now
                 await self.release_event('onEverySecond', None)
@@ -749,12 +831,31 @@ class Aseco:
             # Maintain ~20ms loop cadence
             elapsed = time.monotonic() - loop_start
             sleep_time = max(0.0, 0.02 - elapsed)
+            self.performance.observe('controller.tick', elapsed)
             await asyncio.sleep(sleep_time)
 
     async def _execute_callbacks(self):
         """Drain the GbxClient callback queue and dispatch each."""
-        callbacks = self.client.get_cb_responses()
-        for method, params in callbacks:
+        if self.performance.enabled:
+            callbacks = self.client.get_timed_cb_responses()
+        else:
+            callbacks = [(method, params, None) for method, params in self.client.get_cb_responses()]
+        self._callback_backlog.extend(callbacks)
+        self.performance.gauge_max('callbacks.backlog', len(self._callback_backlog))
+        now = time.monotonic()
+        if len(self._callback_backlog) >= 1000 and now - self._backlog_warning_at >= 60:
+            self._backlog_warning_at = now
+            logger.warning('Callback backlog is %s; processing FIFO without dropping gameplay events',
+                           len(self._callback_backlog))
+        started, count = time.monotonic(), 0
+        while self._callback_backlog and count < 64:
+            if count and time.monotonic() - started >= 0.01:
+                break
+            method, params, received_at = self._callback_backlog.popleft()
+            count += 1
+            if received_at is not None:
+                self.performance.observe('callbacks.age', time.monotonic() - received_at)
+            self.performance.increment('callbacks.dispatched')
             if not self.client.is_connected():
                 self._request_transport_restart()
                 break
@@ -763,7 +864,8 @@ class Aseco:
                 handler = getattr(self, handler_name, None)
                 if handler:
                     try:
-                        await handler(params)
+                        with self.performance.measure(f'callback.{method}'):
+                            await handler(params)
                     except Exception as e:
                         if not self.client.is_connected():
                             self._request_transport_restart()
@@ -787,6 +889,7 @@ class Aseco:
     async def _cb_player_disconnect(self, params: list):
         """TrackMania.PlayerDisconnect: [login]"""
         login = params[0] if params else ''
+        self.ui_delivery.invalidate(login)
         player = self.server.players.remove_player(login)
         if player:
             await self.release_event('onPlayerDisconnect', player)
@@ -843,12 +946,15 @@ class Aseco:
 
     async def _cb_begin_round(self, params: list):
         """TrackMania.BeginRound"""
+        self.score_phase = False
         await self.release_event('onBeginRound', None)
 
     async def _cb_status_changed(self, params: list):
         """TrackMania.StatusChanged: [code, name]"""
         self.prevstatus = self.currstatus
         self.currstatus = params[0] if params else 0
+        if self.currstatus in (4, 5):
+            self.score_phase = self.currstatus == 5
 
         # Check warmup state on Sync/Finish
         if self.currstatus in (3, 5):
@@ -885,6 +991,8 @@ class Aseco:
     # ------------------------------------------------------------------
 
     async def _player_connect(self, params: list):
+        if params:
+            self.ui_delivery.invalidate(params[0])
         """
         Handle a new player connecting.
         params: [login, is_spectator_str_or_bool]
@@ -902,6 +1010,11 @@ class Aseco:
         try:
             info = await self.client.query('GetDetailedPlayerInfo', login)
         except GbxError as e:
+            if e.code == -1000 and 'login unknown' in e.message.lower():
+                # Startup lists/callbacks can outlive a player who just left.
+                # Do not publish a fictional connection to DB and UI handlers.
+                logger.debug('Skipping stale player connection for %s: login no longer present', login)
+                return
             logger.warning('GetDetailedPlayerInfo failed for %s: %s', login, e)
             # Create minimal player
             info = {'Login': login, 'NickName': login,
@@ -974,6 +1087,8 @@ class Aseco:
         Handle beginning of a new challenge.
         params: [challenge_info, warmup, match_continuation]  or None (startup).
         """
+        self._map_generation += 1
+        self.score_phase = params is None and self.currstatus == 5
         if params:
             self.warmup_phase = bool(params[1]) if len(params) > 1 else False
 
@@ -1006,12 +1121,15 @@ class Aseco:
     async def _end_race(self, params: list):
         """TrackMania.EndChallenge: params[0]=rankings, params[1]=challenge"""
         rankings = params[0] if params else []
+        self.score_phase = True
         await self.release_event('onEndRace1', params)  # pre-event (votes reset)
         await self.release_event('onEndRace', params)
         await self.release_event('onEndRaceRanking', rankings)
 
     async def _cb_challenge_restart(self, params: list):
         """TrackMania.ChallengeRestart"""
+        self._map_generation += 1
+        self.score_phase = False
         await self.release_event('onRestartChallenge', params)
         await self.release_event('onRestartChallenge2', params)
 

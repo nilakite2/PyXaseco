@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_bool, as_int, as_str, bind_app_settings
 from pyxaseco.app_services import localdb_get_pool
 from pyxaseco.models import Gameinfo
+from pyxaseco.core.widget_delivery import deliver_ui, is_score_phase
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -177,6 +178,9 @@ class FlexiTime:
             return
 
         self._mode_disabled = False
+        if is_score_phase(self.aseco):
+            await self.hide_panel(pause=False)
+            return
         if not self.paused and self.time_left > 0:
             self.time_left -= 1
         await self._show_panel()
@@ -187,13 +191,16 @@ class FlexiTime:
         self.paused = True
         if self._mode_disabled:
             return
-        self._mode_disabled = True
         await self.hide_panel()
+        self._mode_disabled = True
 
     async def _show_panel(self):
+        if is_score_phase(self.aseco):
+            await self.hide_panel(pause=False)
+            return
         if not self.show_panel:
             if self._panel_visible:
-                await self.hide_panel()
+                await self.hide_panel(pause=False)
             return
 
         colour = self._colour()
@@ -208,15 +215,16 @@ class FlexiTime:
             '</frame>'
         )
         hud = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}">{body}</manialink>'
-        await self.aseco.client.query_ignore_result('SendDisplayManialinkPage', hud, 0, False)
+        await deliver_ui(self.aseco, 'SendDisplayManialinkPage', hud, 0, False)
         self._panel_visible = True
 
-    async def hide_panel(self):
+    async def hide_panel(self, *, pause=True):
+        if pause:
+            self.paused = True
         if not self._panel_visible:
             return
-        self.paused = True
         hud = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}"></manialink>'
-        await self.aseco.client.query_ignore_result('SendDisplayManialinkPage', hud, 0, False)
+        await deliver_ui(self.aseco, 'SendDisplayManialinkPage', hud, 0, False)
         self._panel_visible = False
 
     async def _next_round(self):
@@ -372,7 +380,9 @@ def register(aseco: 'Aseco'):
     setattr(aseco.server, 'feature_flexitime', True)
 
     aseco.register_event('onStartup', flexitime_startup)
+    aseco.register_event('onSync', flexitime_sync)
     aseco.register_event('onBeginRound', flexitime_begin_round)
+    aseco.register_event('onRestartChallenge', flexitime_begin_round)
     aseco.register_event('onEndRound', flexitime_end_round)
     aseco.register_event('onEverySecond', flexitime_tick)
 
@@ -406,8 +416,29 @@ def register(aseco: 'Aseco'):
 async def flexitime_startup(aseco: 'Aseco', _param):
     global _flexitime
     _flexitime = FlexiTime(aseco)
-    await _flexitime.init_timer()
     aseco.console('[FlexiTime] Started v{1}', _flexitime.VERSION)
+
+
+async def flexitime_sync(aseco: 'Aseco', _param):
+    global _flexitime
+    if _flexitime is None:
+        _flexitime = FlexiTime(aseco)
+    await _flexitime.init_timer()
+
+
+async def reload_flexitime_runtime(aseco: 'Aseco') -> None:
+    global _flexitime
+    if _flexitime is None:
+        _flexitime = FlexiTime(aseco)
+        await _flexitime.init_timer()
+        return
+    remaining, paused = _flexitime.time_left, _flexitime.paused
+    _flexitime._load_config()
+    _flexitime.time_left, _flexitime.paused = remaining, paused
+    if _flexitime._is_ta_mode():
+        await _flexitime._show_panel()
+    else:
+        await _flexitime._disable_outside_ta()
 
 
 async def flexitime_begin_round(aseco: 'Aseco', _param):

@@ -198,7 +198,6 @@ async def _draw_trial_player(aseco: 'Aseco', login: str):
     digest = str(hash((title, _digest_entries(entries, login))))
     if _state.player_dedi_digest.get(login) == digest:
         return
-    _state.player_dedi_digest[login] = digest
 
     cfg_runtime = copy.copy(cfg)
     cfg_runtime.title = title
@@ -213,6 +212,7 @@ async def _draw_trial_player(aseco: 'Aseco', login: str):
         click_action=91829,
     )
     await _send(aseco, login, xml)
+    _state.player_dedi_digest[login] = digest
 
 
 async def _build_trial_records_window(aseco: 'Aseco', page: int = 0, records: list | None = None) -> str:

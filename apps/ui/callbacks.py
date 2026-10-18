@@ -6,6 +6,9 @@ from pyxaseco.core.base import Callback, Component
 
 from .handlers.actions import _on_manialink_answer
 from .handlers.events import (
+    _flush_list_redraws,
+    _score_data_ready,
+    _metadata_loaded,
     _on_begin_round,
     _on_checkpoint,
     _on_dedi_record,
@@ -47,6 +50,11 @@ class RecordsEyepieceCallbackSurface(Component):
             component_id='records_eyepiece.callbacks',
             description='Records Eyepiece HUD orchestration and event redraw surface.',
             callbacks=(
+                Callback('onMainLoop', _flush_list_redraws),
+                Callback('onScoreDataReady', _score_data_ready),
+                Callback('onTmxMetadataLoaded', _metadata_loaded),
+                Callback('onTrialRecordsLoaded', _metadata_loaded),
+                Callback('onRpgRecordsLoaded', _metadata_loaded),
                 Callback('onSync', _on_sync),
                 Callback('onPlayerConnect', _on_player_connect),
                 Callback('onPlayerConnect2', _on_player_connect2),

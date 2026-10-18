@@ -1,18 +1,28 @@
 from __future__ import annotations
 
+import importlib
+import sys
+
 from pyxaseco.core.base import Component
 
 from apps.records_dedimania import records_widget as _dedi
 from apps.records_local import records_widget as _local
-from apps.records_rpg import records_widget as _rpg
-from apps.records_trial import records_widget as _trial
 
 
 ML_LOCAL = _local.ML_LOCAL
 ML_DEDI = _dedi.ML_DEDI
 ML_SUBWIN = _local.ML_SUBWIN
 ML_WINDOW = _local.ML_WINDOW
-STAR_MARKER = _rpg.STAR_MARKER
+STAR_MARKER = "$o$s$ff0*$z$fff"
+
+
+def _optional_view(app, name, empty):
+    async def invoke(aseco, *args, **kwargs):
+        if app not in (getattr(aseco, 'active_apps', ()) or ()):
+            return empty()
+        module = importlib.import_module(f'apps.{app}.records_widget')
+        return await getattr(module, name)(aseco, *args, **kwargs)
+    return invoke
 
 
 def _build_local_records_window(*args, **kwargs):
@@ -35,52 +45,44 @@ def _get_dedi_records(*args, **kwargs):
     return _dedi._get_dedi_records(*args, **kwargs)
 
 
-def _build_rpg_records_window(*args, **kwargs):
-    return _rpg._build_rpg_records_window(*args, **kwargs)
+_build_rpg_records_window = _optional_view('records_rpg', '_build_rpg_records_window', str)
 
 
-def _draw_rpg_player(*args, **kwargs):
-    return _rpg._draw_rpg_player(*args, **kwargs)
+_draw_rpg_player = _optional_view('records_rpg', '_draw_rpg_player', lambda: None)
 
 
-def _get_rpg_records(*args, **kwargs):
-    return _rpg._get_rpg_records(*args, **kwargs)
+_get_rpg_records = _optional_view('records_rpg', '_get_rpg_records', list)
 
 
-def _get_rpg_track(*args, **kwargs):
-    return _rpg._get_rpg_track(*args, **kwargs)
+_get_rpg_track = _optional_view('records_rpg', '_get_rpg_track', lambda: None)
 
 
-def _is_rpg_track_active(*args, **kwargs):
-    return _rpg._is_rpg_track_active(*args, **kwargs)
+_is_rpg_track_active = _optional_view('records_rpg', '_is_rpg_track_active', bool)
 
 
 def _rpg_title(*args, **kwargs):
-    return _rpg._rpg_title(*args, **kwargs)
+    module = sys.modules.get('apps.records_rpg.records_widget')
+    return module._rpg_title(*args, **kwargs) if module else 'RPG Records'
 
 
-def _build_trial_records_window(*args, **kwargs):
-    return _trial._build_trial_records_window(*args, **kwargs)
+_build_trial_records_window = _optional_view('records_trial', '_build_trial_records_window', str)
 
 
-def _draw_trial_player(*args, **kwargs):
-    return _trial._draw_trial_player(*args, **kwargs)
+_draw_trial_player = _optional_view('records_trial', '_draw_trial_player', lambda: None)
 
 
-def _get_trial_records(*args, **kwargs):
-    return _trial._get_trial_records(*args, **kwargs)
+_get_trial_records = _optional_view('records_trial', '_get_trial_records', list)
 
 
-def _get_trial_track(*args, **kwargs):
-    return _trial._get_trial_track(*args, **kwargs)
+_get_trial_track = _optional_view('records_trial', '_get_trial_track', lambda: None)
 
 
-def _is_trial_track_active(*args, **kwargs):
-    return _trial._is_trial_track_active(*args, **kwargs)
+_is_trial_track_active = _optional_view('records_trial', '_is_trial_track_active', bool)
 
 
 def _trial_title(*args, **kwargs):
-    return _trial._trial_title(*args, **kwargs)
+    module = sys.modules.get('apps.records_trial.records_widget')
+    return module._trial_title(*args, **kwargs) if module else 'Trial Records'
 
 
 class RecordsEyepieceRecordViewsSurface(Component):

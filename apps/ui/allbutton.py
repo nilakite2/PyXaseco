@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 import math
 import re
 from typing import TYPE_CHECKING
@@ -199,7 +201,7 @@ async def _send_main_buttons(aseco: 'Aseco', _param=None):
         return
     xml = _main_xml()
     for player in aseco.server.players.all():
-        await aseco.client.query_ignore_result(
+        await deliver_ui(aseco, 
             'SendDisplayManialinkPageToLogin',
             player.login,
             xml,
@@ -212,7 +214,7 @@ async def _send_submenu(aseco: 'Aseco', login: str):
     if not feature_allbutton:
         await _hide_allbutton_runtime(aseco, login)
         return
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco, 
         'SendDisplayManialinkPageToLogin',
         login,
         _submenu_xml(),
@@ -269,9 +271,9 @@ async def _allbutton_click(aseco: 'Aseco', answer: list):
 async def _hide_allbutton_runtime(aseco: 'Aseco', login: str | None = None) -> None:
     xml = f"<manialinks><manialink id='{MAIN_ML_ID}'></manialink><manialink id='{SUB_ML_ID}'></manialink></manialinks>"
     if login:
-        await aseco.client.query_ignore_result('SendDisplayManialinkPageToLogin', login, xml, 0, False)
+        await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', login, xml, 0, False)
         return
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
 
 
 async def reload_allbutton_runtime(aseco: 'Aseco') -> None:

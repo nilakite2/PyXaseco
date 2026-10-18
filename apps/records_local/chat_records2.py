@@ -251,25 +251,10 @@ async def get_recs(aseco: 'Aseco', player_id: int) -> dict:
 
 
 async def _get_challenge_list(aseco: 'Aseco') -> dict:
-    """Get server challenge list. Returns {uid: track_info}."""
-    try:
-        batch_size = 500
-        offset = 0
-        result = {}
-        while True:
-            tracks = await aseco.client.query('GetChallengeList', batch_size, offset) or []
-            if not tracks:
-                break
-            for t in tracks:
-                uid = t.get('UId', '')
-                if uid:
-                    result[uid] = t
-            if len(tracks) < batch_size:
-                break
-            offset += batch_size
-        return result
-    except Exception:
-        return {}
+    """Use the shared authoritative paged playlist."""
+    from pyxaseco.core.playlist import playlist
+    rows = await playlist(aseco).snapshot()
+    return {row.get('UId', row.get('Uid', '')): row for row in rows}
 
 
 # ---------------------------------------------------------------------------
@@ -579,61 +564,21 @@ async def chat_toprecs(aseco: 'Aseco', command: dict):
         return
 
     try:
-        maxrecs = 0
-        try:
-            from apps.players.rankings import maxrecs as _mr
-            maxrecs = _mr
-        except ImportError:
-            pass
-
-        pool = await localdb_get_pool(aseco)
-        if not pool:
-            return
-        is_stnt = aseco.server.gameinfo and aseco.server.gameinfo.mode == 4
-        order   = 'DESC' if is_stnt else 'ASC'
-        newlist = await _get_challenge_list(aseco)
-
-        async with pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute('SELECT Id, Uid FROM challenges')
-                chal_rows = await cur.fetchall()
-                tid_list  = [row[0] for row in chal_rows if row[1] in newlist]
-
-        recs: dict[str, int] = {}
-        async with pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                for tid in tid_list:
-                    await cur.execute(
-                        f'SELECT login FROM players,records '
-                        f'WHERE players.id=records.playerid AND challengeid=%s '
-                        f'ORDER BY score {order}, date ASC LIMIT %s',
-                        (tid, maxrecs))
-                    for row in await cur.fetchall():
-                        lgn       = row[0]
-                        recs[lgn] = recs.get(lgn, 0) + 1
-
-        if not recs:
+        from .ranked_counts import ranked_counts
+        data = await ranked_counts(aseco).snapshot()
+        if not data:
             await aseco.client.query_ignore_result(
                 'ChatSendServerMessageToLogin',
                 aseco.format_colors('{#server}> {#error}No players with ranked records found!'),
                 player.login)
             return
-
-        sorted_recs = sorted(recs.items(), key=lambda x: -x[1])[:100]
-
-        head  = 'TOP 100 Ranked Record Holders:'
+        sorted_recs = sorted(data, key=lambda row: -row[2])[:100]
+        head = 'TOP 100 Ranked Record Holders:'
         extra = 0.2 if aseco.settings.lists_colornicks else 0
-        rows_out: list = []
-        async with pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                for i, (lgn, count) in enumerate(sorted_recs, 1):
-                    await cur.execute(
-                        'SELECT NickName FROM players WHERE Login=%s', (lgn,))
-                    nrow = await cur.fetchone()
-                    nick = nrow[0] if nrow else lgn
-                    if not aseco.settings.lists_colornicks:
-                        nick = strip_colors(nick)
-                    rows_out.append([f'{i:02d}.', '{#black}' + nick, str(count)])
+        rows_out = []
+        for i, (login, nickname, count) in enumerate(sorted_recs, 1):
+            nick = nickname if aseco.settings.lists_colornicks else strip_colors(nickname)
+            rows_out.append([f'{i:02d}.', '{#black}' + nick, str(count)])
 
         pages = [rows_out[i:i+15] for i in range(0, max(len(rows_out), 1), 15)]
         player.msgs = [[1, head, [0.7+extra, 0.1, 0.45+extra, 0.15],

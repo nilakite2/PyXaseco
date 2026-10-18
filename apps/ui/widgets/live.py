@@ -168,26 +168,31 @@ def _live_entries_for(aseco, login: str, cfg: WidgetCfg, plimit: int) -> list:
             '_raw': item,
         })
 
-    top = []
-    better = []
+    better: list[dict] = []
+    worse: list[dict] = []
     self_r = None
-    worse = []
-    found = False
+    is_better = True
 
     for entry in all_entries:
         if entry['login'] == login:
             entry['self'] = 0
             entry['highlitefull'] = (entry['rank'] - 1 < cfg.topcount)
             self_r = entry
-            found = True
-        elif not found:
-            if len(top) < cfg.topcount:
-                top.append(entry)
-            else:
-                better.append(entry)
+            is_better = False
+        elif is_better:
+            better.append(entry)
         else:
             entry['self'] = 1
             worse.append(entry)
+
+    top: list[dict] = []
+    ctu_count = cfg.entries
+    if len(better) > cfg.topcount:
+        for _ in range(cfg.topcount):
+            e = better.pop(0)
+            e['self'] = -1
+            top.append(e)
+        ctu_count -= cfg.topcount
 
     if self_r is None:
         placeholder = {
@@ -198,25 +203,41 @@ def _live_entries_for(aseco, login: str, cfg: WidgetCfg, plimit: int) -> list:
             'self': 0,
             'highlitefull': False,
         }
-        avail = cfg.entries - 1
-        result = top[:cfg.topcount]
-        avail -= len(result)
-        result += better[:avail]
-        result.append(placeholder)
-        return result[:cfg.entries]
+        result: list[dict | None] = [None] * max(ctu_count, 1)
+        last_idx = len(result) - 1
+        result[last_idx] = placeholder
+        for i in range(len(better) - 1, -1, -1):
+            last_idx -= 1
+            if last_idx >= 0:
+                row = dict(better[i])
+                row['self'] = -1
+                result[last_idx] = row
+        return (top + [r for r in result if r is not None])[:cfg.entries]
 
-    remaining = cfg.entries - cfg.topcount - 1
-    if remaining < 1:
-        remaining = 1
-    before = remaining // 2
-    after = remaining - before
-    b_slice = better[-before:] if before else []
-    w_slice = worse[:after]
-    if len(w_slice) < after:
-        extra = after - len(w_slice)
-        b_slice = better[-(before + extra):] if (before + extra) else []
+    result_new: list[dict] = [dict(self_r)]
+    result_new[0]['self'] = 0
+    idx = 0
+    has_better = True
+    has_worse = True
 
-    return (top[:cfg.topcount] + b_slice + [self_r] + w_slice)[:cfg.entries]
+    while len(result_new) < ctu_count and (has_better or has_worse):
+        if has_better and len(better) >= idx + 1:
+            row = dict(better[len(better) - 1 - idx])
+            row['self'] = -1
+            result_new = [row] + result_new
+        else:
+            has_better = False
+
+        if len(result_new) < ctu_count:
+            if has_worse and len(worse) >= idx + 1:
+                row = dict(worse[idx])
+                row['self'] = 1
+                result_new.append(row)
+            else:
+                has_worse = False
+        idx += 1
+
+    return (top + result_new)[:cfg.entries]
 
 
 def _live_team_entries(aseco) -> list:
@@ -264,7 +285,6 @@ async def _draw_live_player(aseco: 'Aseco', login: str):
     digest = _digest_entries(raw_entries, login)
     if _state.player_live_digest.get(login) == digest:
         return
-    _state.player_live_digest[login] = digest
 
     xml = _build_record_widget(
         ml_id=ML_LIVE,
@@ -277,6 +297,7 @@ async def _draw_live_player(aseco: 'Aseco', login: str):
         click_action=91806,
     )
     await _send(aseco, login, xml)
+    _state.player_live_digest[login] = digest
 
 
 def _build_live_rankings_window(aseco: 'Aseco', page: int = 0) -> str:

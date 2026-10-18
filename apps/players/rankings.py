@@ -1,7 +1,7 @@
 """RASP ranking domain facade.
 
 This module provides a stable app-level surface for ranking state, commands,
-and callbacks while the implementation still lives in ``rasp.py``.
+and callbacks while the implementation lives in ``ranking_backend.py``.
 """
 
 from __future__ import annotations
@@ -38,6 +38,12 @@ def register_commands(aseco) -> None:
 
 
 def register_callbacks(aseco) -> None:
+    aseco.register_event('onTracklistChanged', _impl._invalidate_playlist_ranks)
+    aseco.register_event('onChallengeListModified', _impl._invalidate_playlist_ranks)
+    aseco.register_event('onLocalRecord', _impl._invalidate_ranks)
+    aseco.register_event('onRecordsChanged', _impl._invalidate_ranks)
+    aseco.register_event('onRanksUpdated', _impl._ranks_updated)
+    aseco.register_event('onEverySecond', _impl._retry_rank_work)
     aseco.register_event('onStartup', _impl.rasp_startup)
     aseco.register_event('onSync', _impl.rasp_sync)
     aseco.register_event('onNewChallenge2', _impl.rasp_new_challenge)
@@ -70,6 +76,12 @@ class RaspRankingCallbackSurface(Component):
             component_id='players.rankings.callbacks',
             description='Player ranking lifecycle, finish, and leaderboard callback surface.',
             callbacks=(
+                Callback('onTracklistChanged', _impl._invalidate_playlist_ranks),
+                Callback('onChallengeListModified', _impl._invalidate_playlist_ranks),
+                Callback('onLocalRecord', _impl._invalidate_ranks),
+                Callback('onRecordsChanged', _impl._invalidate_ranks),
+                Callback('onRanksUpdated', _impl._ranks_updated),
+                Callback('onEverySecond', _impl._retry_rank_work),
                 Callback('onStartup', _impl.rasp_startup),
                 Callback('onSync', _impl.rasp_sync),
                 Callback('onNewChallenge2', _impl.rasp_new_challenge),

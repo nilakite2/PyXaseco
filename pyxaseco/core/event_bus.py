@@ -14,6 +14,7 @@ Handlers may be plain functions or async coroutines; both are supported.
 from __future__ import annotations
 import asyncio
 import logging
+import time
 from typing import Any, Callable, Awaitable, Union
 
 from pyxaseco.core.gbx_client import GbxError
@@ -61,7 +62,9 @@ class EventBus:
         Exceptions in individual handlers are logged but do not abort others.
         """
         handlers = self._handlers.get(event_type, [])
+        metrics = getattr(aseco, 'performance', None)
         for handler in handlers:
+            started = time.monotonic() if metrics is not None and metrics.enabled else None
             try:
                 result = handler(aseco, param)
                 if asyncio.iscoroutine(result):
@@ -81,6 +84,10 @@ class EventBus:
                     break
                 logger.error('EventBus: handler %s raised for event %s: %s',
                              handler, event_type, e, exc_info=True)
+            finally:
+                if started is not None:
+                    name = f'{handler.__module__}.{handler.__qualname__}' if hasattr(handler, '__qualname__') else type(handler).__name__
+                    metrics.observe(f'handler.{event_type}.{name}', time.monotonic() - started)
 
     def has_handlers(self, event_type: str) -> bool:
         return bool(self._handlers.get(event_type))

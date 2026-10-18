@@ -1,0 +1,8 @@
+[endlesstmxr]
+enabled = true
+trigger = "author"
+sections = []
+ignored_styles = ["RPG", "Trial"]
+announce = true
+auto_erase_skipped_map = false
+max_author_time_seconds = 120

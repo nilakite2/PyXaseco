@@ -14,14 +14,11 @@ Behavior:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import re
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -31,6 +28,9 @@ if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
 logger = logging.getLogger(__name__)
+_lookup_uid = ''
+_runtime_aseco = None
+_records_revision = 0
 
 
 PLUGIN_VERSION = "1.0.0"
@@ -44,6 +44,8 @@ RPG_REPLAY_WAIT_SECONDS = 20.0
 RPG_REPLAY_STABLE_DELAY_SECONDS = 0.35
 RPG_SAVE_SUBDIR = "PyXasecoRPG"
 RPG_DELETE_AFTER_UPLOAD = True
+RPG_STORAGE_MAX_FILES = 1000
+RPG_STORAGE_MAX_BYTES = 2 * 1024 * 1024 * 1024
 
 
 _enabled: bool = False
@@ -92,10 +94,11 @@ def _replays_root(aseco: "Aseco") -> Path:
 
 
 def _build_saved_replay_relative_path(challenge, login: str, score: int) -> str:
+    from uuid import uuid4
     track_uid = _track_uid(challenge) or "unknown_uid"
     safe_login = _safe_path_component(login)
     safe_uid = _safe_path_component(track_uid)
-    filename = f"{safe_uid}__{safe_login}__{int(score)}.Replay.Gbx"
+    filename = f"{safe_uid}__{safe_login}__{int(score)}__{uuid4().hex}.Replay.Gbx"
     return str(Path(RPG_SAVE_SUBDIR) / filename).replace("\\", "/")
 
 
@@ -104,72 +107,43 @@ def _resolve_saved_replay_path(aseco: "Aseco", relative_path: str) -> Path:
     return _replays_root(aseco) / Path(rel)
 
 
+def _replay_storage_available(directory: Path) -> bool:
+    count, size = 0, 0
+    if not directory.exists():
+        return True
+    for path in directory.glob('*.Replay.Gbx'):
+        count += 1
+        try:
+            size += path.stat().st_size
+        except FileNotFoundError:
+            continue
+        if count >= RPG_STORAGE_MAX_FILES or size >= RPG_STORAGE_MAX_BYTES:
+            return False
+    return True
+
+
 def _rpg_records_url(uid: str) -> str:
     path = RPG_RECORDS_PATH_TMPL.format(uid=urllib.parse.quote(str(uid).strip(), safe=""))
     return f"{_api_base()}{path}"
 
 
-def _json_request_sync(url: str) -> object | None:
-    req = urllib.request.Request(url, headers=_build_headers())
-    last_error = None
-    for attempt in range(2):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read().decode("utf-8", errors="replace"))
-        except urllib.error.HTTPError as exc:
-            if int(getattr(exc, "code", 0) or 0) == 404:
-                return None
-            last_error = exc
-            if attempt == 0:
-                time.sleep(1.0)
-        except Exception as exc:
-            last_error = exc
-            if attempt == 0:
-                time.sleep(1.0)
-    raise last_error or RuntimeError(f"Could not fetch JSON from {url}")
+async def _json_request(url: str):
+    from pyxaseco.core.external_io import request_legacy_json
+    return await request_legacy_json(_runtime_aseco, 'GET', url, headers=_build_headers())
 
 
-def _json_post_sync(url: str, payload: dict | None = None) -> object:
-    headers = _build_headers()
-    body = b"" if payload is None else json.dumps(payload).encode("utf-8")
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    last_error = None
-    for attempt in range(2):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read().decode("utf-8", errors="replace").strip()
-            return json.loads(raw) if raw else {}
-        except Exception as exc:
-            last_error = exc
-            if attempt == 0:
-                time.sleep(1.0)
-    raise last_error or RuntimeError(f"Could not POST JSON to {url}")
+async def _json_post(url: str, payload=None):
+    from pyxaseco.core.external_io import request_legacy_json
+    return await request_legacy_json(_runtime_aseco, 'POST', url,
+                              payload=payload, headers=_build_headers(), empty_post=True)
 
 
-def _put_file_sync(url: str, path: Path) -> int:
-    headers = {
-        "Content-Type": "application/octet-stream",
-        "User-Agent": f"PyXaseco-RPGRecords/{PLUGIN_VERSION}",
-    }
-    with path.open("rb") as fh:
-        data = fh.read()
-    req = urllib.request.Request(url, data=data, headers=headers, method="PUT")
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return int(getattr(resp, "status", 200) or 200)
-
-
-async def _json_request(url: str) -> object | None:
-    return await asyncio.to_thread(_json_request_sync, url)
-
-
-async def _json_post(url: str, payload: dict | None = None) -> object:
-    return await asyncio.to_thread(_json_post_sync, url, payload)
-
-
-async def _put_file(url: str, path: Path) -> int:
-    return await asyncio.to_thread(_put_file_sync, url, path)
+async def _put_file(url: str, path: Path):
+    from pyxaseco.core.legacy_http import put_file
+    return await _runtime_aseco.jobs.legacy_http.run(put_file, url, path, {
+        'Content-Type': 'application/octet-stream',
+        'User-Agent': f'PyXaseco-RPGRecords/{PLUGIN_VERSION}',
+    }, 60)
 
 
 def _safe_int(value: object, default: int = 0) -> int:
@@ -218,18 +192,24 @@ def _normalize_rpg_record(rec: dict, rank: int, stars: int, challenge_uid: str) 
 
 
 def _normalize_rpg_records_payload(payload: object, requested_uid: str) -> tuple[dict | None, list[dict]]:
-    if not isinstance(payload, dict):
+    if payload is None:
         return None, []
+    if not isinstance(payload, dict) or payload.get('ok') is False:
+        raise ValueError('Unexpected RPG records response')
     raw_records = payload.get("records")
     if not isinstance(raw_records, list):
-        return None, []
+        raise ValueError('Missing RPG records list')
 
     challenge_uid = _clean_text(payload.get("challenge_uid") or requested_uid)
+    if challenge_uid != requested_uid:
+        raise ValueError('RPG track identity mismatch')
     stars = _safe_int(payload.get("stars"), 0)
     rtype = _safe_int(payload.get("type"), 0)
 
     rows: list[dict] = []
     for idx, rec in enumerate(raw_records, start=1):
+        if isinstance(rec, dict) and _clean_text(rec.get('challenge_uid') or challenge_uid) != challenge_uid:
+            raise ValueError('RPG record identity mismatch')
         row = _normalize_rpg_record(rec, idx, stars, challenge_uid)
         if row is not None:
             rows.append(row)
@@ -321,25 +301,13 @@ async def get_rpg_records(uid: str, limit: int | None = None) -> list[dict]:
     return rows
 
 
-async def get_current_rpg_track(aseco: "Aseco") -> dict | None:
-    global _current_track, _current_records
-    challenge = getattr(aseco.server, "challenge", None)
-    uid = _track_uid(challenge)
-    if not uid:
-        _clear_current_cache()
-        return None
+async def get_current_rpg_track(aseco: "Aseco"):
+    uid = _track_uid(aseco.server.challenge)
     if _cache_for_uid(uid):
         return dict(_current_track)
-    try:
-        payload = await _json_request(_rpg_records_url(uid))
-    except Exception:
-        return None
-    track, rows = _normalize_rpg_records_payload(payload, uid)
-    if not track or not rows:
-        return None
-    _current_track = dict(track)
-    _current_records = list(rows)
-    return dict(_current_track)
+    if _lookup_uid != uid:
+        await _sync_current_track(aseco)
+    return None
 
 
 async def get_current_rpg_records(aseco: "Aseco", limit: int | None = None) -> list[dict]:
@@ -363,60 +331,36 @@ def _clear_current_cache() -> None:
     _current_records = []
 
 
-async def _sync_current_track(aseco: "Aseco") -> None:
-    global _current_track, _current_records
+async def _sync_current_track(aseco: "Aseco"):
+    global _lookup_uid
     if not _enabled:
-        _clear_current_cache()
-        try:
-            aseco.server.rpg_records_active = False
-        except Exception:
-            pass
         return
-
-    challenge = getattr(aseco.server, "challenge", None)
-    uid = _track_uid(challenge)
+    from pyxaseco.core.background_jobs import JobEnvelope
+    uid = _track_uid(aseco.server.challenge)
     if not uid:
-        _clear_current_cache()
-        try:
-            aseco.server.rpg_records_active = False
-        except Exception:
-            pass
         return
-
-    try:
-        payload = await _json_request(_rpg_records_url(uid))
-    except Exception as exc:
+    if _lookup_uid != uid:
         _clear_current_cache()
-        try:
-            aseco.server.rpg_records_active = False
-        except Exception:
-            pass
-        logger.warning("[RPGRecords] Record fetch failed for %s: %s", uid, exc)
-        aseco.console("[RPGRecords] Inactive on {1}; fallback to Dedimania", uid)
-        return
-
-    track, rows = _normalize_rpg_records_payload(payload, uid)
-    if not track or not rows:
-        _clear_current_cache()
-        try:
-            aseco.server.rpg_records_active = False
-        except Exception:
-            pass
-        aseco.console("[RPGRecords] Inactive on {1}; fallback to Dedimania", uid)
-        return
-
-    _current_track = dict(track)
-    _current_records = list(rows)
-    try:
-        aseco.server.rpg_records_active = True
-    except Exception:
-        pass
-    aseco.console(
-        "[RPGRecords] Active on {1} (stars={2})",
-        _storage_uid(_current_track) or uid,
-        _safe_int(_current_track.get("stars"), 0),
-    )
-    aseco.console("[RPGRecords] Fetched {1} RPG records for {2}", len(_current_records), uid)
+        aseco.server.rpg_records_active = False
+    job = JobEnvelope.capture(aseco.capture_job_context(), {'uid': uid})
+    revision = _records_revision
+    async def operation(envelope):
+        requested = envelope.payload()['uid']
+        return _normalize_rpg_records_payload(await _json_request(_rpg_records_url(requested)), requested)
+    async def apply(result):
+        global _current_track, _current_records, _lookup_uid
+        if result.status != 'completed':
+            logger.warning('[RPGRecords] Lookup unavailable (%s)', result.error_type)
+            return
+        if revision != _records_revision:
+            return
+        _current_track, _current_records = result.value
+        _lookup_uid = uid
+        aseco.server.rpg_records_active = bool(_current_track)
+        await aseco.release_event('onRpgRecordsLoaded', uid)
+    from pyxaseco.core.background_jobs import JobPolicy
+    aseco.jobs.service('rpg_lookup', JobPolicy(deadline_seconds=65)).submit(
+        job, operation, apply, dedupe_key=f'current:{revision}')
 
 
 async def _announce_rpg_record(aseco: "Aseco", nickname: str, score: int, existing_rank: int, existing_score: int, new_rank: int) -> None:
@@ -463,7 +407,10 @@ async def _create_upload_url() -> str:
 
 async def _upload_replay(path: Path) -> int:
     upload_url = await _create_upload_url()
-    return await _put_file(upload_url, path)
+    status = await _put_file(upload_url, path)
+    if not isinstance(status, int) or not 200 <= status < 300:
+        raise RuntimeError('Unconfirmed RPG replay upload')
+    return status
 
 
 async def _save_best_ghost_replay(aseco: "Aseco", login: str, relative_path: str) -> bool:
@@ -472,17 +419,18 @@ async def _save_best_ghost_replay(aseco: "Aseco", login: str, relative_path: str
 
 
 async def _wait_for_saved_replay(path: Path) -> Path | None:
+    from pyxaseco.core.file_io import file_io
     deadline = time.monotonic() + float(RPG_REPLAY_WAIT_SECONDS)
     while time.monotonic() < deadline:
-        if path.exists():
+        if await file_io(path.exists):
             try:
-                size1 = path.stat().st_size
+                size1 = (await file_io(path.stat)).st_size
             except OSError:
                 await asyncio.sleep(0.5)
                 continue
             await asyncio.sleep(float(RPG_REPLAY_STABLE_DELAY_SECONDS))
             try:
-                size2 = path.stat().st_size
+                size2 = (await file_io(path.stat)).st_size
             except OSError:
                 await asyncio.sleep(0.5)
                 continue
@@ -502,18 +450,8 @@ def _delete_replay_file(path: Path) -> bool:
     return True
 
 
-def _prepare_save_target(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        return
-    try:
-        path.unlink()
-    except Exception as exc:
-        logger.warning("[RPGRecords] Could not remove stale replay target %s before save: %s", path, exc)
-
-
 def _merge_record_into_cache(uid: str, login: str, nickname_raw: str, score: int) -> tuple[bool, int, int, int]:
-    global _current_track, _current_records
+    global _current_track, _current_records, _records_revision
     if not _cache_for_uid(uid):
         return False, 0, 0, 0
 
@@ -574,6 +512,7 @@ def _merge_record_into_cache(uid: str, login: str, nickname_raw: str, score: int
         row["best_score"] = row["score"]
         row["score_text"] = format_time(row["score"]) if row["score"] > 0 else "--"
     _current_records = rows
+    _records_revision += 1
     if not isinstance(_current_track, dict):
         _current_track = {
             "challenge_uid": uid,
@@ -594,8 +533,12 @@ def _merge_record_into_cache(uid: str, login: str, nickname_raw: str, score: int
 
 
 def register(aseco: "Aseco"):
+    global _runtime_aseco, _lookup_uid, _records_revision
+    _runtime_aseco, _lookup_uid, _records_revision = aseco, '', 0
+    _clear_current_cache()
     aseco.register_event("onStartup", _rpg_load_settings)
     aseco.register_event("onNewChallenge", _rpg_sync_current_track)
+    aseco.register_event("onRestartChallenge", _rpg_sync_current_track)
     aseco.register_event("onLocalRecord", _rpg_local_record)
     aseco.add_chat_command("rpgrecs", "Displays all RPG Records on current track")
     aseco.register_event("onChat_rpgrecs", chat_rpgrecs)
@@ -606,6 +549,7 @@ async def _rpg_load_settings(aseco: "Aseco", _param=None):
     _enabled = bool(_api_base())
     if _enabled:
         aseco.console("[RPGRecords] Using RPG API '{1}'", _api_base())
+        _rpg_delivery(aseco)
     else:
         aseco.console("[RPGRecords] Disabled - configure RPG_API_BASE for app/records_rpg")
 
@@ -617,115 +561,70 @@ async def _rpg_sync_current_track(aseco: "Aseco", _param=None):
 async def _rpg_local_record(aseco: "Aseco", new_rec):
     if not _enabled:
         return
-    player = getattr(new_rec, "player", None)
-    challenge = getattr(new_rec, "challenge", None) or getattr(getattr(aseco, "server", None), "challenge", None)
+    player = getattr(new_rec, 'player', None)
+    challenge = getattr(new_rec, 'challenge', None) or aseco.server.challenge
     if not player or not challenge:
         return
-
-    login = _clean_text(getattr(player, "login", ""))
-    nickname_raw = _clean_text(getattr(player, "nickname", "") or login)
-    challenge_uid = _track_uid(challenge)
-    if not login or not challenge_uid:
+    uid, login = _track_uid(challenge), str(player.login)
+    score = int(getattr(new_rec, 'score', 0) or 0)
+    if not uid or not login or score <= 0 or (_lookup_uid == uid and not _cache_for_uid(uid)):
         return
-    if not _cache_for_uid(challenge_uid):
-        aseco.console("[RPGRecords] Skipping replay upload for inactive challenge {1}", challenge_uid)
+    if uid != _track_uid(aseco.server.challenge):
+        logger.warning('[RPGRecords] Cannot capture an old-map ghost after the map changed')
         return
-
-    score = _safe_int(getattr(new_rec, "score", 0), 0)
-    if score <= 0:
+    from pyxaseco.core.file_io import file_io
+    relative = _build_saved_replay_relative_path(challenge, login, score)
+    path = _resolve_saved_replay_path(aseco, relative)
+    if not path.resolve().is_relative_to(_replays_root(aseco).resolve()):
+        raise ValueError('Replay path outside replay root')
+    if not await file_io(_replay_storage_available, path.parent):
+        logger.error('[RPGRecords] Replay storage admission limit reached; existing retained replays preserved')
         return
-    rank = _safe_int(getattr(new_rec, "pos", 0), 0)
-    map_name = _clean_text(getattr(challenge, "name", "") or challenge_uid)
-
-    relative_path = _build_saved_replay_relative_path(challenge, login, score)
-    replay_path = _resolve_saved_replay_path(aseco, relative_path)
-    _prepare_save_target(replay_path)
-
-    try:
-        saved = await _save_best_ghost_replay(aseco, login, relative_path)
-    except Exception as exc:
-        logger.warning(
-            "[RPGRecords] SaveBestGhostsReplay failed for %s on %s (%s): %s",
-            login,
-            challenge_uid,
-            relative_path,
-            exc,
-        )
+    await file_io(path.parent.mkdir, parents=True, exist_ok=True)
+    # Capture the ghost before leaving the map. File stability/network work
+    # belongs to the worker, not the authoritative finish callback.
+    if not await _save_best_ghost_replay(aseco, login, relative):
+        logger.warning('[RPGRecords] Replay capture not acknowledged for %s', uid)
         return
-    if not saved:
-        logger.warning(
-            "[RPGRecords] SaveBestGhostsReplay returned false for %s on %s (%s)",
-            login,
-            challenge_uid,
-            relative_path,
-        )
-        return
+    await _rpg_delivery(aseco).retain({
+        'uid': uid, 'login': login, 'nickname': str(player.nickname), 'score': score,
+        'rank': int(getattr(new_rec, 'pos', 0) or 0), 'relative_path': relative}, map_uid=uid)
 
-    replay_path = await _wait_for_saved_replay(replay_path)
-    if replay_path is None:
-        logger.warning(
-            "[RPGRecords] Saved replay file missing for %s on %s at %s",
-            login,
-            challenge_uid,
-            _resolve_saved_replay_path(aseco, relative_path),
-        )
-        return
 
-    try:
-        status = await _upload_replay(replay_path)
-    except Exception as exc:
-        logger.warning(
-            "[RPGRecords] Upload failed for %s on %s from %s: %s",
-            login,
-            challenge_uid,
-            replay_path,
-            exc,
-        )
-        return
-
-    if 200 <= int(status) < 300:
-        cleanup_ok = True
+def _rpg_delivery(aseco):
+    from pyxaseco.core.retained_delivery import delivery, PreparationRejected
+    from pyxaseco.core.file_io import file_io
+    async def prepare(data):
+        path = _resolve_saved_replay_path(aseco, data['relative_path']).resolve()
+        if not path.is_relative_to(_replays_root(aseco).resolve()):
+            raise PreparationRejected('Replay path outside replay root')
+        if not await _wait_for_saved_replay(path):
+            raise FileNotFoundError('Retained replay not available yet')
+        if not await get_rpg_track(data['uid']):
+            raise PreparationRejected('Captured map is not eligible for RPG upload')
+        return data
+    async def send(data):
+        path = _resolve_saved_replay_path(aseco, data['relative_path'])
+        return await _upload_replay(path)
+    async def apply(data, status, current):
+        if current and status is not None:
+            if not _cache_for_uid(data['uid']):
+                await _sync_current_track(aseco)
+                return
+            changed, old_rank, old_score, rank = _merge_record_into_cache(
+                data['uid'], data['login'], data['nickname'], data['score'])
+            if changed:
+                await _announce_rpg_record(aseco, data['nickname'], data['score'], old_rank, old_score, rank)
+                await aseco.release_event('onRpgRecord', {
+                    'challenge_uid': data['uid'], 'login': data['login'],
+                    'nickname_raw': data['nickname'], 'score': data['score'], 'rank': rank})
+    async def cleanup(data):
         if RPG_DELETE_AFTER_UPLOAD:
-            cleanup_ok = await asyncio.to_thread(_delete_replay_file, replay_path)
-
-        changed, existing_rank, existing_score, new_rank = _merge_record_into_cache(challenge_uid, login, nickname_raw, score)
-        if changed:
-            await _announce_rpg_record(
-                aseco,
-                nickname_raw,
-                score,
-                existing_rank,
-                existing_score,
-                new_rank,
-            )
-            await aseco.release_event("onRpgRecord", {
-                "challenge_uid": challenge_uid,
-                "login": login,
-                "nickname_raw": nickname_raw,
-                "score": score,
-                "rank": new_rank or rank,
-            })
-
-        aseco.console(
-            "[RPGRecords] Uploaded replay for {1} rank={2} score={3} map='{4}'",
-            login,
-            rank or "?",
-            score,
-            map_name,
-        )
-        if RPG_DELETE_AFTER_UPLOAD:
-            if cleanup_ok:
-                aseco.console("[RPGRecords] Deleted local replay {1}", str(replay_path))
-            else:
-                logger.warning("[RPGRecords] Replay uploaded but local cleanup failed: %s", replay_path)
-    else:
-        logger.warning(
-            "[RPGRecords] Upload returned unexpected status %s for %s on %s; keeping replay file %s",
-            status,
-            login,
-            challenge_uid,
-            replay_path,
-        )
+            path = _resolve_saved_replay_path(aseco, data['relative_path'])
+            if not path.resolve().is_relative_to(_replays_root(aseco).resolve()):
+                raise ValueError('Replay path outside replay root')
+            await file_io(_delete_replay_file, path)
+    return delivery(aseco, 'rpg_records', send, apply, prepare=prepare, cleanup=cleanup)
 
 
 async def _send_chat(aseco: "Aseco", login: str, message: str):
@@ -743,27 +642,32 @@ async def chat_rpgrecs(aseco: "Aseco", command: dict):
         await _send_chat(aseco, login, "{#server}> {#error}No current challenge UID available.")
         return
 
-    current = None
-    rows: list[dict] = []
-    cached = get_current_track_cache()
-    if isinstance(cached, dict) and uid in _track_all_uids(cached):
-        current = cached
-    try:
-        fetched = await get_rpg_track(uid)
-        if isinstance(fetched, dict):
-            current = fetched
-    except Exception as exc:
-        logger.warning("[RPGRecords] /rpgrecs track fetch failed for %s: %s", uid, exc)
-    try:
-        rows = await get_rpg_records(uid)
-    except Exception as exc:
-        logger.warning("[RPGRecords] /rpgrecs record fetch failed for %s: %s", uid, exc)
-    if isinstance(current, dict):
-        global _current_track, _current_records
-        _current_track = dict(current)
-        if rows:
-            _current_records = list(rows)
+    if not _enabled:
+        await _send_chat(aseco, login, '{#server}> {#error}RPG records are disabled.')
+        return
+    from pyxaseco.core.background_jobs import Admission, JobEnvelope, JobPolicy
+    job = JobEnvelope.capture(aseco.capture_job_context(), {'uid': uid})
+    async def operation(envelope):
+        requested = envelope.payload()['uid']
+        return _normalize_rpg_records_payload(await _json_request(_rpg_records_url(requested)), requested)
+    async def apply(result):
+        if aseco.server.players.get_player(login) is not player:
+            return
+        if result.status != 'completed':
+            await _send_chat(aseco, login, '{#server}> {#error}RPG records unavailable; please try again later.')
+            return
+        current, rows = result.value
+        await _show_rpgrecs(aseco, player, current, rows)
+    outcome = aseco.jobs.service('rpg_lookup', JobPolicy(deadline_seconds=65)).submit(
+        job, operation, apply, dedupe_key=f'command:{id(player)}')
+    if outcome == Admission.ACCEPTED:
+        await _send_chat(aseco, login, '{#server}> Loading fresh RPG records...')
+    elif outcome != Admission.DUPLICATE:
+        await _send_chat(aseco, login, '{#server}> {#error}RPG records busy; please try again shortly.')
 
+
+async def _show_rpgrecs(aseco, player, current, rows):
+    login = player.login
     if not current or not rows:
         await _send_chat(aseco, login, "{#server}> {#error}Current track has no RPG records.")
         return

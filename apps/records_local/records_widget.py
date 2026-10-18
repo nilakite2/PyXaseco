@@ -160,7 +160,6 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
     digest = _digest_entries(entries, login)
     if _state.player_local_digest.get(login) == digest:
         return
-    _state.player_local_digest[login] = digest
 
     xml = _build_record_widget(
         ml_id=ML_LOCAL,
@@ -172,6 +171,7 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
         click_action=91805,
     )
     await _send(aseco, login, xml)
+    _state.player_local_digest[login] = digest
 
 
 async def _build_local_records_window(aseco: 'Aseco', page: int) -> str:

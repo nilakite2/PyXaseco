@@ -14,6 +14,8 @@ All score-state widgets are sent on onEndRace and hidden on onEndRace1/onNewChal
 
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 import logging
 from typing import TYPE_CHECKING
 from xml.sax.saxutils import escape
@@ -67,7 +69,7 @@ def _team_badge_color(team_id: int) -> str:
 
 
 async def _broadcast(aseco: 'Aseco', xml: str) -> None:
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
 
 
 def _scoretable_header(ml_id: int, cfg: dict, widget_height: float) -> str:

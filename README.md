@@ -1,6 +1,6 @@
-# PyXaseco v1.2-DEV Release
+# PyXaseco v1.3 Release
 
-PyXaseco v1.2 is a Python-based server controller for TrackMania Forever.
+PyXaseco v1.3 is a Python-based server controller for TrackMania Forever.
 
 It is built to cover the familiar XAseco-style server workflow while using a cleaner app-based runtime layout under the hood.
 
@@ -18,7 +18,7 @@ PyXaseco provides the usual controller responsibilities you would expect on a Tr
 ## Project Layout
 
 ```text
-PyXaseco_v1.2/
+PyXaseco/
   apps/              Active app packages
   pyxaseco/          Core runtime
   apps.toml          Active app loadout

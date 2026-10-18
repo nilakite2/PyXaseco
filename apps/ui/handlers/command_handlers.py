@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import sys
+import logging
 from typing import TYPE_CHECKING
 
 from pyxaseco.helpers import display_manialink
 
 from ..config import (
     WidgetCfg,
+    PLUGIN_VERSION,
     _load_config,
     _state,
     validate_phase1_runtime,
@@ -17,6 +19,7 @@ from ..config import (
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
+logger = logging.getLogger(__name__)
 
 _WIDGET_IDS = (91811, 91812, 91813, 91832, 91834)
 _BAR_WIDGET_IDS = (
@@ -106,7 +109,7 @@ async def chat_eyepiece(aseco: 'Aseco', command: dict):
         return 'enabled' if cfg.enabled else 'disabled'
 
     rows = [
-        ['Core port',      '{#black}Eyepiece 1.2-DEV'],
+        ['Core port',      '{#black}Eyepiece ' + PLUGIN_VERSION],
         ['Mode',           '{#black}' + _mode_name(mode)],
         ['Challenge',      '{#black}' + ('enabled' if _state.challenge.enabled else 'disabled')],
         ['Local records',  '{#black}' + ena(_state.local)],
@@ -123,7 +126,7 @@ async def chat_eyepiece(aseco: 'Aseco', command: dict):
     display_manialink(
         aseco,
         login,
-        'Records-Eyepiece 1.2-DEV',
+        'Records-Eyepiece ' + PLUGIN_VERSION,
         ['Icons64x64_1', 'TrackInfo', -0.01],
         rows,
         [1.15, 0.32, 0.83],
@@ -325,6 +328,14 @@ async def reload_ui_runtime(aseco: 'Aseco') -> None:
 
 
 async def reload_ui_layout_runtime(aseco: 'Aseco') -> None:
+    from pyxaseco.core.widget_delivery import is_score_phase
+    if getattr(aseco, 'score_phase', None) is not None:
+        _state.challenge_show_next = is_score_phase(aseco)
+    _state.warmup = getattr(aseco, 'warmup_phase', False)
+    from ..score_data import score_data
+    await score_data(aseco).invalidate(aseco)
+    if getattr(aseco, 'ui_delivery', None):
+        aseco.ui_delivery.invalidate()
     from pyxaseco.app_config import clear_app_defaults_cache as clear_app_catalog_cache
     from pyxaseco.settings_loader import clear_app_defaults_cache as clear_settings_defaults_cache
     from .events import _apply_custom_ui_all, _redraw_all
@@ -394,6 +405,8 @@ async def _reload_dependent_widget_apps(aseco: 'Aseco') -> None:
         ('bestruns', 'apps.bestruns.app'),
         ('bestfinishes', 'apps.bestfinishes.app'),
         ('best_cp_times', 'apps.best_cp_times.app'),
+        ('checkpoint_tools', 'apps.checkpoint_tools.app'),
+        ('flexitime', 'apps.flexitime.app'),
     )
 
     for app_id, module_name in reload_targets:

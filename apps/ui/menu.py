@@ -132,6 +132,7 @@ def register(aseco: "Aseco"):
     aseco.register_event("onStartup", fufiMenu_startup)
     aseco.register_event("onEndRace", fufiMenu_endRace)
     aseco.register_event("onNewChallenge", fufiMenu_newChallenge)
+    aseco.register_event("onRestartChallenge", fufiMenu_newChallenge)
 
 
 def _menu_enabled(config: dict[str, Any]) -> bool:
@@ -1094,7 +1095,8 @@ async def fufiMenu_playerConnect(aseco: "Aseco", player: "Player"):
         return
     if not _fufi_menu.aseco:
         _fufi_menu.aseco = aseco
-    if getattr(getattr(aseco.server, "gameinfo", None), "mode", -1) == getattr(Gameinfo, "SCOR", 7):
+    from pyxaseco.core.widget_delivery import is_score_phase
+    if is_score_phase(aseco):
         await _fufi_menu.close_menu(player.login)
         return
     await _fufi_menu.send_menu_button_to_login(player.login)
@@ -1139,6 +1141,10 @@ async def fufiMenu_newChallenge(aseco: "Aseco", _param=None):
     global _fufi_menu
     if not _fufi_menu:
         return
+    from pyxaseco.core.widget_delivery import is_score_phase
+    if is_score_phase(aseco):
+        await _fufi_menu.hide_menu_everywhere()
+        return
     await _fufi_menu.send_menu_button_to_login("")
 
 
@@ -1164,7 +1170,8 @@ async def reload_menu_runtime(aseco: "Aseco") -> None:
     if not _fufi_menu:
         return
 
-    if getattr(getattr(aseco.server, "gameinfo", None), "state", None) == Gameinfo.SCOR:
+    from pyxaseco.core.widget_delivery import is_score_phase
+    if is_score_phase(aseco):
         return
 
     await _fufi_menu.send_menu_button_to_login("")

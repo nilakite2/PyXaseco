@@ -40,6 +40,7 @@ PLUGIN_METADATA = {
 
 # Module-level DB pool (shared across all callers)
 _pool: Optional[aiomysql.Pool] = None
+_performance = None
 _settings: dict = {}
 _display: bool = True
 _limit: int = 50
@@ -147,22 +148,13 @@ async def ldb_load_settings(aseco: 'Aseco', _param):
 
 
 async def ldb_connect(aseco: 'Aseco', _param):
-    global _pool
+    global _pool, _performance
+    _performance = aseco.performance
 
     aseco.console("[LocalDB] Connecting to MySQL '{1}' db='{2}'",
                   _settings['host'], _settings['db'])
     try:
-        _pool = await aiomysql.create_pool(
-            host=_settings['host'],
-            port=_settings.get('port', 3306),
-            user=_settings['user'],
-            password=_settings['password'],
-            db=_settings['db'],
-            charset='utf8mb4',
-            autocommit=True,
-            minsize=1,
-            maxsize=5,
-        )
+        _pool = await _open_pool()
     except Exception as e:
         raise RuntimeError(f'[LocalDB] Could not connect to MySQL: {e}')
 
@@ -174,7 +166,8 @@ async def ldb_connect(aseco: 'Aseco', _param):
 
 
 async def _open_pool() -> aiomysql.Pool:
-    return await aiomysql.create_pool(
+    from pyxaseco.core.sql_metrics import MeasuredPool, measured_cursor
+    pool = await aiomysql.create_pool(
         host=_settings['host'],
         port=_settings.get('port', 3306),
         user=_settings['user'],
@@ -184,7 +177,18 @@ async def _open_pool() -> aiomysql.Pool:
         autocommit=True,
         minsize=1,
         maxsize=5,
+        cursorclass=measured_cursor(_performance),
     )
+    return MeasuredPool(pool, _performance) if _performance and _performance.enabled else pool
+
+
+async def shutdown(_context):
+    """Workers are stopped before app lifecycle shutdown closes the pool."""
+    global _pool
+    pool, _pool = _pool, None
+    if pool is not None:
+        pool.close()
+        await pool.wait_closed()
 
 
 async def ldb_reconnect(aseco: 'Aseco', _param=None):
@@ -772,6 +776,7 @@ async def ldb_remove_record(aseco: 'Aseco', challenge_id: int, player_id: int, r
                 (challenge_id, player_id)
             )
     aseco.server.records.del_record(recno)
+    await aseco.release_event('onRecordsChanged', challenge_id)
 
 
 async def _get_player_id(login: str) -> Optional[int]:

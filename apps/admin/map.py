@@ -33,7 +33,7 @@ COMMAND_SPECS = [
     ('clearjukebox', 'Clears the entire jukebox'),
     ('cjb', 'Clears the entire jukebox'),
     ('clearhist', 'Clears (part of) track history'),
-    ('add', 'Adds track from TMX: /admin add <id> [tmnf|tmu|tmo|tms|tmn]'),
+    ('add', 'Permanently adds track from TMX: /admin add <id> [tmnf|tmu|tmo|tms|tmn]'),
     ('addthis', 'Adds current /add-ed track permanently'),
     ('addlocal', 'Adds a local track (<filename>)'),
     ('remove', 'Removes a track from rotation'),
@@ -71,7 +71,16 @@ async def handle_subcommand(
     from . import command_router as admin_chat
 
     if sub in ('nextmap', 'next', 'skipmap', 'skip'):
+        message = admin_chat._fmt_admin(aseco, admin, chattitle, 'skips to next track!')
+        async def completed_skip():
+            aseco.console('{1} [{2}] forced next challenge', logtitle, login)
+            await admin_chat._broadcast(aseco, message)
+        if 'endlesstmxr' in (getattr(aseco, 'active_apps', ()) or ()):
+            from apps.endlesstmxr.service import request_skip
+            if await request_skip(aseco, login=login, nickname=str(admin.nickname), complete=completed_skip):
+                return True
         skipped_jb = None
+        skip_warning = ''
         try:
             from apps.jukebox.jukebox import force_jukebox_next, jukebox
 
@@ -79,15 +88,11 @@ async def handle_subcommand(
                 _uid, skipped_jb = next(iter(jukebox.items()))
                 jb_selected = await force_jukebox_next(aseco)
                 if not jb_selected:
-                    await admin_chat._reply(
-                        aseco,
-                        login,
-                        '{#server}> {#error}Could not queue the first jukebox track as next challenge.'
-                    )
-                    return True
+                    skipped_jb = None
+                    skip_warning = '{#server}> {#error}Could not queue the first jukebox track as next challenge. Manual skip will continue.'
         except Exception as e:
-            await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}Jukebox skip failed: {e}')
-            return True
+            skipped_jb = None
+            skip_warning = f'{{#server}}> {{#error}}Jukebox skip failed: {e}. Manual skip will continue.'
 
         if skipped_jb is not None:
             try:
@@ -96,6 +101,8 @@ async def handle_subcommand(
                 pass
 
         await aseco.client.query_ignore_result('NextChallenge')
+        if skip_warning:
+            await admin_chat._reply(aseco, login, skip_warning)
         aseco.console('{1} [{2}] forced next challenge', logtitle, login)
         await admin_chat._broadcast(
             aseco,
@@ -341,8 +348,34 @@ async def handle_subcommand(
         )
         return True
 
-    if sub in ('writetracklist',):
-        await admin_chat._reply(aseco, login, '{#server}> MatchSettings.txt is maintained automatically.')
+    if sub == 'writetracklist':
+        filename = str(arg or getattr(aseco.settings, 'default_tracklist', '') or 'MatchSettings.txt').strip()
+        if not filename or filename in ('.', '..') or any(c in filename for c in ('/', '\\', ':', '\0')):
+            await admin_chat._reply(aseco, login, '{#server}> {#error}Use a filename within the MatchSettings folder.')
+            return True
+        if not filename.lower().endswith('.txt'):
+            filename += '.txt'
+        try:
+            # Await the dedicated server's result; a sent request is not a saved list.
+            result = await aseco.client.query('SaveMatchSettings', f'MatchSettings/{filename}')
+            if result is False or result is None:
+                raise RuntimeError('SaveMatchSettings did not confirm the save.')
+        except Exception as e:
+            await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}Could not write {filename}: {e}')
+            return True
+
+        if getattr(aseco.settings, 'writetracklist_random', False):
+            try:
+                from apps.jukebox.backend import _ensure_random_filter, _matchsettings_autosave_path
+                from pyxaseco.core.file_io import file_io
+                await file_io(_ensure_random_filter, _matchsettings_autosave_path(aseco, filename))
+            except Exception as e:
+                await admin_chat._reply(
+                    aseco, login,
+                    f'{{#server}}> {{#error}}{filename} was saved, but its random-order filter could not be updated: {e}')
+        aseco.console('{1} [{2}] wrote track list: {3} !', logtitle, login, filename)
+        await aseco.release_event('onTracklistChanged', ['write', None])
+        await admin_chat._reply(aseco, login, f'{{#server}}> {{#highlite}}{filename}{{#admin}} written')
         return True
 
     if sub == 'readtracklist':
@@ -416,7 +449,6 @@ async def handle_subcommand(
                 aseco,
                 admin_chat._fmt_admin(aseco, admin, chattitle, 'removes current track from rotation!')
             )
-            await aseco.client.query_ignore_result('NextChallenge')
         except Exception as e:
             await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{e}')
         return True
@@ -439,7 +471,6 @@ async def handle_subcommand(
                 aseco,
                 admin_chat._fmt_admin(aseco, admin, chattitle, 'erases current track!')
             )
-            await aseco.client.query_ignore_result('NextChallenge')
         except Exception as e:
             await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{e}')
         return True
@@ -509,65 +540,48 @@ async def handle_subcommand(
             await admin_chat._reply(aseco, login, '{#server}> {#error}You must include a TMX Track_ID!')
             return True
 
-        jukebox_adminadd = True
+        from apps.jukebox.tmx_jobs import get_tmx_jobs
+        nickname = str(admin.nickname)
         for trkid in track_ids:
             try:
-                from apps.jukebox.jukebox import admin_add_tmx_track
-                ok, info = await admin_add_tmx_track(
-                    aseco, trkid, login, source_hint, use_add_challenge=True
+                async def complete(ok, info, track_id=trkid):
+                    if ok:
+                        aseco.console('{1} [{2}] adds track "{3}" from TMX!', logtitle, login, info)
+                        msg = admin_chat.format_text(
+                            '{#server}>> {#admin}{1}$z$s {#highlite}{2}$z$s {#admin}adds & jukeboxes track: {#highlite}{3} {#admin}from TMX',
+                            chattitle, nickname, info,
+                        )
+                        await admin_chat._broadcast(aseco, msg)
+                    elif aseco.server.players.get_player(login) is admin:
+                        await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}Could not add {track_id}: {info}')
+                await get_tmx_jobs(aseco).request(
+                    login=login, nickname=nickname, ref=trkid, section=source_hint,
+                    complete=complete, require_feature_flags=False, persist=True,
                 )
-                if ok:
-                    track_name = info
-                    aseco.console('{1} [{2}] adds track "{3}" from TMX!', logtitle, login, track_name)
-                    jb_phrase = '& jukeboxes ' if jukebox_adminadd else ''
-                    msg = admin_chat.format_text(
-                        '{#server}>> {#admin}{1}$z$s {#highlite}{2}$z$s {#admin}adds {3}track: {#highlite}{4} {#admin}from TMX',
-                        chattitle, admin.nickname, jb_phrase, track_name
-                    )
-                    await admin_chat._broadcast(aseco, msg)
-                else:
-                    await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}Could not add {trkid}: {info}')
             except Exception as e:
                 await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{e}')
         return True
 
     if sub == 'addthis':
         try:
-            from apps.jukebox.jukebox import tmxplayed
-        except Exception:
-            tmxplayed = None
-
-        try:
-            if not tmxplayed:
+            from apps.jukebox import backend as jukebox_runtime
+            from pyxaseco.core.file_io import file_io
+            filename = aseco.server.challenge.filename
+            uid = getattr(aseco.server.challenge, 'uid', '')
+            if not uid or not filename:
+                raise ValueError('Current track has no usable UID or filename.')
+            changed = await file_io(
+                jukebox_runtime._ensure_matchsettings_entry,
+                jukebox_runtime._matchsettings_path(aseco), filename, uid)
+            # Assign state on its owner, not on the forwarding jukebox facade.
+            jukebox_runtime.tmxplayed = False
+            if not changed:
                 await admin_chat._reply(
                     aseco,
                     login,
                     f'{{#server}}> {{#error}}Current track {{#highlite}}$i {admin_chat.strip_colors(aseco.server.challenge.name)} {{#error}}already permanently in track list!'
                 )
                 return True
-
-            try:
-                from apps.jukebox.jukebox import _matchsettings_path, _ensure_matchsettings_entry
-            except Exception:
-                _matchsettings_path = None
-                _ensure_matchsettings_entry = None
-
-            filename = aseco.server.challenge.filename
-            uid = getattr(aseco.server.challenge, 'uid', '')
-
-            if _matchsettings_path and _ensure_matchsettings_entry and uid:
-                await asyncio.to_thread(
-                    _ensure_matchsettings_entry,
-                    _matchsettings_path(aseco),
-                    filename,
-                    uid
-                )
-
-            try:
-                import apps.jukebox.jukebox as rasp_jukebox_mod
-                rasp_jukebox_mod.tmxplayed = False
-            except Exception:
-                pass
 
             await aseco.release_event('onTracklistChanged', ['rename', filename])
             aseco.console('{1} [{2}] permanently adds current track [{3}]', logtitle, login, admin_chat.strip_colors(aseco.server.challenge.name))
@@ -585,7 +599,7 @@ async def handle_subcommand(
         if arg:
             try:
                 rel_insert = arg.strip()
-                await aseco.client.query_ignore_result('InsertChallenge', rel_insert)
+                await aseco.client.query_ignore_result('AddChallenge', rel_insert)
                 await aseco.release_event('onTracklistChanged', ['add', rel_insert])
 
                 try:

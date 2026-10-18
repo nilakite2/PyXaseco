@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui, is_score_phase
+
 import html
 import logging
 from typing import TYPE_CHECKING
 
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_bool, as_float, as_int, as_str, bind_app_settings
 from pyxaseco.helpers import strip_colors, strip_sizes
-from pyxaseco.models import Gameinfo
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -58,6 +59,7 @@ def register(aseco: "Aseco"):
     aseco.register_event("onStartup", _banner_on_startup)
     aseco.register_event("onEndRace", _banner_on_end_race)
     aseco.register_event("onNewChallenge", _banner_on_new_challenge)
+    aseco.register_event("onRestartChallenge", _banner_on_new_challenge)
     aseco.register_event("onPlayerConnect", _banner_on_player_connect)
 
 
@@ -120,26 +122,27 @@ async def _show_banner(aseco: "Aseco", login: str | None = None):
         return
     xml = _build_xml(await _get_banner_text(aseco))
     if login:
-        await aseco.client.query_ignore_result(
+        await deliver_ui(aseco, 
             "SendDisplayManialinkPageToLogin", login, xml, 0, False
         )
     else:
-        await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+        await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
 async def _hide_banner(aseco: "Aseco", login: str | None = None):
     xml = f'<manialink id="{ML_ID}"></manialink>'
     if login:
-        await aseco.client.query_ignore_result(
+        await deliver_ui(aseco, 
             "SendDisplayManialinkPageToLogin", login, xml, 0, False
         )
     else:
-        await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+        await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
 async def _banner_on_startup(aseco: "Aseco", _params):
     _apply_app_defaults(aseco)
-    await _show_banner(aseco)
+    if not is_score_phase(aseco):
+        await _show_banner(aseco)
 
 
 async def _banner_on_end_race(aseco: "Aseco", _race):
@@ -148,7 +151,8 @@ async def _banner_on_end_race(aseco: "Aseco", _race):
 
 async def _banner_on_new_challenge(aseco: "Aseco", _challenge):
     _apply_app_defaults(aseco)
-    await _show_banner(aseco)
+    if not is_score_phase(aseco):
+        await _show_banner(aseco)
 
 
 async def _banner_on_player_connect(aseco: "Aseco", player: "Player"):
@@ -156,7 +160,7 @@ async def _banner_on_player_connect(aseco: "Aseco", player: "Player"):
     if not _enabled:
         await _hide_banner(aseco, player.login)
         return
-    if getattr(getattr(aseco.server, "gameinfo", None), "mode", -1) == getattr(Gameinfo, "SCOR", 7):
+    if is_score_phase(aseco):
         await _hide_banner(aseco, player.login)
         return
     await _show_banner(aseco, player.login)
@@ -167,6 +171,6 @@ async def reload_banner_runtime(aseco: "Aseco") -> None:
     await _hide_banner(aseco)
     if not _enabled:
         return
-    if getattr(getattr(aseco.server, "gameinfo", None), "state", None) == Gameinfo.SCOR:
+    if is_score_phase(aseco):
         return
     await _show_banner(aseco)

@@ -17,6 +17,9 @@ import struct
 import xml.etree.ElementTree as ET
 from typing import Any, Optional
 import logging
+import time
+
+from pyxaseco.core.performance import profile_rpc
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +180,14 @@ class GbxError(Exception):
         return f'[{self.code}] {self.message}'
 
 
+class GbxAuthenticationError(GbxError):
+    """Invalid credentials must not trigger transport reconnection retries."""
+
+
+class GbxProtocolError(GbxError):
+    """An incompatible endpoint is not a transient connection failure."""
+
+
 # ---------------------------------------------------------------------------
 # Main async client
 # ---------------------------------------------------------------------------
@@ -200,7 +211,9 @@ class GbxClient:
         callbacks = client.get_cb_responses()
     """
 
-    def __init__(self):
+    def __init__(self, performance=None):
+        self.performance = performance
+        self._cb_received_at: list[float] = []
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         self._connected: bool = False
@@ -216,24 +229,25 @@ class GbxClient:
 
     async def connect(self, host: str, port: int, timeout: float = 10.0):
         """Open TCP connection and perform GbxRemote handshake."""
-        self._connected = False
+        await self.disconnect()
         try:
-            self._reader, self._writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port), timeout=timeout
-            )
-        except (asyncio.TimeoutError, OSError) as e:
+            async with asyncio.timeout(timeout):
+                self._reader, self._writer = await asyncio.open_connection(host, port)
+                header_size_bytes = await self._read_exactly(4)
+                (size,) = struct.unpack_from('<I', header_size_bytes)
+                if not 1 <= size <= 64:
+                    raise GbxProtocolError(-32300, 'transport error - wrong lowlevel protocol header')
+                handshake = (await self._read_exactly(size)).decode('utf-8', errors='replace')
+                if handshake != 'GBXRemote 2':
+                    raise GbxProtocolError(-32300,
+                        f'transport error - unsupported protocol: "{handshake}" '
+                        '(only GBXRemote 2 is supported)')
+        except (TimeoutError, OSError, asyncio.IncompleteReadError) as e:
+            await self.disconnect()
             raise GbxError(-32300, f'transport error - could not connect: {e}')
-
-        # --- handshake: read uint32 size + protocol string ---
-        header_size_bytes = await self._read_exactly(4)
-        (size,) = struct.unpack_from('<I', header_size_bytes)
-        if size > 64:
-            raise GbxError(-32300, 'transport error - wrong lowlevel protocol header')
-        handshake = (await self._read_exactly(size)).decode('utf-8', errors='replace')
-        if handshake != 'GBXRemote 2':
-            raise GbxError(-32300,
-                f'transport error - unsupported protocol: "{handshake}" '
-                '(only GBXRemote 2 is supported)')
+        except BaseException:
+            await self.disconnect()
+            raise
 
         logger.info('GbxRemote handshake OK: %s', handshake)
 
@@ -243,21 +257,27 @@ class GbxClient:
 
     async def disconnect(self):
         """Close the connection cleanly."""
+        if not self._connected and self._read_task is None and self._writer is None:
+            return
         self._connected = False
+        self._fail_pending()
         if self._read_task:
             self._read_task.cancel()
             try:
                 await self._read_task
             except asyncio.CancelledError:
                 pass
+            self._read_task = None
         if self._writer:
             self._writer.close()
             try:
-                await self._writer.wait_closed()
+                await asyncio.wait_for(self._writer.wait_closed(), timeout=5.0)
             except Exception:
                 pass
         self._reader = None
         self._writer = None
+        self._cb_queue.clear()
+        self._cb_received_at.clear()
         logger.info('GbxClient disconnected')
 
     def is_connected(self) -> bool:
@@ -275,13 +295,14 @@ class GbxClient:
         """Call Authenticate on the dedicated server."""
         result = await self.query('Authenticate', login, password)
         if result is not True:
-            raise GbxError(-32300, f'Authentication failed (result={result!r})')
+            raise GbxAuthenticationError(-32300, f'Authentication failed (result={result!r})')
         logger.info('Authenticated as %s', login)
 
     # ------------------------------------------------------------------
     # Public query methods
     # ------------------------------------------------------------------
 
+    @profile_rpc('query')
     async def query(self, method: str, *args) -> Any:
         """
         Send an XML-RPC call and await the result.
@@ -294,25 +315,32 @@ class GbxClient:
         if len(xml_bytes) > MAX_REQUEST_SIZE:
             raise GbxError(-32300, f'transport error - request too large ({len(xml_bytes)})')
 
-        async with self._lock:
-            handle = self._next_handle()
-            fut: asyncio.Future = asyncio.get_event_loop().create_future()
-            self._pending[handle] = fut
-            try:
-                await self._send_packet(xml_bytes, handle)
-            except Exception as e:
-                self._pending.pop(handle, None)
-                fut.cancel()
-                raise GbxError(-32300, f'transport error - send failed: {e}')
-
-        # Wait for the background reader to deliver our result
+        # Include lock acquisition and drain, not only the reply, in the deadline.
+        handle = None
+        fut = None
         try:
-            result = await asyncio.wait_for(fut, timeout=20.0)
-        except asyncio.TimeoutError:
-            self._pending.pop(handle, None)
+            async with asyncio.timeout(20.0):
+                async with self._lock:
+                    handle = self._next_handle()
+                    fut = asyncio.get_running_loop().create_future()
+                    self._pending[handle] = fut
+                    try:
+                        await self._send_packet(xml_bytes, handle)
+                    except Exception as e:
+                        raise GbxError(-32300, f'transport error - send failed: {e}')
+                return await fut
+        except TimeoutError:
             raise GbxError(-32300, f'transport error - timeout waiting for response to {method}')
-        return result
+        finally:
+            if handle is not None:
+                self._pending.pop(handle, None)
+            if fut is not None:
+                if not fut.done():
+                    fut.cancel()
+                elif not fut.cancelled():
+                    fut.exception()
 
+    @profile_rpc('send')
     async def query_ignore_result(self, method: str, *args) -> bool:
         """
         Send an XML-RPC call without waiting for the result.
@@ -335,15 +363,13 @@ class GbxClient:
                 return r1 and r2
             raise GbxError(-32300, f'transport error - request too large ({len(xml_bytes)})')
 
-        async with self._lock:
-            handle = self._next_handle()
-            # We don't register a future — we don't care about the response.
-            # The background reader will see the response, find no pending future,
-            # and silently discard it.
-            try:
-                await self._send_packet(xml_bytes, handle)
-            except Exception as e:
-                raise GbxError(-32300, f'transport error - send failed: {e}')
+        try:
+            async with asyncio.timeout(20.0):
+                async with self._lock:
+                    handle = self._next_handle()
+                    await self._send_packet(xml_bytes, handle)
+        except Exception as e:
+            raise GbxError(-32300, f'transport error - send failed: {e}')
         return True
 
     # ------------------------------------------------------------------
@@ -365,7 +391,16 @@ class GbxClient:
         """
         cbs = self._cb_queue[:]
         self._cb_queue.clear()
+        self._cb_received_at.clear()
         return cbs
+
+    def get_timed_cb_responses(self) -> list[tuple[str, list, float | None]]:
+        received = self._cb_received_at[:]
+        callbacks = self.get_cb_responses()
+        return [
+            (method, params, received[index] if index < len(received) else None)
+            for index, (method, params) in enumerate(callbacks)
+        ]
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -382,6 +417,13 @@ class GbxClient:
         # StreamWriter.is_closing() can lag behind a failed drain(). Keep an
         # explicit state so no other callback writes to the poisoned stream.
         self._connected = False
+        self._fail_pending()
+
+    def _fail_pending(self) -> None:
+        for fut in self._pending.values():
+            if not fut.done():
+                fut.set_exception(GbxError(-32300, 'transport error - connection lost'))
+        self._pending.clear()
 
     async def _send_packet(self, xml_bytes: bytes, handle: int):
         """Send: uint32 len + uint32 handle + xml_bytes (little-endian)."""
@@ -395,7 +437,9 @@ class GbxClient:
         try:
             writer.write(header + xml_bytes)
             await writer.drain()
-        except Exception:
+            if self.performance is not None:
+                self.performance.increment('gbx.xml_bytes_sent', len(xml_bytes))
+        except BaseException:
             self._mark_transport_lost()
             raise
 
@@ -462,6 +506,9 @@ class GbxClient:
                         if msg_type == 'methodCall' and params:
                             cb_info = params[0]
                             self._cb_queue.append((cb_info['method'], cb_info['params']))
+                            if self.performance is not None and self.performance.enabled:
+                                self._cb_received_at.append(time.monotonic())
+                                self.performance.gauge_max('callbacks.buffer', len(self._cb_queue))
                     except ValueError as e:
                         logger.warning('GbxRemote: callback parse error: %s', e)
 
@@ -485,14 +532,9 @@ class GbxClient:
             if writer is not None:
                 try:
                     writer.close()
-                    await writer.wait_closed()
+                    await asyncio.wait_for(writer.wait_closed(), timeout=5.0)
                 except Exception:
                     pass
-            # Unblock any pending futures with an error
-            for fut in self._pending.values():
-                if not fut.done():
-                    fut.set_exception(GbxError(-32300, 'transport error - connection lost'))
-            self._pending.clear()
 
 
 # ---------------------------------------------------------------------------

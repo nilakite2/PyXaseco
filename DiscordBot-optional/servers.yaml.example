@@ -1,0 +1,99 @@
+settings:
+  discord_bot:
+    enabled: true
+    token_env: "DISCORD_BOT_TOKEN"
+    command_prefix: "-tm"
+    status_text: "TM ChatBot"
+    max_message_length: 220
+    strip_tm_colors: true
+    send_feedback_message: true
+
+    routes:
+      - guild_id: "1234567890"
+        channel_id: "1234567890"
+        allowed_server_ids: [1, 2, 3, 4]
+
+      - guild_id: "0987654321"
+        channel_id: "0987654321"
+        allowed_server_ids: [5, 6, 7, 8]
+
+instances:
+  - bot_id: 1
+    name: "Server 1"
+    group: "Group1"
+    type: "pyxaseco"
+    xmlrpc_host: "127.0.0.1"
+    xmlrpc_port: 5000
+    xmlrpc_login: "SuperAdmin"
+    xmlrpc_password: "REPLACE_ME_WITH_YOUR_PASSWORD"
+    xmlrpc_path: "/RPC2"
+
+  - bot_id: 2
+    name: "Server 2"
+    group: "Group1"
+    type: "pyxaseco"
+    xmlrpc_host: "127.0.0.1"
+    xmlrpc_port: 5001
+    xmlrpc_login: "SuperAdmin"
+    xmlrpc_password: "REPLACE_ME_WITH_YOUR_PASSWORD"
+    xmlrpc_path: "/RPC2"
+
+  - bot_id: 3
+    name: "Server 3"
+    group: "Group1"
+    type: "pyxaseco"
+    xmlrpc_host: "127.0.0.1"
+    xmlrpc_port: 5002
+    xmlrpc_login: "SuperAdmin"
+    xmlrpc_password: "REPLACE_ME_WITH_YOUR_PASSWORD"
+    xmlrpc_path: "/RPC2"
+
+  - bot_id: 4
+    name: "Server 4"
+    group: "Group1"
+    type: "pyxaseco"
+    xmlrpc_host: "127.0.0.1"
+    xmlrpc_port: 5003
+    xmlrpc_login: "SuperAdmin"
+    xmlrpc_password: "REPLACE_ME_WITH_YOUR_PASSWORD"
+    xmlrpc_path: "/RPC2"
+
+  - bot_id: 5
+    name: "Server 1"
+    group: "Group2"
+    type: "pyxaseco"
+    xmlrpc_host: "127.0.0.1"
+    xmlrpc_port: 5004
+    xmlrpc_login: "SuperAdmin"
+    xmlrpc_password: "REPLACE_ME_WITH_YOUR_PASSWORD"
+    xmlrpc_path: "/RPC2"
+
+  - bot_id: 6
+    name: "Server 2"
+    group: "Group2"
+    type: "pyxaseco"
+    xmlrpc_host: "127.0.0.1"
+    xmlrpc_port: 5005
+    xmlrpc_login: "SuperAdmin"
+    xmlrpc_password: "REPLACE_ME_WITH_YOUR_PASSWORD"
+    xmlrpc_path: "/RPC2"
+
+  - bot_id: 7
+    name: "Server 3"
+    group: "Group2"
+    type: "pyxaseco"
+    xmlrpc_host: "127.0.0.1"
+    xmlrpc_port: 5006
+    xmlrpc_login: "SuperAdmin"
+    xmlrpc_password: "REPLACE_ME_WITH_YOUR_PASSWORD"
+    xmlrpc_path: "/RPC2"
+
+  - bot_id: 8
+    name: "Server 4"
+    group: "Group2"
+    type: "pyxaseco"
+    xmlrpc_host: "127.0.0.1"
+    xmlrpc_port: 5007
+    xmlrpc_login: "SuperAdmin"
+    xmlrpc_password: "REPLACE_ME_WITH_YOUR_PASSWORD"
+    xmlrpc_path: "/RPC2"

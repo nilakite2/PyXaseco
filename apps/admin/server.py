@@ -52,8 +52,8 @@ COMMAND_SPECS = [
     ('unlock', 'Unlocks admin commands & features'),
     ('debug', 'Toggles debugging output'),
     ('pyres', 'Reinitializes the entire PyXaseco controller'),
-    ('shutdown', 'Shuts down XASECO'),
-    ('shutdownall', 'Shuts down Server & XASECO'),
+    ('shutdown', 'Shuts down PyXaseco'),
+    ('shutdownall', 'Shuts down Server & PyXaseco'),
 ]
 
 HANDLED_SUBCOMMANDS = {name for name, _help in COMMAND_SPECS}
@@ -1800,7 +1800,7 @@ async def handle_subcommand(
     if sub == 'shutdown':
         await admin_chat._broadcast(
             aseco,
-            admin_chat._fmt_admin(aseco, admin, chattitle, 'shuts down XASECO!')
+            admin_chat._fmt_admin(aseco, admin, chattitle, 'shuts down PyXaseco!')
         )
         ok = await admin_chat._best_effort_shutdown(aseco, stop_server=False)
         if not ok:
@@ -1810,7 +1810,7 @@ async def handle_subcommand(
     if sub == 'shutdownall':
         await admin_chat._broadcast(
             aseco,
-            admin_chat._fmt_admin(aseco, admin, chattitle, 'shuts down server and XASECO!')
+            admin_chat._fmt_admin(aseco, admin, chattitle, 'shuts down server and PyXaseco!')
         )
         ok = await admin_chat._best_effort_shutdown(aseco, stop_server=True)
         if not ok:

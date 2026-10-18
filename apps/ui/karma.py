@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 """
 mania_karma.py — PyXaseco port of plugins/plugin.mania_karma.php
 """
@@ -21,6 +23,7 @@ from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_int,
                                  as_str, bind_app_settings)
 from pyxaseco.app_services import localdb_get_player_id, localdb_get_pool
 from pyxaseco.core.config import display_path
+from pyxaseco.core.retained_delivery import PreparationDeferred
 from apps.tmx.service import (
     build_public_tmx_track_url as _build_public_tmx_track_url,
     normalise_tmx_web_url as _normalise_tmx_web_url,
@@ -179,6 +182,7 @@ class ReminderStateCfg:
 
 @dataclass
 class KarmaConfig:
+    enabled: bool = True
     api_auth_url: str = "http://worldwide.mania-karma.com/api/tmforever-trackmania-v4.php"
     api_url: str = ""
     website: str = "www.mania-karma.com"
@@ -320,9 +324,14 @@ _cfg = KarmaConfig()
 _api_authcode = ""
 _api_connected = False
 _retrytime = 0
+_lookup_retrytime = 0
 _window_state: dict[str, tuple[str, int]] = {}
 _runtime_aseco: Aseco | None = None
 _current_map: dict[str, Any] = {}
+
+
+class _KarmaAuthenticationPending(PreparationDeferred):
+    """No write was attempted; keep the retained vote pending for authentication."""
 
 
 _karma: dict[str, Any] = {}
@@ -340,6 +349,7 @@ def _apply_enabled_flag(aseco: Aseco) -> bool:
 
 def _set_empty_karma(reset_locals: bool = False) -> dict[str, Any]:
     data = {
+        "global_loaded": False,
         "data": {"uid": "", "id": False, "name": "", "author": "", "env": "", "tmx": ""},
         "new": {"players": {}},
         "global": {
@@ -519,6 +529,11 @@ def _get_mode(aseco: Aseco) -> int:
         return int(aseco.server.gameinfo.mode)
     except Exception:
         return 1
+
+
+def _display_mode(aseco: Aseco) -> int:
+    from pyxaseco.core.widget_delivery import is_score_phase
+    return 7 if is_score_phase(aseco) else _get_mode(aseco)
 
 
 def _current_uid() -> str:
@@ -797,92 +812,77 @@ async def _save_local_votes(votes: dict[str, int]) -> None:
 # API helpers
 # ---------------------------------------------------------------------------
 
-async def _api_get(url: str, timeout: int) -> str | None:
-    try:
-        import aiohttp
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as sess:
-            async with sess.get(url) as resp:
-                if resp.status == 200:
-                    return await resp.text(errors="replace")
-    except Exception as exc:
-        logger.debug("[ManiaKarma] api GET failed: %s", exc)
-    return None
+async def _api_get(url: str, timeout: int) -> str:
+    from pyxaseco.core.http_sessions import HttpPolicy, request_timeout
+    from pyxaseco.core.external_io import read_limited
+    session = _runtime_aseco.jobs.http.get('karma', HttpPolicy())
+    async with session.get(url, timeout=request_timeout(timeout, connect_seconds=_cfg.connect_timeout)) as response:
+        response.raise_for_status()
+        body = await read_limited(response, 1024 * 1024)
+        return body.decode('utf-8', errors='replace')
 
 
-async def _api_post(url: str, payload: str, timeout: int) -> tuple[int, str | None]:
-    try:
-        import aiohttp
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as sess:
-            async with sess.post(url, data=payload.encode("utf-8"), headers={"Content-Type": "text/plain; charset=utf-8"}) as resp:
-                return resp.status, await resp.text(errors="replace")
-    except Exception as exc:
-        logger.debug("[ManiaKarma] api POST failed: %s", exc)
-    return 0, None
+async def _api_post(url: str, payload: str, timeout: int):
+    from pyxaseco.core.http_sessions import HttpPolicy, request_timeout
+    from pyxaseco.core.external_io import read_limited
+    session = _runtime_aseco.jobs.http.get('karma', HttpPolicy())
+    async with session.post(url, data=payload.encode('utf-8'),
+                            headers={'Content-Type': 'text/plain; charset=utf-8'},
+                            timeout=request_timeout(timeout, connect_seconds=_cfg.connect_timeout)) as response:
+        body = await read_limited(response, 1024 * 1024)
+        return response.status, body.decode('utf-8', errors='replace')
+
+
+async def _queue_karma(aseco, url, apply, *, key, current_map=True, timeout=None):
+    from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy
+    # URLs containing session auth tokens stay in this ephemeral closure,
+    # never in retained storage or diagnostics.
+    job = JobEnvelope.capture(aseco.capture_job_context(), {})
+    timeout = _cfg.wait_timeout if timeout is None else timeout
+    async def operation(_envelope):
+        return await _api_get(url, timeout)
+    async def completed(result):
+        await apply(result.value if result.status == 'completed' else None)
+    return aseco.jobs.service('karma', JobPolicy(deadline_seconds=120)).submit(
+        job, operation, completed, current_map=current_map, dedupe_key=key)
 
 
 async def _api_auth(aseco: Aseco) -> bool:
-    global _api_authcode, _api_connected, _retrytime
-    login = getattr(aseco.server, "serverlogin", "") or getattr(aseco.server, "login", "") or ""
-    server_name = getattr(aseco.server, "name", "") or ""
-    zone = getattr(aseco.server, "zone", "") or ""
-    name_b64 = base64.b64encode(server_name.encode()).decode()
-    url = (
-        f"{_cfg.api_auth_url}?Action=Auth"
-        f"&login={urllib.parse.quote(login)}"
-        f"&name={name_b64}"
-        f"&game=TmForever"
-        f"&zone={urllib.parse.quote(zone)}"
-        f"&nation={urllib.parse.quote(_cfg.nation)}"
-    )
-    logger.debug("[ManiaKarma] auth url: %s", url)
-    body = await _api_get(url, _cfg.connect_timeout)
-    if not body:
-        _api_connected = False
-        _retrytime = int(asyncio.get_running_loop().time()) + 60
-        return False
-    try:
-        xml = ET.fromstring(body)
-        status = int(xml.findtext("status") or 0)
-        if status == 200:
-            _api_authcode = xml.findtext("authcode") or ""
-            _cfg.api_url = xml.findtext("api_url") or _cfg.api_auth_url
-            import_done = str(xml.findtext("import_done") or "").strip().lower()
-            if import_done in {"true", "false"}:
-                _cfg.import_done = (import_done == "true")
-            logger.debug(
-                "[ManiaKarma] auth response: status=%s import_done=%s api_url=%s",
-                status,
-                _cfg.import_done,
-                _cfg.api_url,
-            )
-            _api_connected = True
-            _retrytime = 0
-            return True
-    except Exception as exc:
-        logger.debug("[ManiaKarma] auth parse failed: %s", exc)
-    _api_connected = False
+    global _retrytime
+    login = getattr(aseco.server, 'serverlogin', '') or ''
+    url = _cfg.api_auth_url + '?' + urllib.parse.urlencode({
+        'Action': 'Auth', 'login': login,
+        'name': base64.b64encode(str(getattr(aseco.server, 'name', '') or '').encode()).decode(),
+        'game': 'TmForever', 'zone': str(getattr(aseco.server, 'zone', '') or ''),
+        'nation': _cfg.nation})
     _retrytime = int(asyncio.get_running_loop().time()) + 60
-    return False
+    async def apply(body):
+        global _api_authcode, _api_connected, _retrytime
+        if not _cfg.enabled:
+            return
+        try:
+            xml = ET.fromstring(body or '')
+            if int(xml.findtext('status') or 0) != 200:
+                raise ValueError('Karma auth rejected')
+            _api_authcode = xml.findtext('authcode') or ''
+            if not _api_authcode:
+                raise ValueError('Missing Karma auth code')
+            _cfg.api_url = xml.findtext('api_url') or _cfg.api_auth_url
+            imported = str(xml.findtext('import_done') or '').lower()
+            if imported in ('true', 'false'):
+                _cfg.import_done = imported == 'true'
+            _api_connected, _retrytime = True, 0
+            await _fetch_global_votes(aseco)
+            await _send_connection_status(aseco, True, _cfg.current_state)
+        except (ValueError, ET.ParseError):
+            _api_connected = False
+            _retrytime = int(asyncio.get_running_loop().time()) + 60
+            logger.warning('[ManiaKarma] Authentication unavailable/rejected; retry deferred')
+    await _queue_karma(aseco, url, apply, key='auth', current_map=False, timeout=_cfg.connect_timeout)
+    return _api_connected
 
 
-async def _api_get_votes(aseco: Aseco, target_login: str | None = None) -> dict[str, Any]:
-    if not _api_connected or not _cfg.api_url or not _current_uid():
-        return {}
-    server_login = getattr(aseco.server, "serverlogin", "") or getattr(aseco.server, "login", "") or ""
-    map_b64 = base64.b64encode(str(_current_map.get("name", "")).encode()).decode()
-    players = [target_login] if target_login else [p.login for p in _players_all(aseco)]
-    player_param = "|".join(urllib.parse.quote(p) for p in players)
-    url = (
-        f"{_cfg.api_url}?Action=Get"
-        f"&login={urllib.parse.quote(server_login)}"
-        f"&authcode={urllib.parse.quote(_api_authcode)}"
-        f"&uid={urllib.parse.quote(str(_current_map.get('uid', '')))}"
-        f"&map={map_b64}"
-        f"&author={urllib.parse.quote(str(_current_map.get('author', '')))}"
-        f"&env={urllib.parse.quote(str(_current_map.get('environment', '')))}"
-        f"&player={player_param}"
-    )
-    body = await _api_get(url, _cfg.wait_timeout)
+def _parse_global_votes(body):
     if not body:
         return {}
     try:
@@ -928,38 +928,57 @@ async def _api_get_votes(aseco: Aseco, target_login: str | None = None) -> dict[
 
 
 async def _api_vote_multisend(aseco: Aseco, votes: dict[str, int]) -> None:
-    global _retrytime
-    if not votes:
-        return
-    if _retrytime > 0:
-        return
-    if not _api_connected:
-        await _api_auth(aseco)
-        if not _api_connected:
-            return
-    login = getattr(aseco.server, "serverlogin", "") or getattr(aseco.server, "login", "") or ""
-    authortime = 0 if _get_mode(aseco) == 4 else int(_current_map.get("authortime", 0) or 0)
-    authorscore = int(_current_map.get("authorscore", 0) or 0) if _get_mode(aseco) == 4 else 0
-    pairs = "|".join(f"{urllib.parse.quote(k)}={int(v)}" for k, v in votes.items())
-    url = (
-        f"{_cfg.api_url}?Action=Vote"
-        f"&login={urllib.parse.quote(login)}"
-        f"&authcode={urllib.parse.quote(_api_authcode)}"
-        f"&uid={urllib.parse.quote(str(_current_map.get('uid', '')))}"
-        f"&map={base64.b64encode(str(_current_map.get('name', '')).encode()).decode()}"
-        f"&author={urllib.parse.quote(str(_current_map.get('author', '')))}"
-        f"&atime={authortime}"
-        f"&ascore={authorscore}"
-        f"&nblaps={urllib.parse.quote(str(_current_map.get('nblaps', 0)))}"
-        f"&nbchecks={urllib.parse.quote(str(_current_map.get('nbchecks', 0)))}"
-        f"&mood={urllib.parse.quote(str(_current_map.get('mood', '')))}"
-        f"&env={urllib.parse.quote(str(_current_map.get('environment', '')))}"
-        f"&votes={pairs}"
-        f"&tmx={urllib.parse.quote(str(_karma.get('data', {}).get('tmx', '')))}"
-    )
-    body = await _api_get(url, _cfg.wait_timeout)
-    if not body:
-        _retrytime = int(asyncio.get_running_loop().time()) + 60
+    from uuid import uuid4
+    state_key = _karma.setdefault('delivery_key', uuid4().hex)
+    payload = {'map': {key: _current_map.get(key, '') for key in
+               ('uid', 'name', 'author', 'authortime', 'authorscore', 'nblaps', 'nbchecks', 'mood', 'environment')},
+               'votes': dict(votes), 'stunts': _get_mode(aseco) == 4,
+               'tmx': str(_karma.get('data', {}).get('tmx', '') or ''), 'state_key': state_key}
+    await _karma_delivery(aseco).retain(payload, map_uid=payload['map']['uid'])
+    _karma.setdefault('retained_votes', {}).update(votes)
+
+
+def _karma_delivery(aseco):
+    from pyxaseco.core.retained_delivery import delivery
+    def ready():
+        return bool(_api_connected and _cfg.api_url and _api_authcode)
+    async def prepare(data):
+        if not ready():
+            raise _KarmaAuthenticationPending('Karma authentication not ready')
+        return data
+    async def send(data):
+        ch = data['map']
+        params = {'Action': 'Vote', 'login': str(aseco.server.serverlogin),
+                  'authcode': _api_authcode, 'uid': ch['uid'],
+                  'map': base64.b64encode(str(ch['name']).encode()).decode(),
+                  'author': ch['author'], 'atime': 0 if data['stunts'] else ch['authortime'],
+                  'ascore': ch['authorscore'] if data['stunts'] else 0,
+                  'nblaps': ch['nblaps'], 'nbchecks': ch['nbchecks'],
+                  'mood': ch['mood'], 'env': ch['environment'], 'tmx': data['tmx'],
+                  'votes': '|'.join(f'{login}={int(vote)}' for login, vote in data['votes'].items())}
+        body = await _api_get(_cfg.api_url + '?' + urllib.parse.urlencode(params), _cfg.wait_timeout)
+        if int(ET.fromstring(body).findtext('status') or 0) != 200:
+            raise RuntimeError('Unconfirmed Karma vote response')
+        return True
+    async def apply(_payload, _result, current):
+        logger.info('[ManiaKarma] Confirmed %d vote(s) for map %s', len(_payload['votes']), _payload['map']['uid'])
+        # A same-map restart keeps this vote state; returning to the UID later
+        # creates a different state and must not settle its newer votes.
+        same_state = bool(_payload.get('state_key')) and _payload['state_key'] == _karma.get('delivery_key')
+        valid_state = same_state if _payload.get('state_key') else current
+        if valid_state and _payload['map']['uid'] == _current_uid() and _cfg.enabled:
+            waiting = _karma.setdefault('retained_votes', {})
+            for login, vote in _payload['votes'].items():
+                if waiting.get(login) == vote:
+                    waiting.pop(login)
+            _karma['lookup_revision'] = _karma.get('lookup_revision', 0) + 1
+            await _fetch_global_votes(aseco)
+    async def failed(_result):
+        global _api_connected, _retrytime
+        if _api_connected:
+            _api_connected = False
+            _retrytime = int(asyncio.get_running_loop().time()) + 60
+    return delivery(aseco, 'karma', send, apply, prepare=prepare, on_failure=failed, ready=ready)
 
 
 # ---------------------------------------------------------------------------
@@ -1004,28 +1023,78 @@ async def _load_local_karma() -> None:
 
 
 async def _fetch_global_votes(aseco: Aseco, target_login: str | None = None) -> None:
-    result = await _api_get_votes(aseco, target_login)
-    if not result:
+    global _lookup_retrytime
+    if not _cfg.enabled or not _current_uid():
         return
-    gvotes = _karma["global"]["votes"]
-    for key in VOTE_KEYS.values():
-        gvotes[key]["count"] = int(result.get(key, {}).get("count", 0) or 0)
-        gvotes[key]["percent"] = float(result.get(key, {}).get("percent", 0.0) or 0.0)
-    gvotes["total"] = int(result.get("total", 0) or 0)
-    gvotes["karma"] = int(result.get("karma", 0) or 0)
-    if target_login:
-        player_data = result.get("players", {}).get(target_login)
-        if player_data is not None:
-            _karma["global"]["players"][target_login] = {
-                "vote": int(player_data.get("vote", 0) or 0),
-                "previous": int(player_data.get("previous", 0) or 0),
-            }
-    else:
-        for login, pdata in result.get("players", {}).items():
-            _karma["global"]["players"][login] = {
-                "vote": int(pdata.get("vote", 0) or 0),
-                "previous": int(pdata.get("previous", 0) or 0),
-            }
+    players = [target_login] if target_login else [p.login for p in _players_all(aseco)]
+    if not players:
+        # Player-connect requests resume lookups; do not poll with player= empty.
+        _lookup_retrytime = 0
+        return
+    if not _api_connected or not _cfg.api_url:
+        if not _retrytime:
+            await _api_auth(aseco)
+        return
+    pending_at_request = dict(_karma.get('new', {}).get('players', {}))
+    revision = _karma.get('lookup_revision', 0)
+    params = {'Action': 'Get', 'login': str(aseco.server.serverlogin), 'authcode': _api_authcode,
+              'uid': str(_current_map.get('uid', '')),
+              'map': base64.b64encode(str(_current_map.get('name', '')).encode()).decode(),
+              'author': str(_current_map.get('author', '')),
+              'env': str(_current_map.get('environment', '')), 'player': '|'.join(players)}
+    async def apply(body):
+        global _lookup_retrytime
+        if not _cfg.enabled:
+            return
+        if revision != _karma.get('lookup_revision', 0):
+            return
+        result = _parse_global_votes(body)
+        if not result:
+            if not _players_all(aseco):
+                _lookup_retrytime = 0
+                return
+            # A map lookup failure does not invalidate a successfully authenticated
+            # session or prevent queued Vote requests (the 1.2 behavior).
+            _lookup_retrytime = int(asyncio.get_running_loop().time()) + 60
+            reason = 'empty or unavailable response'
+            if body:
+                try:
+                    response = ET.fromstring(body)
+                    status = int(response.findtext('status') or 0)
+                    reason = f'API status {status}' if status != 200 else 'missing or invalid vote data'
+                except (ET.ParseError, ValueError, TypeError):
+                    reason = 'malformed XML or status'
+            logger.warning('[ManiaKarma] Vote lookup unavailable (%s); lookup retry deferred', reason)
+            return
+        _lookup_retrytime = 0
+        if pending_at_request != _karma.get('new', {}).get('players', {}):
+            return
+        # A local vote made while the lookup was running is newer than the
+        # server snapshot. Keep those votes until their retained send completes.
+        pending = dict(_karma.get('retained_votes', {}))
+        pending.update(_karma.get('new', {}).get('players', {}))
+        if pending:
+            return
+        first_loaded = not _karma.get('global_loaded', False)
+        _karma['global_loaded'] = True
+        for login, pdata in result.get('players', {}).items():
+            if login not in pending:
+                _karma['global']['players'][login] = {
+                    'vote': int(pdata.get('vote', 0)), 'previous': int(pdata.get('previous', 0))}
+        gvotes = _karma['global']['votes']
+        for key in VOTE_KEYS.values():
+            gvotes[key] = dict(result.get(key, {'count': 0, 'percent': 0.0}))
+        gvotes['total'], gvotes['karma'] = int(result['total']), int(result['karma'])
+        if _cfg.sync_global_karma_local:
+            await _sync_global_and_local('global', False)
+        await _send_widget_combination(aseco, ['cups_values'], None)
+        for player in _players_all(aseco):
+            await _send_widget_combination(aseco, ['player_marker'], player)
+        await _send_loading_indicator(aseco, False, _cfg.current_state)
+        if first_loaded and _cfg.show_at_start and target_login is None:
+            await _send_map_karma_message(aseco, None)
+    await _queue_karma(aseco, _cfg.api_url + '?' + urllib.parse.urlencode(params),
+                      apply, key=f'votes:{target_login}:{revision}')
 
 
 def _rebuild_counts_from_players(side: str) -> None:
@@ -1157,8 +1226,13 @@ def _build_widget_cups(mode: int) -> str:
     parts.append('<frame posn="2.1 -5.35 0">')
     parts.append('<quad posn="0 -0.1 1" sizen="0.1 2.85" bgcolor="FFF5"/>')
     parts.append('<label posn="0.3 -0.1 1" sizen="4 1.1" textsize="1" scale="0.65" textcolor="FFFF" text="GLOBAL"/>')
-    parts.append(f'<label posn="3.3 0 1" sizen="3 1.4" textsize="1" scale="0.9" textcolor="{_color(global_votes["karma"], False)}" text="$O{global_votes["karma"]}"/>')
-    parts.append(f'<label posn="0.3 -1.3 1" sizen="6.6 1.2" textsize="1" scale="0.85" textcolor="0F3F" text="{_number(global_votes["total"])} {(_cfg.msg_vote_singular if global_votes["total"] == 1 else _cfg.msg_vote_plural)}"/>')
+    loaded = _karma.get('global_loaded', False)
+    global_score = str(global_votes['karma']) if loaded else '--'
+    global_label = ((_number(global_votes['total']) + ' ' +
+                     (_cfg.msg_vote_singular if global_votes['total'] == 1 else _cfg.msg_vote_plural))
+                    if loaded else ('Loading...' if _api_connected else 'Unavailable'))
+    parts.append(f'<label posn="3.3 0 1" sizen="3 1.4" textsize="1" scale="0.9" textcolor="{_color(global_votes["karma"], False)}" text="$O{global_score}"/>')
+    parts.append(f'<label posn="0.3 -1.3 1" sizen="6.6 1.2" textsize="1" scale="0.85" textcolor="0F3F" text="{global_label}"/>')
     parts.append('</frame>')
     parts.append('<frame posn="8.75 -5.35 0">')
     parts.append('<quad posn="0 -0.1 1" sizen="0.1 2.85" bgcolor="FFF5"/>')
@@ -1224,23 +1298,23 @@ async def _send_widget_combination(aseco: Aseco, widgets: list[str], player: Any
     xml.append('</manialinks>')
     payload = ''.join(xml)
     if player is not None:
-        await aseco.client.query_ignore_result('SendDisplayManialinkPageToLogin', player.login, payload, 0, False)
+        await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', player.login, payload, 0, False)
     else:
-        await aseco.client.query_ignore_result('SendDisplayManialinkPage', payload, 0, False)
+        await deliver_ui(aseco, 'SendDisplayManialinkPage', payload, 0, False)
 
 
 async def _send_connection_status(aseco: Aseco, status: bool, mode: int) -> None:
     xml = [f'<manialink id="{ML_CONNECTION}">']
     if not _cfg.enabled:
         xml.append('</manialink>')
-        await aseco.client.query_ignore_result('SendDisplayManialinkPage', ''.join(xml), 0, False)
+        await deliver_ui(aseco, 'SendDisplayManialinkPage', ''.join(xml), 0, False)
         return
     if status is False:
         await _send_loading_indicator(aseco, False, mode)
         gm = _cfg.gm_cfg(mode)
         xml.append(f'<frame posn="{gm.pos_x} {gm.pos_y} 20"><quad posn="0.5 -5.2 0.9" sizen="1.4 1.4" style="Icons128x128_1" substyle="Multiplayer"/></frame>')
     xml.append('</manialink>')
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', ''.join(xml), 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', ''.join(xml), 0, False)
 
 
 async def _send_loading_indicator(aseco: Aseco, status: bool, mode: int) -> None:
@@ -1249,12 +1323,12 @@ async def _send_loading_indicator(aseco: Aseco, status: bool, mode: int) -> None
         gm = _cfg.gm_cfg(mode)
         xml.append(f'<frame posn="{gm.pos_x} {gm.pos_y} 20"><quad posn="0.5 -5.2 0.9" sizen="1.4 1.4" image="{_cfg.img_progress_indicator}"/></frame>')
     xml.append('</manialink>')
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', ''.join(xml), 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', ''.join(xml), 0, False)
 
 
 async def _send_window(aseco: Aseco, login: str, window_xml: str) -> None:
     payload = f'<?xml version="1.0" encoding="UTF-8"?><manialinks>{window_xml}</manialinks>'
-    await aseco.client.query_ignore_result('SendDisplayManialinkPageToLogin', login, payload, 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', login, payload, 0, False)
 
 
 async def _show_help_window(aseco: Aseco, player: Any, message: str) -> None:
@@ -1586,7 +1660,7 @@ async def _show_reminder_window(aseco: Aseco, players: str | list[str]) -> None:
         xml.append(f'<quad posn="41.25 0.08 0" sizen="7 4" image="{_cfg.img_tmx_logo_normal}" imagefocus="{_cfg.img_tmx_logo_focus}" url="{_tmx_page_url(aseco)}"/>')
     xml.extend(['</frame>', '</frame>', '</manialink>', '</manialinks>'])
     payload = ''.join(xml)
-    await aseco.client.query_ignore_result('SendDisplayManialinkPageToLogin', ','.join(player_logins), payload, 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', ','.join(player_logins), payload, 0, False)
     for login in player_logins:
         p = _get_player(aseco, login)
         if p is not None:
@@ -1621,7 +1695,7 @@ async def _show_mx_window(aseco: Aseco, player: Any) -> None:
     if _cfg.img_tmx_logo_normal:
         xml.append(f'<quad posn="41.25 0.08 0" sizen="7 4" image="{_cfg.img_tmx_logo_normal}" imagefocus="{_cfg.img_tmx_logo_focus}" url="{_tmx_page_url(aseco)}"/>')
     xml.extend(['</frame></frame></manialink></manialinks>'])
-    await aseco.client.query_ignore_result('SendDisplayManialinkPageToLogin', player.login, ''.join(xml), 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', player.login, ''.join(xml), 0, False)
     _ensure_player_state(player)
     player.data['ManiaKarma']['ReminderWindow'] = True
 
@@ -1633,13 +1707,13 @@ async def _close_reminder_window(aseco: Aseco, player: Any | None = None) -> Non
     if player is not None:
         _ensure_player_state(player)
         if player.data['ManiaKarma'].get('ReminderWindow'):
-            await aseco.client.query_ignore_result('SendDisplayManialinkPageToLogin', player.login, xml, 0, False)
+            await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', player.login, xml, 0, False)
             player.data['ManiaKarma']['ReminderWindow'] = False
     else:
         for p in _players_all(aseco):
             _ensure_player_state(p)
             p.data['ManiaKarma']['ReminderWindow'] = False
-        await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
+        await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
 
 
 # ---------------------------------------------------------------------------
@@ -1700,6 +1774,8 @@ async def _send_map_karma_message(aseco: Aseco, login: str | None) -> None:
 # ---------------------------------------------------------------------------
 
 async def _handle_player_vote(aseco: Aseco, player: Any, vote: int) -> None:
+    if not _cfg.enabled:
+        return
     if _startup_phase(aseco):
         return
     _ensure_player_state(player)
@@ -1725,6 +1801,7 @@ async def _handle_player_vote(aseco: Aseco, player: Any, vote: int) -> None:
 
     if old_global != vote:
         _karma['new']['players'][player.login] = vote
+        _karma['lookup_revision'] = _karma.get('lookup_revision', 0) + 1
 
     for side, old_vote in (("global", old_global), ("local", old_local)):
         old_key = VOTE_KEYS.get(old_vote)
@@ -1792,7 +1869,8 @@ async def _handle_player_vote(aseco: Aseco, player: Any, vote: int) -> None:
 # ---------------------------------------------------------------------------
 
 async def _load_config(aseco: Aseco) -> None:
-    global _cfg
+    global _cfg, _api_connected, _api_authcode, _retrytime, _lookup_retrytime
+    previous = _cfg
     _cfg = KarmaConfig()
     bound = bind_app_settings(MANIA_KARMA_SETTINGS_SCHEMA, getattr(aseco, '_base_dir', None))
     root = bound.values["config"] if isinstance(bound.values["config"], dict) else {}
@@ -1802,6 +1880,12 @@ async def _load_config(aseco: Aseco) -> None:
     _cfg.api_auth_url = as_str(urls.get('api_auth'), _cfg.api_auth_url)
     _cfg.website = as_str(urls.get('website'), _cfg.website)
     _cfg.nation = as_str(_env('MK_NATION'), '').upper()
+    if previous.api_auth_url == _cfg.api_auth_url and previous.nation == _cfg.nation:
+        _cfg.api_url = previous.api_url
+        _cfg.import_done = previous.import_done
+    else:
+        _api_connected, _api_authcode = False, ''
+        _retrytime = _lookup_retrytime = 0
 
     _cfg.connect_timeout = bound.values["config/connect_timeout"]
     _cfg.wait_timeout = bound.values["config/wait_timeout"]
@@ -1914,14 +1998,17 @@ async def _load_config(aseco: Aseco) -> None:
 async def _mk_onSync(aseco: Aseco, _data=None) -> None:
     global _karma, _current_map, _runtime_aseco
     _runtime_aseco = aseco
+    _karma_delivery(aseco)
     await _load_config(aseco)
+    if not _cfg.enabled:
+        return
     if not _cfg.api_auth_url:
         logger.warning('[ManiaKarma] Disabled: urls.api_auth missing in app_defaults.toml')
         return
     if not _cfg.nation or _cfg.nation == 'YOUR_SERVER_NATION' or _cfg.nation not in ISO3166_ALPHA3:
         logger.warning('[ManiaKarma] Disabled: nation must be set to a valid ISO-3166 alpha-3 code via MK_NATION')
         return
-    _cfg.current_state = _get_mode(aseco)
+    _cfg.current_state = _display_mode(aseco)
     _current_map = await _get_current_map_info(aseco)
     if not _karma or _startup_phase(aseco):
         _karma = _set_empty_karma(True)
@@ -1949,12 +2036,19 @@ async def _mk_onSync(aseco: Aseco, _data=None) -> None:
 
 
 async def _mk_onEverySecond(aseco: Aseco, _data=None) -> None:
+    global _lookup_retrytime
+    if not _cfg.enabled:
+        return
     if _retrytime > 0:
         now = int(asyncio.get_running_loop().time())
         if now >= _retrytime:
             await _api_auth(aseco)
             if _api_connected:
                 await _send_connection_status(aseco, True, _cfg.current_state)
+    elif _api_connected and _lookup_retrytime > 0:
+        if int(asyncio.get_running_loop().time()) >= _lookup_retrytime:
+            _lookup_retrytime = 0
+            await _fetch_global_votes(aseco)
 
 
 async def _mk_onShutdown(aseco: Aseco, _data=None) -> None:
@@ -1962,6 +2056,8 @@ async def _mk_onShutdown(aseco: Aseco, _data=None) -> None:
 
 
 async def _mk_onChat(aseco: Aseco, chat: list) -> None:
+    if not _cfg.enabled:
+        return
     if len(chat) < 3 or chat[0] == getattr(aseco.server, 'id', None):
         return
     if len(chat) > 3 and bool(chat[3]):
@@ -1980,6 +2076,8 @@ async def _mk_onChat(aseco: Aseco, chat: list) -> None:
 
 
 async def chat_karma(aseco: Aseco, command: dict) -> None:
+    if not _cfg.enabled:
+        return
     author = command['author']
     login = author.login
     params = str(command.get('params') or '').strip().upper()
@@ -2046,6 +2144,8 @@ async def _mk_onKarmaChange(aseco: Aseco, _unused=None) -> None:
 
 
 async def _mk_onPlayerConnect(aseco: Aseco, player: Any) -> None:
+    if not _cfg.enabled:
+        return
     global _current_map
     _ensure_player_state(player)
     if _cfg.show_welcome and _cfg.msg_welcome:
@@ -2082,6 +2182,8 @@ async def _mk_onPlayerDisconnect(aseco: Aseco, player: Any) -> None:
 
 
 async def _mk_onPlayerFinish(aseco: Aseco, finish_item: Any) -> None:
+    if not _cfg.enabled:
+        return
     player = getattr(finish_item, 'player', None)
     if player is None:
         return
@@ -2101,6 +2203,8 @@ async def _mk_onPlayerFinish(aseco: Aseco, finish_item: Any) -> None:
 
 
 async def _mk_onPlayerManialinkPageAnswer(aseco: Aseco, answer: list) -> None:
+    if not _cfg.enabled:
+        return
     if len(answer) < 3 or int(answer[2] or 0) == 0:
         return
     player = _get_player(aseco, str(answer[1]))
@@ -2150,7 +2254,7 @@ async def _mk_onPlayerManialinkPageAnswer(aseco: Aseco, answer: list) -> None:
 
 
 async def _mk_onNewChallenge(aseco: Aseco, map_obj: Any) -> None:
-    _cfg.current_state = _get_mode(aseco)
+    _cfg.current_state = _display_mode(aseco)
     await _close_reminder_window(aseco, None)
     await _send_widget_combination(aseco, ['hide_all'], None)
     await _store_karma_votes(aseco)
@@ -2161,6 +2265,8 @@ async def _mk_onNewChallenge(aseco: Aseco, map_obj: Any) -> None:
 
 
 async def _mk_onNewChallenge2(aseco: Aseco, map_obj: Any) -> None:
+    if not _cfg.enabled:
+        return
     global _current_map, _karma
     _current_map = await _get_current_map_info(aseco)
     _karma = _set_empty_karma(True)
@@ -2181,7 +2287,7 @@ async def _mk_onNewChallenge2(aseco: Aseco, map_obj: Any) -> None:
     await _fetch_global_votes(aseco)
     if _cfg.sync_global_karma_local:
         await _sync_global_and_local('global', False)
-    _cfg.current_state = _get_mode(aseco)
+    _cfg.current_state = _display_mode(aseco)
     await _send_loading_indicator(aseco, True, _cfg.current_state)
     await _send_widget_combination(aseco, ['skeleton_race', 'cups_values'], None)
     for p in _players_all(aseco):
@@ -2189,13 +2295,9 @@ async def _mk_onNewChallenge2(aseco: Aseco, map_obj: Any) -> None:
     await _send_loading_indicator(aseco, False, _cfg.current_state)  # hide spinner once votes are loaded
     if _retrytime > 0:
         await _send_connection_status(aseco, False, _cfg.current_state)
-    if _cfg.show_at_start:
-        await _send_map_karma_message(aseco, None)
-
-
 async def _mk_onRestartChallenge2(aseco: Aseco, _map: Any) -> None:
     await _close_reminder_window(aseco, None)
-    _cfg.current_state = _get_mode(aseco)
+    _cfg.current_state = _display_mode(aseco)
     await _send_widget_combination(aseco, ['skeleton_race', 'cups_values'], None)
     for p in _players_all(aseco):
         await _send_widget_combination(aseco, ['player_marker'], p)
@@ -2258,8 +2360,7 @@ async def _export_votes_csv(aseco: Aseco) -> str:
     return '\n'.join(out) + '\n'
 
 
-async def _build_export_payload(aseco: Aseco) -> tuple[str, int]:
-    server_login = getattr(aseco.server, "serverlogin", "") or getattr(aseco.server, "login", "") or ""
+async def _build_export_payload(aseco: Aseco, identity: tuple[str, str, str]) -> tuple[str, int]:
     rows = []
     try:
         rows = await _db_fetchall(
@@ -2280,6 +2381,12 @@ async def _build_export_payload(aseco: Aseco) -> tuple[str, int]:
         except Exception:
             rows = []
 
+    from pyxaseco.core.file_io import file_io
+    return await file_io(_encode_export_rows, rows, identity)
+
+
+def _encode_export_rows(rows, identity):
+    server_login, authcode, nation = identity
     lines: list[str] = []
     count = 0
     for row in rows:
@@ -2294,8 +2401,8 @@ async def _build_export_payload(aseco: Aseco) -> tuple[str, int]:
                 str(row[2] or ''),
                 str(row[3] or ''),
                 server_login,
-                _api_authcode,
-                str(_cfg.nation or ''),
+                authcode,
+                nation,
                 str(row[4] or ''),
                 str(int(row[5] or 0)),
             ])
@@ -2305,102 +2412,62 @@ async def _build_export_payload(aseco: Aseco) -> tuple[str, int]:
     return base64.b64encode(gzip.compress(raw, compresslevel=9)).decode("ascii"), count
 
 
-async def _api_export_votes(aseco: Aseco, player: Any) -> None:
-    if _cfg.import_done:
-        await aseco.client.query_ignore_result(
-            'ChatSendServerMessageToLogin',
-            _fmt_message(aseco, '{#server}>> {#admin}Export of local votes already done, skipping...'),
-            player.login,
-        )
-        return
+async def _send_chat(aseco, login, message):
+    await aseco.client.query_ignore_result(
+        'ChatSendServerMessageToLogin', _fmt_message(aseco, message), login)
 
+
+async def _api_export_votes(aseco: Aseco, player: Any) -> None:
+    from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy, Admission
+    if _cfg.import_done:
+        await _send_chat(aseco, player.login, '{#server}>> {#admin}Export of local votes already done, skipping...')
+        return
     if not _api_connected or not _cfg.api_url or not _api_authcode:
         await _api_auth(aseco)
-        if not _api_connected or not _cfg.api_url or not _api_authcode:
-            await aseco.client.query_ignore_result(
-                'ChatSendServerMessageToLogin',
-                _fmt_message(aseco, '{#server}>> {#error}Export failed because ManiaKarma is not connected.'),
-                player.login,
-            )
+        await _send_chat(aseco, player.login, '{#server}>> {#error}ManiaKarma is connecting; try export again shortly.')
+        return
+    login = str(player.login)
+    server_login = str(getattr(aseco.server, 'serverlogin', '') or '')
+    url = _cfg.api_url + '?' + urllib.parse.urlencode({
+        'Action': 'Import', 'login': server_login, 'authcode': _api_authcode,
+        'nation': str(_cfg.nation or '')})
+    timeout = _cfg.wait_timeout
+    identity = server_login, _api_authcode, str(_cfg.nation or '')
+    job = JobEnvelope.capture(aseco.capture_job_context(login=login), {})
+    async def operation(_job):
+        payload, count = await _build_export_payload(aseco, identity)
+        status, _body = await _api_post(url, payload, timeout)
+        return status, count
+    async def apply(result):
+        if result.status == 'completed' and result.value[0] == 200:
+            _cfg.import_done = True
+        if aseco.server.players.get_player(login) is not player:
             return
-
-    await aseco.client.query_ignore_result(
-        'ChatSendServerMessageToLogin',
-        _fmt_message(aseco, '{#server}>> {#admin}Collecting players with their votes on Maps...'),
-        player.login,
-    )
-    payload, count = await _build_export_payload(aseco)
-    await aseco.client.query_ignore_result(
-        'ChatSendServerMessageToLogin',
-        _fmt_message(aseco, f'{{#server}}>> {{#admin}}Found {count} votes in database.'),
-        player.login,
-    )
-    await aseco.client.query_ignore_result(
-        'ChatSendServerMessageToLogin',
-        _fmt_message(aseco, '{#server}>> {#admin}Compressing collected data...'),
-        player.login,
-    )
-    await aseco.client.query_ignore_result(
-        'ChatSendServerMessageToLogin',
-        _fmt_message(aseco, '{#server}>> {#admin}Encoding data...'),
-        player.login,
-    )
-    await aseco.client.query_ignore_result(
-        'ChatSendServerMessageToLogin',
-        _fmt_message(aseco, f'{{#server}}>> {{#admin}}Sending now the export with size of {len(payload)} bytes...'),
-        player.login,
-    )
-
-    login = getattr(aseco.server, "serverlogin", "") or getattr(aseco.server, "login", "") or ""
-    url = (
-        f"{_cfg.api_url}?Action=Import"
-        f"&login={urllib.parse.quote(login)}"
-        f"&authcode={urllib.parse.quote(_api_authcode)}"
-        f"&nation={urllib.parse.quote(str(_cfg.nation or ''))}"
-    )
-    status, _body = await _api_post(url, payload, _cfg.wait_timeout)
-    if status == 200:
-        _cfg.import_done = True
-        await aseco.client.query_ignore_result(
-            'ChatSendServerMessageToLogin',
-            _fmt_message(aseco, '{#server}>> {#admin}Export done. Thanks for supporting mania-karma.com!'),
-            player.login,
-        )
-    elif status == 406:
-        await aseco.client.query_ignore_result(
-            'ChatSendServerMessageToLogin',
-            _fmt_message(aseco, '{#server}>> {#error}Export rejected! Please check your <login> and MK_NATION environment value!'),
-            player.login,
-        )
-    elif status == 409:
-        await aseco.client.query_ignore_result(
-            'ChatSendServerMessageToLogin',
-            _fmt_message(aseco, '{#server}>> {#error}Export rejected! Export was already done, allowed only one time!'),
-            player.login,
-        )
-    else:
-        await aseco.client.query_ignore_result(
-            'ChatSendServerMessageToLogin',
-            _fmt_message(aseco, f'{{#server}}>> {{#error}}Connection failed with {status} for url [{url}]'),
-            player.login,
-        )
+        if result.status != 'completed':
+            message = '{#server}>> {#error}Export outcome is uncertain; verify with ManiaKarma before retrying.'
+        else:
+            status, count = result.value
+            message = {
+                200: f'{{#server}}>> {{#admin}}Export done ({count} votes). Thanks for supporting mania-karma.com!',
+                406: '{#server}>> {#error}Export rejected! Check server login and MK_NATION.',
+                409: '{#server}>> {#error}Export was already done; only one export is allowed.',
+            }.get(status, '{#server}>> {#error}Export failed; check ManiaKarma status before retrying.')
+        await _send_chat(aseco, login, message)
+    outcome = aseco.jobs.service('karma', JobPolicy(deadline_seconds=120)).submit(
+        job, operation, apply, current_map=False, dedupe_key='export')
+    message = ('{#server}>> {#admin}Vote export queued.'
+               if outcome in (Admission.ACCEPTED, Admission.DUPLICATE)
+               else '{#server}>> {#error}Vote export could not be queued; try later.')
+    await _send_chat(aseco, login, message)
 
 
 async def _store_karma_votes(aseco: Aseco) -> None:
     new_votes = dict(_karma.get('new', {}).get('players', {}) or {})
     if not new_votes:
         return
-    if _retrytime > 0:
-        try:
-            now = int(asyncio.get_running_loop().time())
-            if now >= _retrytime:
-                await _api_auth(aseco)
-        except Exception:
-            pass
-    if _retrytime == 0:
-        await _api_vote_multisend(aseco, new_votes)
     if _cfg.save_karma_also_local:
         await _save_local_votes(new_votes)
+    await _api_vote_multisend(aseco, new_votes)
     _karma['new']['players'].clear()
 
 
@@ -2410,8 +2477,7 @@ async def _store_karma_votes(aseco: Aseco) -> None:
 
 def register(aseco: Aseco) -> None:
     global _karma
-    if not _apply_enabled_flag(aseco):
-        return
+    _apply_enabled_flag(aseco)
     _karma = _set_empty_karma(True)
     aseco.register_event('onSync', _mk_onSync)
     aseco.register_event('onEverySecond', _mk_onEverySecond)
@@ -2448,8 +2514,10 @@ async def reload_karma_runtime(aseco: Aseco) -> None:
     global _runtime_aseco, _karma, _current_map
 
     _runtime_aseco = aseco
+    from pyxaseco.core.background_jobs import JobPolicy
+    aseco.jobs.service('karma', JobPolicy(deadline_seconds=120)).invalidate()
     await _load_config(aseco)
-    _cfg.current_state = _get_mode(aseco)
+    _cfg.current_state = _display_mode(aseco)
     _current_map = await _get_current_map_info(aseco)
 
     if not _karma or not isinstance(_karma.get('global'), dict) or not isinstance(_karma.get('local'), dict):
@@ -2471,6 +2539,10 @@ async def reload_karma_runtime(aseco: Aseco) -> None:
 
     if not _cfg.gm_cfg(_cfg.current_state).enabled:
         return
+    if not _api_connected:
+        await _api_auth(aseco)
+    else:
+        await _fetch_global_votes(aseco)
 
     try:
         await _load_local_karma()

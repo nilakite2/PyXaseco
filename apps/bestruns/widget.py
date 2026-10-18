@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -56,6 +58,7 @@ def register(aseco: "Aseco"):
     aseco.register_event("onStartup", OnStartup_bestruns)
     aseco.register_event("onNewChallenge", OnNewChallenge_bestruns)
     aseco.register_event("onBeginRound", OnBeginRound_bestruns)
+    aseco.register_event("onRestartChallenge", OnBeginRound_bestruns)
     aseco.register_event("onEndRace", OnEndRace_bestruns)
     aseco.register_event("onPlayerFinish", OnPlayerFinish_bestruns)
     aseco.register_event("onPlayerConnect", OnPlayerConnect_bestruns)
@@ -219,7 +222,8 @@ def _format_score(ms: int) -> str:
 
 
 def _is_score_mode(aseco: "Aseco") -> bool:
-    return getattr(getattr(aseco.server, "gameinfo", None), "mode", -1) == getattr(Gameinfo, "SCOR", 7)
+    from pyxaseco.core.widget_delivery import is_score_phase
+    return is_score_phase(aseco)
 
 
 async def Display_bestruns(aseco: "Aseco"):
@@ -349,12 +353,12 @@ async def Display_bestruns(aseco: "Aseco"):
             xml_parts.append("</frame>")
 
     xml_parts.extend(["</frame>", "</manialink>"])
-    await aseco.client.query_ignore_result("SendDisplayManialinkPage", "".join(xml_parts), 0, False)
+    await deliver_ui(aseco, "SendDisplayManialinkPage", "".join(xml_parts), 0, False)
 
 
 async def Clear_bestruns(aseco: "Aseco", _challenge):
     xml = f'<manialink id="{ML_ID}"></manialink>'
-    await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 1, False)
+    await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
 async def reload_bestruns_runtime(aseco: "Aseco") -> None:

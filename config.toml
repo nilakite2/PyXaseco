@@ -10,7 +10,7 @@ login = "SuperAdmin"
 password = "SuperAdmin"
 ip = "127.0.0.1"
 port = 5000
-timeout = 180
+timeout = 10
 
 [database]
 host = "127.0.0.1"

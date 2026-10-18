@@ -4,6 +4,8 @@ best_cp_times_v2.py - based on Trakman scroll style LiveCpsRanking
 
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 import logging
 import importlib
 import re
@@ -57,6 +59,8 @@ class BctState:
     hidden_logins: set[str] = field(default_factory=set)
     pages: dict[str, int] = field(default_factory=dict)
     view_modes: dict[str, str] = field(default_factory=dict)
+    inlay_payloads: dict[str, str] = field(default_factory=dict)
+    highlighted_logins: set[str] = field(default_factory=set)
 
 
 _state = BctState()
@@ -84,6 +88,7 @@ def register(aseco: "Aseco"):
     aseco.register_event("onCheckpoint", bct_onCheckpoint)
     aseco.register_event("onNewChallenge2", bct_onNewChallenge2)
     aseco.register_event("onPlayerConnect", bct_onPlayerConnect)
+    aseco.register_event("onPlayerDisconnect", bct_onPlayerDisconnect)
     aseco.register_event("onPlayerInfoChanged", bct_onPlayerInfoChanged)
     aseco.register_event("onPlayerManialinkPageAnswer", bct_onPlayerManialinkPageAnswer)
     aseco.register_event("onEndRace1", bct_onEndRace1)
@@ -158,20 +163,11 @@ def _resolve_eyepiece_apply():
 
 
 async def _restore_eyepiece_checkpoint_list_control(aseco: "Aseco", login: str | None = None) -> None:
+    if hasattr(aseco, '_best_cp_checkpoint_list_override'):
+        del aseco._best_cp_checkpoint_list_override
     ep_state = _resolve_eyepiece_state()
     ep_apply = _resolve_eyepiece_apply()
     if ep_state and ep_apply:
-        try:
-            ui_app = importlib.import_module("apps.ui.app")
-            reload_config = getattr(ui_app, "reload_config", None)
-            if callable(reload_config):
-                reload_config(aseco)
-            refreshed_state = getattr(ui_app, "get_state", lambda: ep_state)()
-        except Exception:
-            refreshed_state = ep_state
-
-        checkpoint_visible = bool(getattr(refreshed_state, "custom_ui_checkpoint_list", True))
-        ep_state.custom_ui_checkpoint_list = checkpoint_visible
         await ep_apply(aseco)
         return
 
@@ -187,22 +183,22 @@ async def _restore_eyepiece_checkpoint_list_control(aseco: "Aseco", login: str |
 
 async def bct_apply_custom_ui_all(aseco: "Aseco", checkpoint_visible: bool):
     xml = _custom_ui_xml(checkpoint_visible)
-    await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+    await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
 async def bct_apply_custom_ui_login(aseco: "Aseco", login: str, checkpoint_visible: bool):
     xml = _custom_ui_xml(checkpoint_visible)
-    await aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, 0, False)
+    await deliver_ui(aseco, "SendDisplayManialinkPageToLogin", login, xml, 0, False)
 
 
 async def bct_set_checkpoint_list_visible(aseco: "Aseco", checkpoint_visible: bool):
     if not _state.widget.custom_ui:
         await _restore_eyepiece_checkpoint_list_control(aseco)
         return
+    aseco._best_cp_checkpoint_list_override = bool(checkpoint_visible)
     ep_state = _resolve_eyepiece_state()
     ep_apply = _resolve_eyepiece_apply()
-    if ep_state and ep_apply and getattr(ep_state, "custom_ui_enabled", False):
-        ep_state.custom_ui_checkpoint_list = checkpoint_visible
+    if ep_state and ep_apply:
         await ep_apply(aseco)
         return
     try:
@@ -216,10 +212,10 @@ async def bct_set_checkpoint_list_visible_login(aseco: "Aseco", login: str, chec
     if not _state.widget.custom_ui:
         await _restore_eyepiece_checkpoint_list_control(aseco, login=login)
         return
+    aseco._best_cp_checkpoint_list_override = bool(checkpoint_visible)
     ep_state = _resolve_eyepiece_state()
     ep_apply = _resolve_eyepiece_apply()
-    if ep_state and ep_apply and getattr(ep_state, "custom_ui_enabled", False):
-        ep_state.custom_ui_checkpoint_list = checkpoint_visible
+    if ep_state and ep_apply:
         await ep_apply(aseco)
         return
     try:
@@ -232,6 +228,8 @@ async def bct_set_checkpoint_list_visible_login(aseco: "Aseco", login: str, chec
 async def bct_onSync(aseco: "Aseco", _param=None):
     global _state
     _state = BctState()
+    from pyxaseco.core.widget_delivery import is_score_phase
+    _state.current_state = STATE_SCORE if is_score_phase(aseco) else STATE_RACE
 
     game = ""
     try:
@@ -264,6 +262,8 @@ async def bct_onSync(aseco: "Aseco", _param=None):
 
 
 async def bct_onPlayerConnect(aseco: "Aseco", player: "Player"):
+    _state.inlay_payloads.pop(player.login, None)
+    _state.highlighted_logins.discard(player.login)
     if not getattr(_state, "challenge_num_cps", 0):
         _state.challenge_num_cps = _state.show_max_checkpoints
     _state.pages[player.login] = 0
@@ -286,6 +286,15 @@ async def bct_onPlayerConnect(aseco: "Aseco", player: "Player"):
         ),
         player.login,
     )
+
+
+async def bct_onPlayerDisconnect(aseco: "Aseco", player: "Player"):
+    login = player.login
+    _state.inlay_payloads.pop(login, None)
+    _state.highlighted_logins.discard(login)
+    _state.pages.pop(login, None)
+    _state.player_checkpoint_times.pop(login, None)
+    _state.hidden_logins.discard(login)
 
 
 async def bct_onPlayerInfoChanged(aseco: "Aseco", info):
@@ -317,7 +326,9 @@ async def bct_onPlayerInfoChanged(aseco: "Aseco", info):
             "</manialinks>"
         )
         _state.hidden_logins.add(login)
-        await aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, 0, False)
+        _state.inlay_payloads.pop(login, None)
+        _state.highlighted_logins.discard(login)
+        await deliver_ui(aseco, "SendDisplayManialinkPageToLogin", login, xml, 0, False)
     else:
         _state.hidden_logins.discard(login)
         _state.pages.setdefault(login, 0)
@@ -348,10 +359,13 @@ async def bct_onPlayerManialinkPageAnswer(aseco: "Aseco", answer: list):
 
 
 async def bct_onNewChallenge2(aseco: "Aseco", challenge_item):
-    _state.current_state = STATE_RACE
+    from pyxaseco.core.widget_delivery import is_score_phase
+    _state.current_state = STATE_SCORE if is_score_phase(aseco) else STATE_RACE
     await bct_set_checkpoint_list_visible(aseco, False)
     _state.pages.clear()
     _state.player_checkpoint_times.clear()
+    _state.inlay_payloads.clear()
+    _state.highlighted_logins.clear()
     await bct_buildWidget(aseco, None)
 
     _state.challenge_num_cps = int(getattr(challenge_item, "nbchecks", 0) or _state.show_max_checkpoints)
@@ -364,6 +378,10 @@ async def bct_onNewChallenge2(aseco: "Aseco", challenge_item):
 
 async def bct_onRestartChallenge(aseco: "Aseco", _challenge_item):
     _state.current_state = STATE_RACE
+    _state.inlay_payloads.clear()
+    _state.highlighted_logins.clear()
+    await bct_buildWidget(aseco)
+    await bct_buildCheckpointsTimeInlay(aseco)
 
 
 async def bct_onBeginRound(aseco: "Aseco", _param=None):
@@ -421,7 +439,14 @@ async def bct_onCheckpoint(aseco: "Aseco", checkpt: list):
     if refresh:
         await bct_buildCheckpointsTimeInlay(aseco, checkpoint_id)
     else:
-        await bct_buildCheckpointsTimeInlay(aseco)
+        affected = [
+            viewer.login for viewer in aseco.server.players.all()
+            if (
+                _effective_subject_login(aseco, viewer.login) == player.login
+                or viewer.login in _state.highlighted_logins
+            )
+        ]
+        await bct_buildCheckpointsTimeInlay(aseco, target_logins=affected)
 
 
 async def bct_onEndRace1(aseco: "Aseco", _race):
@@ -436,10 +461,20 @@ async def bct_onEndRace1(aseco: "Aseco", _race):
     _state.checkpoint_times = {}
     _state.player_checkpoint_times.clear()
     _state.pages.clear()
-    await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+    _state.inlay_payloads.clear()
+    _state.highlighted_logins.clear()
+    await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
 async def bct_buildWidget(aseco: "Aseco", login: str | None = None):
+    from pyxaseco.core.widget_delivery import is_score_phase
+    if is_score_phase(aseco):
+        xml = f'<manialink id="{ML_WIDGET}"/>'
+        if login:
+            await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', login, xml, 0, False)
+        else:
+            await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
+        return
     width = _state.widget.width
     height = _state.widget.height
 
@@ -455,15 +490,28 @@ async def bct_buildWidget(aseco: "Aseco", login: str | None = None):
     )
 
     if login:
-        await aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, 0, False)
+        await deliver_ui(aseco, "SendDisplayManialinkPageToLogin", login, xml, 0, False)
     else:
-        await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+        await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
-async def bct_buildCheckpointsTimeInlay(aseco: "Aseco", cpid: int = -1, login: str | None = None):
+async def bct_buildCheckpointsTimeInlay(
+    aseco: "Aseco", cpid: int = -1, login: str | None = None, *,
+    target_logins: list[str] | None = None,
+):
+    from pyxaseco.core.widget_delivery import is_score_phase
+    if is_score_phase(aseco):
+        xml = f'<manialink id="{ML_INLAY}"/>'
+        if login:
+            await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', login, xml, 0, False)
+        else:
+            await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
+        return
     checkpoint_id = cpid if cpid != -1 else 0
     logins: list[str] = []
-    if login:
+    if target_logins is not None:
+        logins = [value for value in target_logins if value not in _state.hidden_logins]
+    elif login:
         if login not in _state.hidden_logins:
             logins = [login]
     else:
@@ -472,6 +520,7 @@ async def bct_buildCheckpointsTimeInlay(aseco: "Aseco", cpid: int = -1, login: s
     if not logins:
         return
 
+    groups: dict[str, list[str]] = {}
     for target_login in logins:
         xml = _build_inlay_xml(
             aseco,
@@ -480,7 +529,19 @@ async def bct_buildCheckpointsTimeInlay(aseco: "Aseco", cpid: int = -1, login: s
             cpid != -1,
             getattr(getattr(aseco.server, "gameinfo", None), "mode", -1),
         )
-        await aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", target_login, xml, 0, False)
+        if _state.inlay_payloads.get(target_login) == xml:
+            continue
+        groups.setdefault(xml, []).append(target_login)
+    for xml, recipients in groups.items():
+        await deliver_ui(aseco,
+            "SendDisplayManialinkPageToLogin", ",".join(recipients), xml, 0, False,
+        )
+        for target_login in recipients:
+            _state.inlay_payloads[target_login] = xml
+            if 'TextTitle2Blink' in xml:
+                _state.highlighted_logins.add(target_login)
+            else:
+                _state.highlighted_logins.discard(target_login)
 
 
 def _visible_checkpoint_ids() -> list[int]:
@@ -687,7 +748,12 @@ async def chat_bcps(aseco: "Aseco", command: dict):
 
 
 async def reload_best_cp_times_runtime(aseco: "Aseco") -> None:
+    _state.inlay_payloads.clear()
+    _state.highlighted_logins.clear()
     _load_cfg(aseco)
+    from pyxaseco.core.widget_delivery import is_score_phase
+    _state.current_state = STATE_SCORE if is_score_phase(aseco) else STATE_RACE
+    await bct_set_checkpoint_list_visible(aseco, False)
     if _state.current_state == STATE_SCORE:
         xml = (
             '<?xml version="1.0" encoding="UTF-8"?>'
@@ -696,11 +762,17 @@ async def reload_best_cp_times_runtime(aseco: "Aseco") -> None:
             f'<manialink id="{ML_INLAY}"></manialink>'
             "</manialinks>"
         )
-        await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+        await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
         return
 
-    await bct_set_checkpoint_list_visible(aseco, False)
-
+    for player in aseco.server.players.all():
+        if bool(getattr(player, 'isspectator', False)) and not _state.widget.show_spectators:
+            _state.hidden_logins.add(player.login)
+            xml = (f'<manialinks><manialink id="{ML_WIDGET}"></manialink>'
+                   f'<manialink id="{ML_INLAY}"></manialink></manialinks>')
+            await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', player.login, xml, 0, False)
+        else:
+            _state.hidden_logins.discard(player.login)
     await bct_buildWidget(aseco, None)
     await bct_buildCheckpointsTimeInlay(aseco)
 

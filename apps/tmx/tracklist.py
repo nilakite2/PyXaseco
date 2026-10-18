@@ -92,7 +92,8 @@ async def _fetch_tracklist_data(aseco: 'Aseco') -> list:
       goldtime_ms, silvertime_ms, bronzetime_ms, laprace, nblaps
     """
     try:
-        tracks_raw = await aseco.client.query('GetChallengeList', 5000, 0) or []
+        from pyxaseco.core.playlist import playlist
+        tracks_raw = await playlist(aseco).snapshot()
     except Exception as e:
         logger.debug('[Eyepiece] GetChallengeList: %s', e)
         return []

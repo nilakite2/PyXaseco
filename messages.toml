@@ -102,7 +102,7 @@ local_record_new_rank = "{#server}>> {#highlite}{1}{#record} gained the {#rank}{
 local_record_first = "{#server}>> {#highlite}{1}{#record} claimed the {#rank}{2}{#record}. Local Record!  {3}: {#highlite}{4}"
 
 [dedi_messages]
-dedi_welcome = "{#welcome}Welcome to the Dedimania world record system at www.dedimania.com - see {#highlite}/helpdedi"
+dedi_welcome = "{#welcome}Welcome to the Dedimania world record system at www.dedimania.net - see {#highlite}/helpdedi"
 dedi_timeout = "{#dedimsg}Dedimania system timed out - retrying in {#highlite}{1}{#dedimsg} minutes"
 dedi_ranking = "{#server}>> {#dedimsg}Dedimania Record rankings on {#highlite}{1}{#dedimsg} {2} this round:"
 dedi_ranking_range = "{#server}>> {#dedimsg}Dedimania Record rankings on {#highlite}{1}{#dedimsg} {2} this round (range {#highlite}{3}{#dedimsg}):"

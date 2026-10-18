@@ -17,6 +17,7 @@ APP_METADATA = {
     "modules": [
         "apps/jukebox/jukebox.py",
         "apps/jukebox/backend.py",
+        "apps/jukebox/tmx_jobs.py",
     ],
     "entries": [
         "app/jukebox",

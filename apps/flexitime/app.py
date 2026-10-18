@@ -83,3 +83,7 @@ APP_INSTANCE = FlexiTimeApp()
 
 def register(aseco: "Aseco"):
     APP_INSTANCE.register_runtime(aseco)
+
+
+async def reload_runtime(aseco: "Aseco") -> None:
+    await flexitime.reload_flexitime_runtime(aseco)

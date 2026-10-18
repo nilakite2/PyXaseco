@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui, is_score_phase
+
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -49,6 +51,8 @@ def register(aseco: "Aseco"):
     aseco.register_event("onStartup", OnStartup_bestfinishes)
     aseco.register_event("onNewChallenge", OnNewChallenge_bestfinishes)
     aseco.register_event("onEndRace", OnEndRace_bestfinishes)
+    aseco.register_event("onBeginRound", OnBeginRound_bestfinishes)
+    aseco.register_event("onRestartChallenge", OnBeginRound_bestfinishes)
     aseco.register_event("onPlayerFinish", OnPlayerFinish_bestfinishes)
     aseco.register_event("onPlayerConnect", OnPlayerConnect_bestfinishes)
 
@@ -74,7 +78,7 @@ async def OnStartup_bestfinishes(aseco: "Aseco", _empty):
 
 
 async def OnPlayerConnect_bestfinishes(aseco: "Aseco", _player: "Player"):
-    if getattr(getattr(aseco.server, "gameinfo", None), "mode", -1) == getattr(Gameinfo, "SCOR", 7):
+    if is_score_phase(aseco):
         return
     # Keep widget visible / initialized for newly connected players.
     await Display_bestfinishes(aseco)
@@ -195,6 +199,9 @@ def _format_score(ms: int) -> str:
 
 
 async def Display_bestfinishes(aseco: "Aseco"):
+    if is_score_phase(aseco):
+        await Clear_bestfinishes(aseco, None)
+        return
     cfg = _state.config
     x_frame_widget = cfg.x
     y_frame_widget = cfg.y
@@ -275,17 +282,21 @@ async def Display_bestfinishes(aseco: "Aseco"):
             y_cursor -= height_main * cfg.scale
 
     xml_parts.extend(["</frame>", "</manialink>"])
-    await aseco.client.query_ignore_result("SendDisplayManialinkPage", "".join(xml_parts), 0, False)
+    await deliver_ui(aseco, "SendDisplayManialinkPage", "".join(xml_parts), 0, False)
+
+
+async def OnBeginRound_bestfinishes(aseco: "Aseco", _param=None):
+    await Display_bestfinishes(aseco)
 
 
 async def Clear_bestfinishes(aseco: "Aseco", _challenge):
     xml = f'<manialink id="{ML_ID}"></manialink>'
-    await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 1, False)
+    await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
 async def reload_bestfinishes_runtime(aseco: "Aseco") -> None:
     LoadConfig_bestfinishes(aseco)
-    if getattr(getattr(aseco.server, "gameinfo", None), "state", -1) == getattr(Gameinfo, "SCOR", 7):
+    if is_score_phase(aseco):
         await Clear_bestfinishes(aseco, None)
         return
     await Display_bestfinishes(aseco)

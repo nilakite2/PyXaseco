@@ -282,6 +282,7 @@ class Settings:
     server_login: str = 'SuperAdmin'
     server_password: str = 'SuperAdmin'
     server_timeout: int = 10
+    durable_record_delivery: bool | None = None
 
 # -- Feature flags using the current config key names --
     lock_password: str = ''
@@ -394,6 +395,11 @@ def load_config(config_file: str | Path, settings: Settings) -> bool:
     _overlay_env_from_config(data)
     aseco = data.get('aseco', {})
     tmserver = data.get('tmserver', {})
+    durable = aseco.get('durable_record_delivery')
+    if durable is not None and not isinstance(durable, bool):
+        logger.error('aseco.durable_record_delivery must be a TOML boolean')
+        return False
+    settings.durable_record_delivery = durable
 
     settings.chat_colors = {}
     settings.chat_messages = {}

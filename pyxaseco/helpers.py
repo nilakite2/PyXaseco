@@ -376,12 +376,14 @@ def setup_manialink_events(aseco: 'Aseco'):
 
 async def _allwindows_off(aseco: 'Aseco', _data=None):
     """
-    Clear the main window, records panel, and donate panel at end of race.
+    Clear transient helper-managed windows at end of race.
+
+    Keep the dedicated donate panel alive during score mode so players can
+    still trigger /donate from the panel while the score screen is visible.
     """
     xml = (f'<manialinks>'
            f'<manialink id="{ML_ID_MAIN}"></manialink>'
            f'<manialink id="{ML_ID_RECS}"></manialink>'
-           f'<manialink id="{ML_ID_DONATE}"></manialink>'
            f'</manialinks>')
     await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
 

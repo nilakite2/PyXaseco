@@ -51,7 +51,7 @@ display = true
 limit = 50
 
 [dedimania]
-welcome = "{#welcome}Welcome to the Dedimania world record system at www.dedimania.com - see {#highlite}/helpdedi"
+welcome = "{#welcome}Welcome to the Dedimania world record system at www.dedimania.net - see {#highlite}/helpdedi"
 timeout_msg = "{#dedimsg}Dedimania system timed out - retrying in {#highlite}{1}{#dedimsg} minutes"
 name = "Dedimania"
 url = "http://dedimania.net:8002/Dedimania"

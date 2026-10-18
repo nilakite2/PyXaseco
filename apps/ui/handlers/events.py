@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui, is_score_phase
+
 from typing import TYPE_CHECKING
 
 from pyxaseco.helpers import format_time, strip_colors
@@ -53,6 +55,7 @@ async def _on_sync(aseco: 'Aseco', _data):
         _state._rpoints_cache = []
 
     _clear_per_challenge_state()
+    _state.challenge_show_next = is_score_phase(aseco)
     # Record the real game mode now so _effective_mode() works from the start
     _effective_mode(aseco)
     _state.live_cache = await _fetch_live(aseco)
@@ -75,8 +78,13 @@ async def _on_sync(aseco: 'Aseco', _data):
     await _refresh_server_limits(aseco)
     await _refresh_visitor_count(aseco)
     await _redraw_all(aseco)
-    await hide_all_score_bars(aseco)
-    await draw_all_race_bars(aseco)
+    if _state.challenge_show_next:
+        await _on_end_race(aseco)
+    else:
+        await hide_all_score_bars(aseco)
+        await draw_all_race_bars(aseco)
+    from ..challenge_widget import _prefetch_next_challenge
+    await _prefetch_next_challenge(aseco)
 
 
 async def _on_player_connect(aseco: 'Aseco', player: 'Player'):
@@ -113,6 +121,7 @@ async def _on_player_connect2(aseco: 'Aseco', player: 'Player'):
 
 async def _on_player_disconnect(aseco: 'Aseco', player: 'Player'):
     login = player.login
+    getattr(aseco, '_challenge_overviews', {}).pop(login, None)
     for d in (
         _state.player_visible,
         _state.player_cp_idx,
@@ -372,7 +381,8 @@ async def _on_end_round(aseco: 'Aseco', _p=None):
 async def _on_new_challenge(aseco: 'Aseco', challenge: 'Challenge'):
     from ..widgets.common import _hide
 
-    _state.challenge_show_next = False
+    _state.challenge_show_next = is_score_phase(aseco)
+    getattr(aseco, '_challenge_overviews', {}).clear()
     cur = getattr(aseco.server, 'challenge', None)
     if cur and getattr(cur, 'uid', '') and (not challenge or cur.uid != getattr(challenge, 'uid', '')):
         mode = getattr(aseco.server.gameinfo, 'mode', -1)
@@ -418,8 +428,12 @@ async def _on_new_challenge2(aseco: 'Aseco', _challenge):
     from ..toplists import hide_all_score_columns
 
     _effective_mode(aseco)
-    _state.challenge_show_next = False
+    _state.challenge_show_next = is_score_phase(aseco)
     _state.next_challenge = {}
+
+    if _state.challenge_show_next:
+        await _on_end_race(aseco)
+        return
 
     await _apply_custom_ui_all(aseco)
     _state.live_cache = await _fetch_live(aseco)
@@ -441,11 +455,17 @@ async def _on_new_challenge2(aseco: 'Aseco', _challenge):
     await _refresh_visitor_count(aseco)
     await draw_all_race_bars(aseco)
 
+    from ..challenge_widget import _prefetch_next_challenge
+    await _prefetch_next_challenge(aseco)
+
 
 async def _on_restart_challenge(aseco: 'Aseco', _p=None):
     from ..hud_views import _fetch_live
 
     _clear_per_challenge_state()
+    _state.challenge_show_next = False
+    _state.next_challenge = {}
+    getattr(aseco, '_challenge_overviews', {}).clear()
     for _player in aseco.server.players.all():
         _player.retired = False
         _player.finished_waiting = False
@@ -454,6 +474,17 @@ async def _on_restart_challenge(aseco: 'Aseco', _p=None):
     _state.live_cache = await _fetch_live(aseco)
     _state.next_refresh = _loop_time() + _state.refresh_interval
     await _redraw_all(aseco)
+    from ..hud_views import hide_all_score_bars, draw_all_race_bars
+    from ..widgets.score_widgets import hide_all_score_lists, hide_round_score
+    from ..toplists import hide_all_score_columns
+    await hide_all_score_bars(aseco)
+    await hide_all_score_lists(aseco)
+    await hide_all_score_columns(aseco)
+    await hide_round_score(aseco)
+    await _apply_custom_ui_all(aseco)
+    await draw_all_race_bars(aseco)
+    from ..challenge_widget import _prefetch_next_challenge
+    await _prefetch_next_challenge(aseco)
 
 
 async def _on_end_race(aseco: 'Aseco', _p=None):
@@ -476,7 +507,7 @@ async def _on_end_race(aseco: 'Aseco', _p=None):
     for p in aseco.server.players.all():
         _state.player_cp_delta[p.login] = ''
     # Broadcast empty manialinks to hide local/dedi/CP widgets for all players at once.
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco, 
         'SendDisplayManialinkPage',
         '<manialink id="91812"></manialink>'
         '<manialink id="91811"></manialink>'
@@ -500,9 +531,8 @@ async def _on_end_race(aseco: 'Aseco', _p=None):
 
 
 async def _on_end_race1(aseco: 'Aseco', _p=None):
-    # Keep score-screen widgets visible while the server still reports Score mode (7).
-    current_mode = getattr(aseco.server.gameinfo, 'mode', -1)
-    if current_mode == Gameinfo.SCOR:
+    # End-race callbacks run after the core has entered the score phase.
+    if is_score_phase(aseco):
         _state.challenge_show_next = True
         return
 
@@ -524,22 +554,69 @@ async def _on_end_race1(aseco: 'Aseco', _p=None):
     await draw_all_race_bars(aseco)
 
 
-async def _on_jukebox_changed(aseco: 'Aseco', _data=None):
-    from ..challenge_widget import _get_next_track_info
+async def _on_jukebox_changed(aseco, _data=None):
+    aseco._ui_jukebox_dirty = True
+
+
+async def _on_tracklist_changed(aseco, _data=None):
+    aseco._ui_tracklist_dirty = True
+
+
+async def _flush_list_redraws(aseco, _data=None):
+    if getattr(aseco, '_ui_score_dirty', False):
+        aseco._ui_score_dirty = False
+        if _state.challenge_show_next:
+            from ..toplists import draw_all_score_columns
+            await draw_all_score_columns(aseco)
+    jukebox = getattr(aseco, '_ui_jukebox_dirty', False)
+    tracks = getattr(aseco, '_ui_tracklist_dirty', False)
+    aseco._ui_jukebox_dirty = aseco._ui_tracklist_dirty = False
+    if jukebox:
+        await _redraw_jukebox_changed(aseco)
+    if tracks:
+        if not jukebox:
+            await _redraw_tracklist_changed(aseco)
+        else:
+            from ..hud_views import _draw_trackcount_all
+            await _draw_trackcount_all(aseco)
+
+
+async def _score_data_ready(aseco, _data=None):
+    aseco._ui_score_dirty = True
+
+
+async def _metadata_loaded(aseco, uid):
+    current = str(aseco.server.challenge.uid) == str(uid)
+    if current:
+        _state.last_challenge = {}
+        _state.player_dedi_digest.clear()
+        await _draw_dedi_all(aseco)
+    if _state.challenge_show_next:
+        if str(_state.next_challenge.get('uid', '')) == str(uid):
+            from ..internal.helpers import _enrich_track_with_tmx
+            await _enrich_track_with_tmx(aseco, _state.next_challenge,
+                _effective_mode(aseco), need_times=True, need_env=True,
+                need_mood=True, need_meta=True)
+            await _draw_challenge_all(aseco)
+    elif current:
+        await _draw_challenge_all(aseco)
+    from ..challenge_widget import _refresh_open_challenge_windows
+    await _refresh_open_challenge_windows(aseco, uid)
+
+
+async def _redraw_jukebox_changed(aseco: 'Aseco', _data=None):
+    from ..challenge_widget import _prefetch_next_challenge, _refresh_open_challenge_windows
 
     _state.last_challenge = {}
     _state.player_local_digest.clear()
     _state.player_dedi_digest.clear()
     _state.player_live_digest.clear()
-    if _state.challenge_show_next:
-        try:
-            _state.next_challenge = await _get_next_track_info(aseco, _effective_mode(aseco))
-        except Exception:
-            _state.next_challenge = {}
+    await _prefetch_next_challenge(aseco)
     await _redraw_all(aseco)
+    await _refresh_open_challenge_windows(aseco)
 
 
-async def _on_tracklist_changed(aseco: 'Aseco', _data=None):
+async def _redraw_tracklist_changed(aseco: 'Aseco', _data=None):
     setattr(aseco.server, '_re_trackcount', 0)
     _state.player_local_digest.clear()
     _state.player_dedi_digest.clear()
@@ -550,6 +627,9 @@ async def _on_tracklist_changed(aseco: 'Aseco', _data=None):
         await _hide_trackcount(aseco)
     else:
         await _draw_trackcount_all(aseco)
+    from ..challenge_widget import _prefetch_next_challenge, _refresh_open_challenge_windows
+    await _prefetch_next_challenge(aseco)
+    await _refresh_open_challenge_windows(aseco)
 
 
 async def _on_player_wins(aseco: 'Aseco', _player=None):
@@ -570,7 +650,7 @@ async def _on_status_to5(aseco: 'Aseco', _data=None):
     from ..widgets.score_widgets import draw_all_score_lists
     from ..toplists import draw_all_score_columns
 
-    if getattr(aseco.server.gameinfo, 'mode', -1) == Gameinfo.SCOR or _state.challenge_show_next:
+    if is_score_phase(aseco) or _state.challenge_show_next:
         _state.challenge_show_next = True
         await _redraw_all(aseco)
         await draw_all_score_lists(aseco)
@@ -607,14 +687,18 @@ async def _on_every_second(aseco: 'Aseco', _p=None):
         await _draw_clock_all(aseco)
 
     if _loop_time() >= _state.next_refresh:
-        _state.live_cache = await _fetch_live(aseco)
+        live_cfg = _state.live.get(_effective_mode(aseco))
+        needs_ranking = not _state.challenge_show_next and (
+            _state.current_ranking.enabled or (live_cfg and live_cfg.enabled)
+        )
+        _state.live_cache = await _fetch_live(aseco) if needs_ranking else []
         _state.next_refresh = _loop_time() + max(1, _state.refresh_interval)
         await _draw_live_all(aseco)
         if not _state.challenge_show_next:
             await _refresh_visitor_count(aseco)
             await _draw_visitors_all(aseco)
             await _draw_playerspectator_all(aseco)
-            await _draw_currentranking_all(aseco)
+            await _draw_currentranking_all(aseco, rankings=_state.live_cache)
 
 
 async def _on_checkpoint(aseco: 'Aseco', params: list):
@@ -708,6 +792,10 @@ async def _apply_custom_ui_all(aseco: 'Aseco'):
         round_scores = True
         scoretable = True
 
+    override = getattr(aseco, '_best_cp_checkpoint_list_override', None)
+    if override is not None:
+        checkpoint_list = bool(override)
+
     xml = (
         '<manialinks>'
         '<manialink id="0"><line></line></manialink>'
@@ -722,7 +810,7 @@ async def _apply_custom_ui_all(aseco: 'Aseco'):
         '</manialinks>'
     )
 
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco, 
         'SendDisplayManialinkPage', xml, 0, False
     )
 
@@ -833,6 +921,8 @@ async def _draw_live_player(aseco: 'Aseco', login: str):
 
 
 def _is_score_state(aseco: 'Aseco') -> bool:
+    if getattr(aseco, 'score_phase', None) is not None:
+        return is_score_phase(aseco)
     mode = getattr(getattr(aseco, 'server', None), 'gameinfo', None)
     current_mode = getattr(mode, 'mode', -1)
     return _state.challenge_show_next or current_mode == getattr(Gameinfo, 'SCOR', 7)
@@ -849,4 +939,4 @@ async def _refresh_score_state_records(aseco: 'Aseco', kind: str = 'dedi') -> No
     else:
         xml = build_dedi_records_for_score(aseco)
 
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
