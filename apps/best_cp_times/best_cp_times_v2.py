@@ -29,6 +29,7 @@ ML_INLAY = 92002
 ACTION_PAGE_BASE = 9207000
 
 PAGE_SIZE = 10
+ROW_HEIGHT = 1.52
 
 STATE_RACE = 1
 STATE_SCORE = 6
@@ -40,6 +41,7 @@ class WidgetCfg:
     position_y: float = -20.0
     width: float = 15.0
     height: float = 18.2
+    rows: int = PAGE_SIZE
     textsize: float = 1.0
     textscale: float = 0.9
     custom_ui: bool = True
@@ -73,6 +75,7 @@ BEST_CP_TIMES_SETTINGS_SCHEMA = AppSettingsSchema(
         AppSetting("config/position/y", -20.0, cast=as_float, description="Widget Y position.", category="layout"),
         AppSetting("config/width", 15.0, cast=as_float, description="Widget width.", category="layout"),
         AppSetting("config/height", 18.2, cast=as_float, description="Widget height.", category="layout"),
+        AppSetting("config/rows", PAGE_SIZE, cast=as_int, description="Checkpoint rows per page (minimum 1).", category="display"),
         AppSetting("config/textsize", 1.0, cast=as_float, description="Base text size.", category="display"),
         AppSetting("config/textscale", 0.9, cast=as_float, description="Text scale.", category="display"),
         AppSetting("config/number", 2000, cast=as_int, description="Maximum checkpoints shown.", category="display"),
@@ -112,6 +115,7 @@ def _load_cfg(aseco: "Aseco"):
     _state.widget.show_spectators = bound.values["config/show_spectators"]
     _state.widget.width = max(14.0, bound.values["config/width"])
     _state.widget.height = max(14.0, bound.values["config/height"])
+    _state.widget.rows = max(1, bound.values["config/rows"])
     logger.info("[BestCpTimesV2] Config loaded from %s", display_path(path))
 
 
@@ -397,6 +401,8 @@ async def bct_onCheckpoint(aseco: "Aseco", checkpt: list):
         return
 
     score = int(checkpt[2] or 0)
+    if score <= 0:
+        return
     round_no = int(checkpt[3] or 0)
     checkpoint_id = int(checkpt[4] or 0)
 
@@ -413,29 +419,22 @@ async def bct_onCheckpoint(aseco: "Aseco", checkpt: list):
             if cp >= 0:
                 checkpoint_id = cp
 
-    _state.pages[player.login] = checkpoint_id // PAGE_SIZE
-    _state.player_checkpoint_times.setdefault(player.login, {})[checkpoint_id] = score
+    personal_times = _state.player_checkpoint_times.setdefault(player.login, {})
+    if _better_score(score, personal_times.get(checkpoint_id, 0), mode):
+        personal_times[checkpoint_id] = score
 
     refresh = False
     current = _state.checkpoint_times.get(checkpoint_id, {"Score": 0, "Nickname": "---"})
     current_score = int(current.get("Score", 0) or 0)
 
-    better = False
-    if current_score > 0:
-        if mode == 4:
-            better = score > current_score
-        else:
-            better = score < current_score
-    else:
-        better = True
-
-    if better:
+    if _better_score(score, current_score, mode):
         _state.checkpoint_times[checkpoint_id] = {
             "Score": score,
             "Nickname": bct_handleSpecialChars(getattr(player, "nickname", player.login)),
         }
         refresh = True
 
+    _state.pages[player.login] = _page_for_checkpoint(checkpoint_id, player.login)
     if refresh:
         await bct_buildCheckpointsTimeInlay(aseco, checkpoint_id)
     else:
@@ -447,6 +446,10 @@ async def bct_onCheckpoint(aseco: "Aseco", checkpt: list):
             )
         ]
         await bct_buildCheckpointsTimeInlay(aseco, target_logins=affected)
+
+
+def _better_score(score: int, current: int, mode: int) -> bool:
+    return current <= 0 or (score > current if mode == 4 else score < current)
 
 
 async def bct_onEndRace1(aseco: "Aseco", _race):
@@ -476,7 +479,7 @@ async def bct_buildWidget(aseco: "Aseco", login: str | None = None):
             await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
         return
     width = _state.widget.width
-    height = _state.widget.height
+    height = max(_state.widget.height, ROW_HEIGHT * _state.widget.rows + 3.0)
 
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
@@ -550,20 +553,20 @@ def _visible_checkpoint_ids() -> list[int]:
 
 def _page_count() -> int:
     total = len(_visible_checkpoint_ids())
-    return max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    rows = _state.widget.rows
+    return max(1, (total + rows - 1) // rows)
 
 
 def _clamp_page(page: int) -> int:
     return max(0, min(max(0, _page_count() - 1), int(page or 0)))
 
 
-def _page_for_checkpoint(checkpoint_id: int) -> int:
-    ids = _visible_checkpoint_ids()
-    try:
-        idx = ids.index(int(checkpoint_id))
-    except ValueError:
+def _page_for_checkpoint(checkpoint_id: int, login: str | None = None) -> int:
+    ids = _visible_checkpoint_ids_for(login, _effective_view_mode(login)) if login else _visible_checkpoint_ids()
+    if not ids:
         return 0
-    return _clamp_page(idx // PAGE_SIZE)
+    idx = min(sum(cp < checkpoint_id for cp in ids), len(ids) - 1)
+    return idx // _state.widget.rows
 
 
 def _find_login_by_pid(aseco: "Aseco", pid: int) -> str | None:
@@ -601,7 +604,8 @@ def _effective_page_for_login(aseco: "Aseco", login: str) -> int:
     subject_login = _effective_subject_login(aseco, login)
     view_mode = _effective_view_mode(login)
     ids = _visible_checkpoint_ids_for(subject_login, view_mode)
-    total_pages = max(1, (len(ids) + PAGE_SIZE - 1) // PAGE_SIZE)
+    rows = _state.widget.rows
+    total_pages = max(1, (len(ids) + rows - 1) // rows)
     return max(0, min(max(0, total_pages - 1), int(_state.pages.get(subject_login, 0) or 0)))
 
 
@@ -649,8 +653,9 @@ def _build_inlay_xml(aseco: "Aseco", login: str, checkpoint_id: int, highlight: 
     subject_login = _effective_subject_login(aseco, login)
     page = _effective_page_for_login(aseco, login)
     ids = _visible_checkpoint_ids_for(subject_login, view_mode)
-    start = page * PAGE_SIZE
-    page_ids = ids[start:start + PAGE_SIZE]
+    rows = _state.widget.rows
+    start = page * rows
+    page_ids = ids[start:start + rows]
     width = _state.widget.width
 
     rank_x = 1.65
@@ -665,7 +670,7 @@ def _build_inlay_xml(aseco: "Aseco", login: str, checkpoint_id: int, highlight: 
         f'<frame posn="{_state.widget.position_x} {_state.widget.position_y} 3">',
     ]
 
-    row_offset = 1.52
+    row_offset = ROW_HEIGHT
     for idx, cp in enumerate(page_ids, start=1):
         posy = -(row_offset * idx)
         if highlight and cp == checkpoint_id:
@@ -697,9 +702,9 @@ def _build_inlay_xml(aseco: "Aseco", login: str, checkpoint_id: int, highlight: 
         )
 
     page = _effective_page_for_login(aseco, login)
-    total_pages = max(1, (len(ids) + PAGE_SIZE - 1) // PAGE_SIZE)
+    total_pages = max(1, (len(ids) + rows - 1) // rows)
     if total_pages > 1:
-        footer_y = -(row_offset * (PAGE_SIZE + 0.55)) - 0.45
+        footer_y = -(row_offset * (rows + 0.55)) - 0.45
         prev_x = 0.55
         page_x = 3.6
         next_x = 5.15

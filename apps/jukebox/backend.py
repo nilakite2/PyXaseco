@@ -1937,6 +1937,7 @@ async def chat_y(aseco: 'Aseco', command: dict):
                               strip_colors(tmxadd.get('name', '')))
             await _jb_broadcast(aseco, msg)
             tmxadd.clear()
+            await rasp_votes._vote_panels_off(aseco)
             await aseco.release_event('onJukeboxChanged', ['add', jukebox[uid]])
 
     # Chat vote
@@ -2048,6 +2049,7 @@ async def chat_y(aseco: 'Aseco', command: dict):
                     logger.warning('[Votes] Ignore failed: %s', e)
 
             chatvote.clear()
+            await rasp_votes._vote_panels_off(aseco)
     else:
         await _reply(aseco, login, '{#server}> {#error}There is no vote in progress!')
 

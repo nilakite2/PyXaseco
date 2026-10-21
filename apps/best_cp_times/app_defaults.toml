@@ -3,6 +3,7 @@
 [best_cp_times_v2.config]
 width = "15"
 height = "18.2"
+rows = 10
 number = "2000"
 custom_ui = "true"
 show_spectators = "true"
