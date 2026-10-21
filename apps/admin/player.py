@@ -450,7 +450,44 @@ async def handle_subcommand(
         return True
 
     if sub == 'forceteam':
-        await admin_chat._reply(aseco, login, '{#server}> {#error}/admin forceteam is not implemented yet.')
+        if not args or len(args) > 2:
+            await admin_chat._reply(aseco, login, '{#server}> Usage: /admin forceteam <login> [blue|red]')
+            return True
+        if getattr(getattr(aseco.server, 'gameinfo', None), 'mode', None) != 2:
+            await admin_chat._reply(aseco, login, '{#server}> {#error}Command only available in Team mode.')
+            return True
+        team = {'b': 0, 'blue': 0, 'r': 1, 'red': 1}.get(args[1].lower()) if len(args) == 2 else None
+        if len(args) == 2 and team is None:
+            await admin_chat._reply(aseco, login, '{#server}> {#error}Choose Blue (B) or Red (R).')
+            return True
+        target = await admin_chat._get_player_param(aseco, admin, args[0], offline=True)
+        if not target:
+            return True
+        if not admin_chat._is_connected_player(aseco, target):
+            await admin_chat._deny_offline_target(aseco, admin, target.login)
+            return True
+        if team is not None and not admin_chat._can_target_player(aseco, admin, target):
+            await admin_chat._deny_protected_target(aseco, admin, target.login)
+            return True
+        try:
+            info = await aseco.client.query('GetPlayerInfo', target.login)
+            current = info.get('TeamId') if isinstance(info, dict) else None
+            label = {0: 'Blue', 1: 'Red'}.get(current, 'no')
+            nick = admin_chat.strip_colors(target.nickname)
+            if team is None:
+                await admin_chat._reply(aseco, login, f'{{#server}}> Player {{#highlite}}{nick}{{#server}} is in {label} team.')
+            elif current == team:
+                await admin_chat._reply(aseco, login, f'{{#server}}> Player {{#highlite}}{nick}{{#server}} is already in {label} team.')
+            else:
+                label = 'Blue' if team == 0 else 'Red'
+                result = await aseco.client.query('ForcePlayerTeam', target.login, team)
+                if result is False:
+                    raise RuntimeError('Dedicated server refused the team change.')
+                aseco.console('{1} [{2}] forced [{3}] into {4} team', logtitle, login, target.login, label)
+                await admin_chat._broadcast(aseco, admin_chat._fmt_admin(
+                    aseco, admin, chattitle, 'forces into ' + label + ' team', nick))
+        except Exception as exc:
+            await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{exc}')
         return True
 
     return False
@@ -466,7 +503,7 @@ def _register_specs(aseco: 'Aseco') -> None:
             app='admin',
             category='admin-player',
             parent='admin',
-            usage=f'/admin {name}',
+            usage='/admin forceteam <login> [blue|red]' if name == 'forceteam' else f'/admin {name}',
             display_name=name,
             public=False,
             permission=name,

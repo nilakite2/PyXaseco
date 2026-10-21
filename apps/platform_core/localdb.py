@@ -498,7 +498,7 @@ async def ldb_player_finish(aseco: 'Aseco', params: list):
     if _pool is None or len(params) < 3:
         return
     _uid, login, score = params[0], params[1], params[2]
-    if score == 0:
+    if score <= 0:
         return
 
     player = aseco.server.players.get_player(login)
@@ -512,6 +512,19 @@ async def ldb_player_finish(aseco: 'Aseco', params: list):
     nick     = strip_colors(player.nickname)
 
     from pyxaseco.helpers import format_time
+
+    checks = []
+    try:
+        from apps.platform_core.checkpoints import checkpoints
+        cp = checkpoints.get(login)
+        if cp and getattr(cp, 'curr_cps', None):
+            checks = [int(x) for x in cp.curr_cps]
+    except (TypeError, ValueError):
+        pass
+
+    # PB storage is independent of the capped leaderboard. The upsert rejects
+    # worse/equal scores atomically, including players absent from that list.
+    await _insert_record(challenge.id, player.id, score, checks, stunts=bool(is_stnt))
 
     # Find where this score fits in the record list
     for i in range(maxrecs):
@@ -545,17 +558,7 @@ async def ldb_player_finish(aseco: 'Aseco', params: list):
             new_rec.challenge = challenge
             new_rec.new       = True
 
-            # Try to attach checkpoint data from checkpoints now,
-            # so both in-memory records and DB rows get real CP times.
-            try:
-                from apps.platform_core.checkpoints import checkpoints
-                cp = checkpoints.get(login)
-                if cp and getattr(cp, 'curr_cps', None):
-                    new_rec.checks = [int(x) for x in cp.curr_cps]
-                else:
-                    new_rec.checks = []
-            except Exception:
-                new_rec.checks = []
+            new_rec.checks = checks
 
             if cur_rank != -1:
                 diff = (score - cur_score) if is_stnt else (cur_score - score)
@@ -598,9 +601,8 @@ async def ldb_player_finish(aseco: 'Aseco', params: list):
                     await aseco.client.query_ignore_result(
                         'ChatSendServerMessageToLogin', aseco.format_colors(private), login)
 
-            # Persist to DB and fire event
+            # Only leaderboard changes produce the existing ranked-record event.
             if new_rec.new:
-                await _insert_record(challenge.id, player.id, score, new_rec.checks)
                 aseco.console('[LocalDB] player {1} finished with {2} → rank {3}',
                               login, score, i+1)
                 new_rec.pos = i + 1
@@ -617,17 +619,21 @@ def _get_msg(key: str, *args) -> str:
     return format_text(raw, *args)
 
 
-async def _insert_record(challenge_id: int, player_id: int, score: int, checks: list):
-    if _pool is None or player_id == 0 or challenge_id == 0:
+async def _insert_record(challenge_id: int, player_id: int, score: int, checks: list, *, stunts: bool = False):
+    if _pool is None or player_id == 0 or challenge_id == 0 or score <= 0:
         return
     cps = ','.join(str(c) for c in checks)
+    better = '>' if stunts else '<'
+    condition = f'(Score <= 0 OR VALUES(Score) {better} Score)'
     async with _pool.acquire() as conn:
         async with conn.cursor() as cur:
+            # Score must be assigned last: Date/Checkpoints compare the old score.
             await cur.execute(
                 'INSERT INTO records (ChallengeId, PlayerId, Score, Date, Checkpoints) '
                 'VALUES (%s, %s, %s, NOW(), %s) '
-                'ON DUPLICATE KEY UPDATE Score=VALUES(Score), Date=VALUES(Date), '
-                'Checkpoints=VALUES(Checkpoints)',
+                f'ON DUPLICATE KEY UPDATE Date=IF({condition}, VALUES(Date), Date), '
+                f'Checkpoints=IF({condition}, VALUES(Checkpoints), Checkpoints), '
+                f'Score=IF({condition}, VALUES(Score), Score)',
                 (challenge_id, player_id, score, cps)
             )
 

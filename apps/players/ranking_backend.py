@@ -126,7 +126,7 @@ PLAYER_RANKING_SETTINGS_SCHEMA = AppSettingsSchema(
         AppSetting('reset_cache_start', reset_cache_start, as_bool, 'Reset ranking cache on startup.', 'rankings'),
         AppSetting('minrank', minrank, as_int, 'Minimum rank display threshold.', 'rankings'),
         AppSetting('maxavg', maxavg, as_int, 'Maximum average count.', 'rankings'),
-        AppSetting('maxrecs', maxrecs, as_int, 'Maximum records to retain.', 'rankings'),
+        AppSetting('maxrecs', maxrecs, as_int, 'Leaderboard/ranking limit; personal bests are saved beyond it.', 'rankings'),
     ),
 )
 
@@ -659,12 +659,23 @@ async def _show_pb(aseco: 'Aseco', player: 'Player', challenge_id: int, always_s
                 async with pool.acquire() as conn:
                     async with conn.cursor() as cur:
                         await cur.execute(
+                            'SELECT Score FROM records WHERE PlayerId=%s AND ChallengeId=%s',
+                            (player.id, challenge_id)
+                        )
+                        row = await cur.fetchone()
+                        if row and row[0] > 0:
+                            pb_time = row[0]
+                            pb_rank = '$nUNRANKED$m'
+                            found = True
+                        # Keep older rs_times-only PBs visible without a bulk migration.
+                        await cur.execute(
                             f'SELECT score FROM rs_times WHERE playerID=%s AND challengeID=%s '
                             f'ORDER BY score {order} LIMIT 1',
                             (player.id, challenge_id)
                         )
                         row = await cur.fetchone()
-                        if row:
+                        if row and row[0] > 0 and (not found or
+                                (row[0] > pb_time if is_stnt else row[0] < pb_time)):
                             pb_time = row[0]
                             pb_rank = '$nUNRANKED$m'
                             found = True

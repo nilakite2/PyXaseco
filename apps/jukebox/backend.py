@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.helpers import format_text, format_time, strip_colors, display_manialink, display_manialink_multi
 from pyxaseco.app_services import get_tmx_service, localdb_get_pool
+from pyxaseco.core.bounded_cache import BoundedCache
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 TMX_DOWNLOAD_DIR = 'TMX'
 TMX_SECTION_CHOICES = ('TMNF', 'TMU', 'TMN', 'TMO', 'TMS')
+TMX_TAG_ACTION_BASE = 8521000
+TMX_TAG_LIMIT = 512
+_tmx_tags_cache = BoundedCache(capacity=5, ttl=3600)
 TMX_STYLE_NAMES = {
     'Normal', 'Stunt', 'Maze', 'Offroad', 'Laps', 'Fullspeed',
     'LOL', 'Tech', 'SpeedTech', 'RPG', 'PressForward', 'Trial', 'Grass',
@@ -1106,6 +1110,60 @@ async def _search_tmx_tracks_legacy(aseco, section: str, *, name: str = '', auth
             break
 
     return tracks
+
+
+async def _tmx_tags(aseco, section: str) -> list[tuple[int, str]]:
+    cached = _tmx_tags_cache.get(section)
+    if cached is not None:
+        return cached
+    from pyxaseco.core.external_io import request_json
+    data = await request_json(aseco, 'tmx_search', 'GET',
+        _tmx_api_url(section, 'meta/tags'), timeout=10, headers={'User-Agent': 'PyXaseco/1.3'})
+    if not isinstance(data, list) or len(data) > TMX_TAG_LIMIT:
+        raise ValueError('Invalid TMX tag list')
+    tags = []
+    seen = set()
+    for row in data:
+        if not isinstance(row, dict):
+            raise ValueError('Invalid TMX tag')
+        tag_id, name = row.get('Id'), row.get('Name')
+        if type(tag_id) is not int or tag_id < 0 or not isinstance(name, str) or not name.strip():
+            raise ValueError('Invalid TMX tag')
+        if tag_id not in seen:
+            tags.append((tag_id, name.strip()[:100]))
+            seen.add(tag_id)
+    if tags:
+        _tmx_tags_cache[section] = tags
+    return tags
+
+
+async def _search_tmx_tag_tracks(aseco, section: str, tag_id: int) -> list[dict]:
+    from pyxaseco.core.external_io import request_json
+    fields = 'TrackId,TrackName,Authors[],Uploader.UserId,Uploader.Name,Environment,Tags'
+    tracks, seen = [], set()
+    after = None
+    for _ in range(5):
+        data = await request_json(aseco, 'tmx_search', 'GET', _tmx_api_url(
+            section, 'tracks', fields=fields, tag=tag_id, count=100, after=after),
+            timeout=5, headers={'User-Agent': 'PyXaseco/1.3'})
+        if not isinstance(data, dict) or not isinstance(data.get('Results'), list):
+            raise ValueError('Invalid TMX tag search response')
+        rows = data['Results']
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get('Tags'), list) or tag_id not in row['Tags']:
+                raise ValueError('TMX returned a track outside the selected tag')
+            normalised = _normalise_tmx_track_row(row, section)
+            if normalised and normalised['id'] not in seen:
+                tracks.append(normalised)
+                seen.add(normalised['id'])
+        if not rows or not data.get('More'):
+            break
+        cursor = rows[-1].get('TrackId')
+        if type(cursor) is not int or cursor <= 0 or cursor == after:
+            break
+        after = cursor
+    # A legacy search fallback would silently drop the tag filter.
+    return tracks[:500]
 
 
 async def _search_tmx_tracks(aseco, section: str, *, name: str = '', author: str = '', recent: bool = False) -> list[dict]:
@@ -3627,7 +3685,7 @@ async def chat_xlist(aseco: 'Aseco', command: dict):
             ['...', '{#black}xxx', 'Lists tracks matching a name or author'],
             ['...', '{#black}auth:yyy', 'Lists tracks matching author'],
             ['...', '{#black}tmx', 'Selects a TMX section from TMO,TMS,TMN,TMNF,TMU'],
-            ['...', '{#black}tag #', 'Tag search is planned but not implemented yet'],
+            ['...', '{#black}tags', 'Choose a TMX tag, then browse its tracks'],
             [],
             ['Pick a TMX Id number from the list, and use {#black}/add # {sec}'],
         ]
@@ -3638,12 +3696,11 @@ async def chat_xlist(aseco: 'Aseco', command: dict):
         )
         return
 
-    if params[-1].upper() in TMX_SECTION_CHOICES:
+    if params and params[-1].upper() in TMX_SECTION_CHOICES:
         section = params.pop().upper()
 
-    if params and params[0].lower() == 'tag':
-        await _reply(aseco, login, '{#server}> {#error}/xlist tag is not implemented yet.')
-        return
+    tag_mode = bool(params and params[0].lower() in ('tag', 'tags'))
+    tag_query = ' '.join(params[1:]).strip() if tag_mode else ''
 
     from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy, Admission
     recent = bool(params and params[0].lower() == 'recent')
@@ -3656,9 +3713,19 @@ async def chat_xlist(aseco: 'Aseco', command: dict):
                 name = (name + ' ' + token).strip()
     revision = int(getattr(player, '_tmx_search_revision', 0)) + 1
     job = JobEnvelope.capture(aseco.capture_job_context(login=login), {
-        'section': section, 'recent': recent, 'name': name, 'author': author})
+        'section': section, 'recent': recent, 'name': name, 'author': author,
+        'tag_mode': tag_mode, 'tag_query': tag_query})
     async def operation(envelope):
         p = envelope.payload()
+        if p['tag_mode']:
+            tags = await _tmx_tags(aseco, p['section'])
+            if not p['tag_query']:
+                return {'tags': tags}
+            selected = next(((tid, label) for tid, label in tags
+                if str(tid) == p['tag_query'] or label.casefold() == p['tag_query'].casefold()), None)
+            if selected is None:
+                return {'unknown_tag': True}
+            return {'tag_name': selected[1], 'tracks': await _search_tmx_tag_tracks(aseco, p['section'], selected[0])}
         if p['recent']:
             return await _search_tmx_tracks(aseco, p['section'], recent=True)
         if p['author']:
@@ -3671,6 +3738,15 @@ async def chat_xlist(aseco: 'Aseco', command: dict):
             return
         if result.status != 'completed':
             await _reply(aseco, login, '{#server}> {#error}TMX search unavailable; try /xlist again later.')
+        elif tag_mode and not tag_query:
+            _show_xlist_tags(aseco, player, section, result.value['tags'])
+        elif tag_mode and result.value.get('unknown_tag'):
+            await _reply(aseco, login, '{#server}> {#error}Unknown tag; use /xlist tags to choose one.')
+        elif tag_mode:
+            if result.value['tracks']:
+                _show_xlist_results(aseco, player, section, result.value['tracks'], tag_name=result.value['tag_name'])
+            else:
+                await _reply(aseco, login, '{#server}> {#error}No tracks found for that tag.')
         elif not result.value:
             await _reply(aseco, login, '{#server}> {#error}No tracks found.')
         else:
@@ -3679,17 +3755,41 @@ async def chat_xlist(aseco: 'Aseco', command: dict):
         job, operation, apply, current_map=False, dedupe_key='search:' + str(revision))
     if outcome == Admission.ACCEPTED:
         player._tmx_search_revision = revision
+        player._tmx_tag_choices = {}
     await _reply(aseco, login,
         '{#server}> {#message}TMX search queued.' if outcome == Admission.ACCEPTED
         else '{#server}> {#error}TMX search queue unavailable; try later.')
 
 
-def _show_xlist_results(aseco, player, section, tracks):
+def _show_xlist_tags(aseco, player, section, tags):
+    player._tmx_tag_choices = {}
+    header = f'TMX Tags {{#black}}{section}$g - choose a tag'
+    columns = ['Id', 'Tag (click to show tracks)']
+    player.msgs = [[1, header, [0.9, 0.15, 0.75], ['Icons64x64_1', 'TrackInfo']]]
+    page = [columns]
+    for index, (tag_id, name) in enumerate(tags[:TMX_TAG_LIMIT]):
+        # Change the action bank between requests so old-window clicks are ignored.
+        action = TMX_TAG_ACTION_BASE + (player._tmx_search_revision % 16) * TMX_TAG_LIMIT + index
+        player._tmx_tag_choices[action] = (section, tag_id)
+        page.append([str(tag_id), [_literal_ml_text(name), action]])
+        if len(page) == 16:
+            player.msgs.append(page)
+            page = [columns]
+    if len(page) > 1:
+        player.msgs.append(page)
+    if len(player.msgs) == 1:
+        player.msgs.append([['', 'No tags available.']])
+    display_manialink_multi(aseco, player)
+
+
+def _show_xlist_results(aseco, player, section, tracks, *, tag_name=''):
 
     adminadd = bool(aseco.allow_ability(player, 'add'))
     clickable = getattr(aseco.settings, 'clickable_lists', False)
     player.tracklist = []
     header = f'{_literal_ml_text("Tracks On TMX Section")} {{#black}}{section}$g:'
+    if tag_name:
+        header += ' ' + _literal_ml_text(tag_name) + ' (up to 500 results)'
 
     if adminadd:
         widths = [1.55, 0.12, 0.16, 0.6, 0.1, 0.4, 0.17]
@@ -3760,6 +3860,13 @@ async def _event_jukebox(aseco: 'Aseco', answer: list):
     login = answer[1]
     player = aseco.server.players.get_player(login)
     if not player:
+        return
+
+    if TMX_TAG_ACTION_BASE <= action < TMX_TAG_ACTION_BASE + 16 * TMX_TAG_LIMIT:
+        selected = getattr(player, '_tmx_tag_choices', {}).get(action)
+        if selected:
+            section, tag_id = selected
+            await chat_xlist(aseco, {'author': player, 'params': f'tags {tag_id} {section}'})
         return
 
     if 101 <= action <= 2000:
