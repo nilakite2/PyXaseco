@@ -16,7 +16,18 @@ import os
 import sys
 from pathlib import Path
 
-from pyxaseco.core.aseco import Aseco
+from pyxaseco.management.config_store import ManagementError, runtime_lock
+
+MANAGEMENT_RUNTIME_LOCK = 1
+Aseco = None
+
+
+def _create_controller(**kwargs):
+    global Aseco
+    if Aseco is None:
+        from pyxaseco.core.aseco import Aseco as controller_class
+        Aseco = controller_class
+    return Aseco(**kwargs)
 
 
 class ControllerFormatter(logging.Formatter):
@@ -68,8 +79,29 @@ async def main():
                         help='Enable debug logging')
     parser.add_argument('--perf', action='store_true',
                         help='Log bounded performance summaries every 60 seconds')
+    parser.add_argument('--supervised', action='store_true',
+                        help='Let the OS service manager own restart/recovery')
+    parser.add_argument('--service-plan', help='Prepared per-installation service plan')
     args = parser.parse_args()
+    if args.supervised != bool(args.service_plan):
+        parser.error('--supervised and --service-plan must be supplied together')
 
+    try:
+        with runtime_lock(Path(args.config).resolve().parent):
+            if args.supervised:
+                return await _run_service_controller(args)
+            restart_reason = await _run_controller(args)
+    except (ManagementError, OSError, ValueError) as exc:
+        if not args.supervised:
+            raise
+        detail = str(exc) if isinstance(exc, ManagementError) else 'check plan syntax, paths and permissions'
+        print(f'[PyXaseco] Service startup refused ({type(exc).__name__}): {detail}', file=sys.stderr)
+        return 0 if os.name == 'nt' else 78
+    if restart_reason:
+        await _restart_controller(logging.getLogger('pyxaseco'), restart_reason)
+
+
+async def _run_controller(args):
     setup_logging(args.debug)
     logger = logging.getLogger('pyxaseco')
 
@@ -78,7 +110,7 @@ async def main():
     # found correctly regardless of working directory.
     config_path = str(Path(args.config).resolve())
 
-    aseco = Aseco(debug=args.debug, performance=args.perf)
+    aseco = _create_controller(debug=args.debug, performance=args.perf)
     restart_reason = 'clean shutdown restart request'
     try:
         await aseco.run(config_path)
@@ -107,8 +139,41 @@ async def main():
                 await aseco.performance.stop()
 
     if aseco.restart_requested:
-        await _restart_controller(logger, restart_reason)
+        return restart_reason
+
+
+async def _run_service_controller(args):
+    from pyxaseco.management.lifecycle import ServiceSession, arm_exit_watchdog, run_supervised
+    from pyxaseco.management.services import ManagedLifecycle, ServicePlan
+    config = Path(args.config).resolve()
+    plan = ServicePlan.read(args.service_plan)
+    if Path(plan.config).resolve() != config:
+        raise ManagementError('Service plan does not belong to this controller config')
+    if plan.platform != ('windows' if os.name == 'nt' else 'linux'):
+        raise ManagementError('Service plan targets a different operating system')
+    # Explicit CWD prevents a service from loading another folder's .env/logs.
+    os.chdir(config.parent)
+    setup_logging(args.debug)
+    session = ServiceSession(config.parent, plan.instance_id)
+    try:
+        aseco = _create_controller(debug=args.debug, performance=args.perf)
+        aseco.register_service('management.lifecycle', ManagedLifecycle(plan), owner='management')
+    except Exception:
+        logging.getLogger('pyxaseco').exception('Controller construction/import failed under service supervision')
+        if len(session.failures()) >= 3:
+            session.publish('blocked', exit_code=78)
+            return 0 if os.name == 'nt' else 78
+        code = session.record_failure()
+        session.publish('failed', exit_code=code)
+        return code
+    code = await run_supervised(aseco, str(config), session)
+    arm_exit_watchdog(code)
+    return code
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        sys.exit(asyncio.run(main()) or 0)
+    except ManagementError as exc:
+        print(f'[PyXaseco] {exc}', file=sys.stderr)
+        sys.exit(2)

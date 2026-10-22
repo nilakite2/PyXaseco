@@ -901,8 +901,8 @@ def validate_phase1_dependencies(aseco: 'Aseco') -> None:
         ('service/tmx', 'app/tmx'),
         ('feature/rasp_jukebox', 'app/jukebox'),
     ]
-    if any(cfg.enabled for cfg in _state.dedi.values()):
-        required_groups.append(('service/records_dedimania', 'app/records_dedimania'))
+    # The Dedi widget slot also displays independent RPG/Trial records.
+    # Enabling its layout must not require the optional Dedimania service.
 
     missing = sorted(group[0] for group in required_groups if not any(name in loaded for name in group))
     if missing:

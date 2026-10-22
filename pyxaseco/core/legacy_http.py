@@ -7,6 +7,7 @@ import json
 import time
 import urllib.error
 import urllib.request
+from contextlib import nullcontext
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -78,14 +79,17 @@ def _read_response(response, timeout):
             raise ValueError('external response exceeds byte limit')
 
 
-def json_request(url, method, body, headers, timeout, attempts=1):
+def json_request(url, method, body, headers, timeout, attempts=1, observer=None, owner=''):
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
     for attempt in range(attempts):
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                raw = _read_response(response, timeout)
-                text = raw.decode('utf-8', errors='replace').strip()
-                return json.loads(text) if text or method == 'GET' else {}
+            with observer.request(owner) if observer is not None else nullcontext() as sample:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    if sample is not None:
+                        sample.http_status = response.status
+                    raw = _read_response(response, timeout)
+                    text = raw.decode('utf-8', errors='replace').strip()
+                    return json.loads(text) if text or method == 'GET' else {}
         except urllib.error.HTTPError as error:
             error.close()
             if method == 'GET' and error.code == 404:
@@ -98,7 +102,7 @@ def json_request(url, method, body, headers, timeout, attempts=1):
         time.sleep(1)
 
 
-def put_file(url, path, headers, timeout):
+def put_file(url, path, headers, timeout, observer=None, owner=''):
     with path.open('rb') as handle:
         size = path.stat().st_size
         if size > 64 * 1024 * 1024:
@@ -106,8 +110,11 @@ def put_file(url, path, headers, timeout):
         request = urllib.request.Request(url, data=handle,
             headers={**headers, 'Content-Length': str(size)}, method='PUT')
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                return int(response.status or 200)
+            with observer.request(owner) if observer is not None else nullcontext() as sample:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    if sample is not None:
+                        sample.http_status = response.status
+                    return int(response.status or 200)
         except urllib.error.HTTPError as error:
             error.close()
             raise

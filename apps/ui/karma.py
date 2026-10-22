@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pyxaseco.core.service_health import observed_response
 
 from pyxaseco.core.widget_delivery import deliver_ui
 
@@ -816,7 +817,8 @@ async def _api_get(url: str, timeout: int) -> str:
     from pyxaseco.core.http_sessions import HttpPolicy, request_timeout
     from pyxaseco.core.external_io import read_limited
     session = _runtime_aseco.jobs.http.get('karma', HttpPolicy())
-    async with session.get(url, timeout=request_timeout(timeout, connect_seconds=_cfg.connect_timeout)) as response:
+    async with observed_response(_runtime_aseco, 'karma',
+            session.get(url, timeout=request_timeout(timeout, connect_seconds=_cfg.connect_timeout))) as response:
         response.raise_for_status()
         body = await read_limited(response, 1024 * 1024)
         return body.decode('utf-8', errors='replace')
@@ -826,9 +828,9 @@ async def _api_post(url: str, payload: str, timeout: int):
     from pyxaseco.core.http_sessions import HttpPolicy, request_timeout
     from pyxaseco.core.external_io import read_limited
     session = _runtime_aseco.jobs.http.get('karma', HttpPolicy())
-    async with session.post(url, data=payload.encode('utf-8'),
+    async with observed_response(_runtime_aseco, 'karma', session.post(url, data=payload.encode('utf-8'),
                             headers={'Content-Type': 'text/plain; charset=utf-8'},
-                            timeout=request_timeout(timeout, connect_seconds=_cfg.connect_timeout)) as response:
+                            timeout=request_timeout(timeout, connect_seconds=_cfg.connect_timeout))) as response:
         body = await read_limited(response, 1024 * 1024)
         return response.status, body.decode('utf-8', errors='replace')
 

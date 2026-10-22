@@ -24,6 +24,7 @@ from pyxaseco.core.config import _load_dotenv, _env
 from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy, Admission
 from pyxaseco.core.http_sessions import HttpPolicy, request_timeout
 from pyxaseco.core.external_io import read_limited
+from pyxaseco.core.service_health import observe_request
 from pyxaseco.core.aseco import PYXASECO_VERSION
 
 if TYPE_CHECKING:
@@ -106,15 +107,20 @@ def _build_multicall(*calls) -> bytes:
 
 async def _dedi_post(payload: bytes, timeout: int = 15):
     session = _runtime_aseco.jobs.http.get('dedimania', HttpPolicy())
-    async with session.post(dedi_db.get('Url', 'http://dedimania.net:8002/Dedimania'),
+    with observe_request(_runtime_aseco, 'dedimania') as sample:
+        async with session.post(dedi_db.get('Url', 'http://dedimania.net:8002/Dedimania'),
                             data=payload, headers={'Content-Type': 'text/xml'},
                             timeout=request_timeout(timeout)) as response:
-        response.raise_for_status()
-        body = await read_limited(response, 4 * 1024 * 1024)
-    results, _ = xmlrpc.client.loads(body)
-    if results and isinstance(results[0], list):
-        return results[0]
-    return results
+            if sample is not None:
+                sample.http_status = response.status
+            response.raise_for_status()
+            body = await read_limited(response, 4 * 1024 * 1024)
+        results, _ = xmlrpc.client.loads(body)
+        if results and isinstance(results[0], list):
+            results = results[0]
+        if sample is not None and not _authenticated(results):
+            sample.status = 'API rejected'
+        return results
 
 
 def _authenticated(results):

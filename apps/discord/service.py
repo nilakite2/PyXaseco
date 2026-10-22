@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 from pyxaseco.helpers import strip_colors
+from pyxaseco.core.service_health import observed_response
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_bool, as_int, bind_app_settings
 from pyxaseco.core.config import _load_dotenv, _env, display_path
 
@@ -251,7 +252,7 @@ class DiscordWebhookState:
             "content": _truncate_discord_content(content),
             "username": self.cfg.admin_webhook_name if channel == "admin" else self.cfg.chat_webhook_name,
         }
-        async with self.session.post(url, json=body) as resp:
+        async with observed_response(self.aseco, 'discord', self.session.post(url, json=body)) as resp:
             if resp.status >= 400:
                 self._failed(channel, str(resp.status))
                 if resp.status == 429:

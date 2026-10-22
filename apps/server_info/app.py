@@ -16,6 +16,7 @@ APP_METADATA = {
     "description": "Server information, runtime introspection, and update-check commands.",
     "modules": [
         "apps/server_info/commands.py",
+        "apps/server_info/overview.py",
         "apps/server_info/public_stats.py",
         "apps/server_info/uptodate.py",
     ],

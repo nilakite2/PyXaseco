@@ -240,7 +240,7 @@ async def _post_heartbeat(aseco: "Aseco", *, force=False, is_online=True):
     async def operation(envelope):
         return await request_legacy_json(aseco, 'POST', url,
                                   payload=envelope.payload(), headers=headers,
-                                  timeout=PUBLIC_STATS_REQUEST_TIMEOUT)
+                                  timeout=PUBLIC_STATS_REQUEST_TIMEOUT, owner='public_stats')
     async def apply(result):
         if result.status != 'completed':
             logger.warning('[PublicStats] Heartbeat unavailable (%s)', result.failure_label)
@@ -266,7 +266,7 @@ def _stats_delivery(aseco):
         response = await request_legacy_json(aseco, 'POST',
                                   f"{_api_base()}{PUBLIC_STATS_RECENT_RECORD_PATH}",
                                   payload=data, headers=_build_headers(),
-                                  timeout=PUBLIC_STATS_REQUEST_TIMEOUT)
+                                  timeout=PUBLIC_STATS_REQUEST_TIMEOUT, owner='public_stats')
         if not isinstance(response, dict) or response.get('ok') is not True:
             raise RuntimeError('Unconfirmed public stats record response')
         return response

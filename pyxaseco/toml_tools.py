@@ -1,10 +1,25 @@
 from __future__ import annotations
 
 import json
-import re
 import tomllib
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
+
+from pyxaseco.management.config_store import edit_toml, revision, update_file
+
+_edit_revisions = ContextVar('toml_edit_revisions', default=None)
+
+
+@contextmanager
+def revision_guard(path):
+    file = Path(path).resolve()
+    token = _edit_revisions.set({file: revision(file.read_bytes())})
+    try:
+        yield
+    finally:
+        _edit_revisions.reset(token)
 
 
 def _format_scalar(value: Any) -> str:
@@ -55,7 +70,7 @@ def dump_toml(data: dict[str, Any]) -> str:
 
 
 def write_toml(path: str | Path, data: dict[str, Any]) -> None:
-    Path(path).write_text(dump_toml(data), encoding='utf-8')
+    update_file(Path(path), lambda _text: dump_toml(data), validator=tomllib.loads)
 
 
 def read_toml(path: str | Path) -> dict[str, Any]:
@@ -70,62 +85,25 @@ def update_toml_table_scalar(
     key: str,
     value: Any,
 ) -> None:
-    file_path = Path(path)
-    lines = file_path.read_text(encoding='utf-8').splitlines()
-    header = f"[{'.'.join(str(part) for part in table_path)}]"
-    key_pattern = re.compile(rf'^\s*{re.escape(key)}\s*=')
-    new_line = f'{key} = {_format_value(value)}'
-
-    table_idx = None
-    for idx, line in enumerate(lines):
-        if line.strip() == header:
-            table_idx = idx
-            break
-
-    if table_idx is None:
-        if lines and lines[-1].strip():
-            lines.append('')
-        lines.extend([header, new_line])
-        file_path.write_text('\n'.join(lines).rstrip() + '\n', encoding='utf-8')
-        return
-
-    insert_at = len(lines)
-    for idx in range(table_idx + 1, len(lines)):
-        stripped = lines[idx].strip()
-        if stripped.startswith('[') and stripped.endswith(']'):
-            insert_at = idx
-            break
-        if key_pattern.match(lines[idx]):
-            lines[idx] = new_line
-            file_path.write_text('\n'.join(lines).rstrip() + '\n', encoding='utf-8')
-            return
-
-    lines.insert(insert_at, new_line)
-    file_path.write_text('\n'.join(lines).rstrip() + '\n', encoding='utf-8')
+    revisions = _edit_revisions.get()
+    file = Path(path).resolve()
+    saved = update_file(file, lambda text: edit_toml(text, (*table_path, key), value),
+                        expected=revisions.get(file) if revisions else None, validator=tomllib.loads)
+    if revisions is not None:
+        revisions[file] = saved.revision
 
 
 def move_loadout_entry(path: str | Path, entry: str, enabled: bool) -> dict[str, Any]:
-    data = read_toml(path)
-    loadout = data.get('loadout')
-    if not isinstance(loadout, dict):
-        loadout = {}
-        data['loadout'] = loadout
-
-    enabled_list = loadout.get('enabled')
-    disabled_list = loadout.get('disabled')
-    if not isinstance(enabled_list, list):
-        enabled_list = []
-        loadout['enabled'] = enabled_list
-    if not isinstance(disabled_list, list):
-        disabled_list = []
-        loadout['disabled'] = disabled_list
-
-    enabled_list[:] = [item for item in enabled_list if item != entry]
-    disabled_list[:] = [item for item in disabled_list if item != entry]
-
-    target = enabled_list if enabled else disabled_list
-    if entry not in target:
-        target.append(entry)
-
-    write_toml(path, data)
-    return data
+    result = {}
+    def change(text):
+        data = tomllib.loads(text)
+        loadout = data.get('loadout', {})
+        active = [item for item in loadout.get('enabled', []) if item != entry]
+        inactive = [item for item in loadout.get('disabled', []) if item != entry]
+        (active if enabled else inactive).append(entry)
+        updated = edit_toml(text, ('loadout', 'enabled'), active)
+        updated = edit_toml(updated, ('loadout', 'disabled'), inactive)
+        result.update(tomllib.loads(updated))
+        return updated
+    update_file(Path(path), change, validator=tomllib.loads)
+    return result

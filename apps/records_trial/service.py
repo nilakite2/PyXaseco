@@ -78,13 +78,13 @@ def _pick_display_name(*candidates: object) -> str:
 
 async def _json_request(url: str) -> object:
     from pyxaseco.core.external_io import request_legacy_json
-    return await request_legacy_json(_runtime_aseco, 'GET', url, headers=_build_headers())
+    return await request_legacy_json(_runtime_aseco, 'GET', url, headers=_build_headers(), owner='records_trial')
 
 
 async def _json_post(url: str, payload: dict) -> object:
     from pyxaseco.core.external_io import request_legacy_json
     return await request_legacy_json(_runtime_aseco, 'POST', url,
-                              payload=payload, headers=_build_headers())
+                              payload=payload, headers=_build_headers(), owner='records_trial')
 
 
 def _normalize_trial_track_payload(payload: object) -> dict | None:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import logging
 import shutil
 from contextvars import ContextVar
@@ -11,7 +10,10 @@ from typing import TYPE_CHECKING, Any
 
 from pyxaseco.helpers import display_manialink_multi
 from pyxaseco.models import Gameinfo
-from pyxaseco.toml_tools import move_loadout_entry, read_toml as _read_toml, update_toml_table_scalar
+from pyxaseco.management.app_policy import (
+    MANAGEABLE_STANDALONE_APPS, PROTECTED_STANDALONE_APPS, RELOADABLE_APPS,
+)
+from pyxaseco.toml_tools import move_loadout_entry, read_toml as _read_toml, revision_guard, update_toml_table_scalar
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -47,19 +49,27 @@ def _with_config_snapshot(render):
     return wrapped
 
 
-MANAGEABLE_STANDALONE_APPS: dict[str, str] = {
-    'flexitime': 'FlexiTime',
-    'bestcps': 'Best CPs',
-    'bestsecs': 'Best Secs',
-    'bestruns': 'Best Runs',
-    'bestfinishes': 'Best Finishes',
-    'best_cp_times': 'Best CP Times',
-    'records_rpg': 'RPG Records',
-    'records_trial': 'Trial Records',
-    'jfreu': 'JFreu',
-    'ztrack': 'ZTrack',
-    'endlesstmxr': 'Endless TMX Random',
-}
+def _guard_config_change(function):
+    import inspect
+    signature = inspect.signature(function)
+    parameters = tuple(signature.parameters)
+    def file_for(args, kwargs):
+        bound = signature.bind(*args, **kwargs).arguments
+        aseco, target = bound[parameters[0]], bound[parameters[1]]
+        relative = target['file'] if isinstance(target, dict) else f'apps/{target}/app_defaults.toml'
+        return _root_dir(aseco) / relative
+    if inspect.iscoroutinefunction(function):
+        @wraps(function)
+        async def asynchronous(*args, **kwargs):
+            with revision_guard(file_for(args, kwargs)):
+                return await function(*args, **kwargs)
+        return asynchronous
+    @wraps(function)
+    def synchronous(*args, **kwargs):
+        with revision_guard(file_for(args, kwargs)):
+            return function(*args, **kwargs)
+    return synchronous
+
 
 CONFIG_APPS: dict[str, dict[str, str]] = {
     'admin': {
@@ -114,36 +124,6 @@ CONFIG_APP_DISCOVERY_EXCLUDE = {
     'admin',
     'platform_core',
     'jukebox',
-}
-
-PROTECTED_STANDALONE_APPS = {
-    'admin',
-    'apps_manager',
-    'discord',
-    'help',
-    'jukebox',
-    'platform_core',
-    'platform_ui',
-    'players',
-    'records_dedimania',
-    'records_local',
-    'server_info',
-    'social_chat',
-    'tmx',
-    'ui',
-    'voting',
-}
-
-RELOADABLE_APPS = {
-    'ui',
-    'bestcps',
-    'bestsecs',
-    'bestruns',
-    'bestfinishes',
-    'best_cp_times',
-    'checkpoint_tools',
-    'flexitime',
-    'endlesstmxr',
 }
 
 _APPS_USAGE = (
@@ -1095,6 +1075,7 @@ def _editable_fields(aseco: 'Aseco', item: dict[str, Any]) -> list[dict[str, Any
     return _editable_fields_from_info(aseco, item, _config_item_target_info(aseco, item))
 
 
+@_guard_config_change
 def _update_config_field(aseco: 'Aseco', item: dict[str, Any], field_key: str, delta: float) -> str:
     info = _config_item_target_info(aseco, item)
     table_path = _config_field_write_path(item, info, field_key)
@@ -1278,28 +1259,8 @@ def _config_save_mode(aseco: 'Aseco', app_key: str) -> str:
 async def _reload_app_runtime(aseco: 'Aseco', app_key: str, item_key: str | None = None) -> bool:
     if not _can_reload_app(aseco, app_key):
         return False
-    from pyxaseco.app_config import clear_app_defaults_cache as clear_app_catalog_cache
-    from pyxaseco.settings_loader import clear_app_defaults_cache as clear_settings_defaults_cache
-
-    clear_app_catalog_cache(getattr(aseco, '_base_dir', None))
-    clear_settings_defaults_cache()
-    if app_key == 'ui' and item_key:
-        from apps.ui.runtime_reload import reload_ui_item_runtime
-        await reload_ui_item_runtime(aseco, item_key)
-        return True
-
-    try:
-        app_module = importlib.import_module(f'apps.{app_key}.app')
-    except Exception:
-        logger.warning('[AppsManager] Could not import reload module for %s', app_key, exc_info=True)
-        return False
-    reload_fn = getattr(app_module, 'reload_runtime', None)
-    if not callable(reload_fn):
-        return False
-    result = reload_fn(aseco)
-    if hasattr(result, '__await__'):
-        await result
-    return True
+    from pyxaseco.management.reload import reload_app
+    return await reload_app(aseco, app_key, item_key)
 
 
 @_with_config_snapshot
@@ -1339,11 +1300,13 @@ def _show_apps_manager_window(aseco: 'Aseco', admin) -> None:
         secondary = ''
         if status == 'enabled':
             primary = _action_cell(admin, 'Disable', ('toggle_app', 'disable', app_name))
-            secondary = _action_cell(admin, 'Remove', ('archive_app', app_name))
+            if app_name not in PROTECTED_STANDALONE_APPS:
+                secondary = _action_cell(admin, 'Remove', ('archive_app', app_name))
         elif status == 'disabled':
             primary = _action_cell(admin, 'Enable', ('toggle_app', 'enable', app_name))
-            secondary = _action_cell(admin, 'Remove', ('archive_app', app_name))
-        elif status == 'removed':
+            if app_name not in PROTECTED_STANDALONE_APPS:
+                secondary = _action_cell(admin, 'Remove', ('archive_app', app_name))
+        elif status == 'removed' and app_name not in PROTECTED_STANDALONE_APPS:
             primary = _action_cell(admin, 'Add', ('restore_app', app_name))
         rows.append([
             label,
@@ -1479,6 +1442,7 @@ def _show_item_edit_window(aseco: 'Aseco', admin, app_key: str, item_key: str) -
     )
 
 
+@_guard_config_change
 async def _apply_config_toggle(
     aseco: 'Aseco',
     app_key: str,
@@ -1545,6 +1509,9 @@ async def handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
 
     if kind == 'archive_app':
         name = str(payload[1])
+        if name in PROTECTED_STANDALONE_APPS:
+            await _reply(aseco, login, '{#server}> {#error}App files are protected; use Enable/Disable instead.')
+            return True
         app_dir, _archived = _standalone_paths(aseco, name)
         if app_dir.exists():
             move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', False)
@@ -1555,6 +1522,9 @@ async def handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
 
     if kind == 'restore_app':
         name = str(payload[1])
+        if name in PROTECTED_STANDALONE_APPS:
+            await _reply(aseco, login, '{#server}> {#error}App files are protected; use Enable/Disable instead.')
+            return True
         app_dir, archived = _standalone_paths(aseco, name)
         if archived is not None:
             _apps_dir(aseco).mkdir(parents=True, exist_ok=True)
@@ -1636,7 +1606,7 @@ async def _handle_apps_command(aseco: 'Aseco', login: str, admin, args: list[str
         if not name:
             await _reply_apps_usage(aseco, login)
             return
-        if name in config_apps:
+        if name in config_apps and name != 'records_dedimania':
             state = 'disabled' if _standalone_loadout_state(aseco, name) == 'disabled' else None
             if state == 'disabled':
                 await _reply(aseco, login, f'{{#server}}> {{#message}}{config_apps[name]["label"]}: {{#highlite}}disabled')
@@ -1654,7 +1624,8 @@ async def _handle_apps_command(aseco: 'Aseco', login: str, admin, args: list[str
         if not name:
             await _reply_apps_usage(aseco, login)
             return
-        if name in config_apps:
+        # Dedimania has editable settings but also supports a service loadout toggle.
+        if name in config_apps and name != 'records_dedimania':
             await _reply(aseco, login, '{#server}> {#error}Use {#highlite}/admin apps config ' + name + '{#error} for merged features and UI-owned items.')
             return
         if _is_manageable_standalone_app(aseco, name):

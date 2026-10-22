@@ -129,21 +129,22 @@ def _rpg_records_url(uid: str) -> str:
 
 async def _json_request(url: str):
     from pyxaseco.core.external_io import request_legacy_json
-    return await request_legacy_json(_runtime_aseco, 'GET', url, headers=_build_headers())
+    return await request_legacy_json(_runtime_aseco, 'GET', url, headers=_build_headers(), owner='records_rpg')
 
 
 async def _json_post(url: str, payload=None):
     from pyxaseco.core.external_io import request_legacy_json
     return await request_legacy_json(_runtime_aseco, 'POST', url,
-                              payload=payload, headers=_build_headers(), empty_post=True)
+                              payload=payload, headers=_build_headers(), empty_post=True, owner='records_rpg')
 
 
 async def _put_file(url: str, path: Path):
     from pyxaseco.core.legacy_http import put_file
+    from pyxaseco.core.service_health import health_for
     return await _runtime_aseco.jobs.legacy_http.run(put_file, url, path, {
         'Content-Type': 'application/octet-stream',
         'User-Agent': f'PyXaseco-RPGRecords/{PLUGIN_VERSION}',
-    }, 60)
+    }, 60, health_for(_runtime_aseco), 'records_rpg')
 
 
 def _safe_int(value: object, default: int = 0) -> int:

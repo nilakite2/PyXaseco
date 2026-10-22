@@ -59,10 +59,14 @@ class TmxTransport:
     def session(self):
         return self.aseco.jobs.http.get('tmx_downloads', TMX_HTTP_POLICY)
 
+    def response(self, url, **kwargs):
+        from pyxaseco.core.service_health import observed_response
+        return observed_response(self.aseco, 'tmx_downloads', self.session().get(url, **kwargs))
+
     async def summary(self, section: str, track_id: int, routes: dict) -> dict | None:
         from . import backend as b
         url = routes[section]['api'] + '&' + urllib.parse.urlencode({'id': int(track_id)})
-        async with self.session().get(url, timeout=aiohttp.ClientTimeout(total=5),
+        async with self.response(url, timeout=aiohttp.ClientTimeout(total=5),
                                       headers={'User-Agent': 'PyXaseco/1.3'}) as response:
             if response.status == 404:
                 return None
@@ -91,7 +95,7 @@ class TmxTransport:
         return result
 
     async def random_reference(self, section: str, routes: dict) -> int:
-        async with self.session().get(f"https://{routes[section]['public']}/trackrandom",
+        async with self.response(f"https://{routes[section]['public']}/trackrandom",
                                       timeout=aiohttp.ClientTimeout(total=5),
                                       max_redirects=5, headers={'User-Agent': 'PyXaseco/1.3'}) as response:
             response.raise_for_status()
@@ -162,7 +166,7 @@ class TmxTransport:
             # in this task so cancellation cannot strand an executor-open handle.
             handle = path.open('xb')
             created = True
-            async with self.session().get(f'https://{host}/trackgbx/{track_id}',
+            async with self.response(f'https://{host}/trackgbx/{track_id}',
                                           headers={'Accept-Encoding': 'identity', 'User-Agent': 'PyXaseco/1.3'},
                                           auto_decompress=False) as response:
                 response.raise_for_status()

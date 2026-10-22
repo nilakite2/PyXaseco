@@ -468,6 +468,12 @@ async def _send_multipage(aseco: 'Aseco', player: 'Player'):
     if not isinstance(meta, list):
         return
 
+    # Optional page preparation lets dynamic windows check access and set their
+    # page-specific heading/columns before the shared pager renders anything.
+    prepare = meta[4] if len(meta) > 4 else None
+    if callable(prepare) and not prepare(aseco, player):
+        return
+
     page_idx    = meta[0]           # 1-based
     total_pages = len(player.msgs) - 1
 
@@ -486,8 +492,9 @@ async def _send_multipage(aseco: 'Aseco', player: 'Player'):
         rows = list(rows) + [[] for _ in range(page1_len - len(rows))]
 
     style = player.style if player.style else {}
+    refresh_action = meta[6] if len(meta) > 6 else None
     xml   = _build_multi_page_window(header, icon, rows, widths,
-                                     page_idx, total_pages, style)
+                                     page_idx, total_pages, style, refresh_action=refresh_action)
     xml = aseco.format_colors(xml)
 
     # Keep autoclose disabled for multi-page windows.
@@ -496,10 +503,10 @@ async def _send_multipage(aseco: 'Aseco', player: 'Player'):
     )
 
 
-def _build_multi_page_window(header, icon, rows, widths, page, total, style) -> str:
+def _build_multi_page_window(header, icon, rows, widths, page, total, style, *, refresh_action=None) -> str:
     if not style:
-        return _build_plain_multi_page_window(header, rows, widths, page, total)
-    return _build_styled_multi_page_window(header, icon, rows, widths, page, total, style)
+        return _build_plain_multi_page_window(header, rows, widths, page, total, refresh_action=refresh_action)
+    return _build_styled_multi_page_window(header, icon, rows, widths, page, total, style, refresh_action=refresh_action)
 
 
 # ---------------------------------------------------------------------------
@@ -550,7 +557,7 @@ def _build_plain_window(header, data, widths, button) -> str:
     return xml
 
 
-def _build_plain_multi_page_window(header, data, widths, page, total) -> str:
+def _build_plain_multi_page_window(header, data, widths, page, total, *, refresh_action=None) -> str:
     """Build plain TMN-style multi-page window markup."""
     tsp = 'B'
     txt = '333' + tsp
@@ -606,7 +613,11 @@ def _build_plain_multi_page_window(header, data, widths, page, total) -> str:
             xml += f'<cell bgcolor="{bgd}" width="0.11"><text>$</text></cell>'
         xml += f'<cell bgcolor="{bgd}" width="{butw:.3f}"><text>$</text></cell>'
 
-    xml += f'<cell bgcolor="{bgd}" width="{butw:.3f}"><text halign="center" action="0">$oClose</text></cell>'
+    close_width = butw if refresh_action is None else butw / 2
+    xml += f'<cell bgcolor="{bgd}" width="{close_width:.3f}"><text halign="center" action="0">$oClose</text></cell>'
+    if refresh_action is not None:
+        xml += (f'<cell bgcolor="{bgd}" width="{close_width:.3f}">'
+                f'<text halign="center" action="{refresh_action}">$oRefresh</text></cell>')
 
     if page < total:
         xml += f'<cell bgcolor="{bgd}" width="{butw:.3f}"><text halign="center" action="2">$oNext</text></cell>'
@@ -717,7 +728,7 @@ def _build_styled_window(header, icon, data, widths, button, style) -> str:
     return xml
 
 
-def _build_styled_multi_page_window(header, icon, data, widths, page, total, style) -> str:
+def _build_styled_multi_page_window(header, icon, data, widths, page, total, style, *, refresh_action=None) -> str:
     """Build styled TMF-style multi-page window markup."""
     hsize = float(_s(style, 'HEADER.TEXTSIZE') or 0.06)
     bsize = float(_s(style, 'BODY.TEXTSIZE') or 0.04)
@@ -825,6 +836,9 @@ def _build_styled_multi_page_window(header, icon, data, widths, page, total, sty
     xml += (f'<quad pos="-{w / 2:.3f} -{close_y:.3f} -0.2"'
             f' size="0.06 0.06" halign="center"'
             f' style="Icons64x64_1" substyle="Close" action="0"/>\n')
+
+    if refresh_action is not None:
+        xml += _nav(w / 2 + 0.075, 'Refresh', refresh_action)
 
     # Right side: Next, Next5, Last
     if page < total:

@@ -1068,7 +1068,8 @@ async def _search_tmx_tracks_legacy(aseco, section: str, *, name: str = '', auth
             from pyxaseco.core.external_io import read_limited
             session = aseco.jobs.http.get('tmx_search')
             import aiohttp
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+            from pyxaseco.core.service_health import observed_response
+            async with observed_response(aseco, 'tmx_search', session.get(url, timeout=aiohttp.ClientTimeout(total=5))) as response:
                 response.raise_for_status()
                 text = (await read_limited(response, 1024 * 1024)).decode('utf-8', errors='replace')
         except Exception as e:

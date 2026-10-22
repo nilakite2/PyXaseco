@@ -11,6 +11,7 @@ from pyxaseco.helpers import (display_manialink, display_manialink_multi,
                               format_text, format_time, format_time_h, strip_colors)
 from pyxaseco.app_services import localdb_get_pool
 from pyxaseco.core.aseco import PYXASECO_VERSION
+from . import overview
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -78,6 +79,7 @@ def register(aseco: 'Aseco'):
         order=115,
     )
     aseco.register_event('onChat_server', chat_server)
+    aseco.register_event('onPlayerManialinkPageAnswer', overview.on_answer)
     aseco.register_event('onChat_xaseco', chat_xaseco)
     aseco.register_event('onChat_pyxaseco', chat_pyxaseco)
     aseco.register_event('onChat_plugins', chat_plugins)
@@ -86,79 +88,7 @@ def register(aseco: 'Aseco'):
 
 
 async def chat_server(aseco: 'Aseco', command: dict):
-    player = command['author']
-    login = player.login
-
-    players = list(aseco.server.players.all())
-    active_players = [p for p in players if not getattr(p, 'isspectator', False)]
-    spectators = [p for p in players if getattr(p, 'isspectator', False)]
-    nations = {getattr(p, 'nation', '') for p in players if getattr(p, 'nation', '')}
-    players_count = len(players)
-    nations_count = len(nations)
-    playtime_total = sum(int(getattr(p, 'timeplayed', 0) or 0) for p in players)
-    playdays = playtime_total // (24 * 3600)
-    playtime_rem = playtime_total % (24 * 3600)
-    coppers = int(getattr(aseco.server, 'coppers', 0) or 0)
-
-    admin_contact = ''
-    feature_votes = False
-    maxrecs = int(getattr(aseco.settings, 'max_records', 30) or 30)
-    try:
-        from apps.players.rankings import admin_contact as _ac
-        admin_contact = _ac or ''
-    except Exception:
-        pass
-    try:
-        from apps.voting.voting import feature_votes as _fv
-        feature_votes = bool(_fv)
-    except Exception:
-        pass
-    try:
-        from apps.players.rankings import maxrecs as _mr
-        maxrecs = int(_mr or maxrecs)
-    except Exception:
-        pass
-
-    header = f'Server info: {aseco.server.name}'
-    stats = [
-        ['Server Name', '{#black}' + str(aseco.server.name)],
-        ['Comment', '{#black}' + str(getattr(aseco.server, 'comment', '') or '<none>')],
-        ['Current Players', '{#black}' + str(len(active_players))],
-        ['Spectators', '{#black}' + str(len(spectators))],
-        ['Max Players', '{#black}' + str(aseco.server.maxplay)],
-        ['Max Specs', '{#black}' + str(aseco.server.maxspec)],
-        ['Recs/Track', '{#black}' + str(maxrecs)],
-    ]
-
-    if feature_votes:
-        stats.append(['Voting info', '{#black}/helpvote'])
-    else:
-        stats.append(['Vote Timeout', '{#black}' + format_time(aseco.server.votetime)])
-        stats.append(['Vote Ratio', '{#black}' + str(round(aseco.server.voterate, 2))])
-
-    if aseco.server.rights:
-        rights_val = '{#black}United'
-        if aseco.allow_ability(player, 'server_coppers'):
-            rights_val += f'   $gCoppers: {{#black}}{coppers}'
-        stats.append(['Rights', rights_val])
-    else:
-        stats.append(['Rights', '{#black}Nations'])
-
-    stats.append(['Ladder Limits', '{#black}' + str(aseco.server.laddermin)
-                  + '$g - {#black}' + str(aseco.server.laddermax)])
-
-    if admin_contact:
-        stats.append(['Admin Contact', '{#black}' + admin_contact])
-
-    stats.append([])
-    stats.append([f'Visited by $f80{players_count} $gPlayers from $f40{nations_count} $gNations'])
-    stats.append(['who together played: {#black}' +
-                  f'{playdays} day{"s" if playdays != 1 else " "} '
-                  + format_time_h(playtime_rem * 1000, False) + ' $g!'])
-
-    display_manialink(aseco, login, header,
-                      ['Icons64x64_1', 'DisplaySettings', 0.01],
-                      stats, [1.0, 0.3, 0.7], 'OK')
+    await overview.show(aseco, command['author'])
 
 
 async def chat_xaseco(aseco: 'Aseco', command: dict):
@@ -212,7 +142,7 @@ async def chat_xaseco(aseco: 'Aseco', command: dict):
     info += [
         ['Uptime', '{#black}' + f'{updays} day{"s" if updays != 1 else " "} ' +
          format_time_h(uptime_rem * 1000, False)],
-        ['Website', '{#black}$l[www.github.com/nilakite2/PyXaseco]www.github.com/nilakite2/PyXaseco$l'],
+        ['Website', '{#black}$l[http://github.com/nilakite2/PyXaseco]http://github.com/nilakite2/PyXaseco$l'],
         ['Credits', '{#black}Python port: Nila'],
         ['', '{#black}Original authors: Xymph, Flo, Assembler Maniac, Jfreu & others'],
     ]

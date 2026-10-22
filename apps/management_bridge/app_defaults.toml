@@ -1,0 +1,5 @@
+[management_bridge]
+# The apps.toml loadout is the enable switch. No separate enabled flag.
+host = "127.0.0.1"
+# Zero selects a free local port independently for every installation.
+port = 0

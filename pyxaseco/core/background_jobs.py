@@ -23,6 +23,7 @@ from aiohttp import ClientResponseError
 from pyxaseco.core.http_sessions import HttpSessions
 from pyxaseco.core.legacy_http import LegacyHttp
 from pyxaseco.core.performance import PerformanceMetrics
+from pyxaseco.core.service_health import ServiceHealth
 
 
 logger = logging.getLogger(__name__)
@@ -297,6 +298,7 @@ class BackgroundJobs:
         self._context = context
         self.metrics = metrics
         self.policy = policy
+        self.health = ServiceHealth()
         self.http = HttpSessions()
         self.legacy_http = LegacyHttp()
         self._services: dict[str, JobService] = {}

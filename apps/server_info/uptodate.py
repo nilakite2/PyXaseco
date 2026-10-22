@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import format_text
+from pyxaseco.core.service_health import observed_response
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -43,7 +44,7 @@ async def _check_version(aseco: 'Aseco') -> str | None:
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
-            async with session.get(VERSION_URL, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            async with observed_response(aseco, 'update_check', session.get(VERSION_URL, timeout=aiohttp.ClientTimeout(total=5))) as resp:
                 current = (await resp.text()).strip()
         if current and current != '-1':
             if current != PYXASECO_VERSION:

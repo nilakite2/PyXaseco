@@ -518,13 +518,21 @@ class Aseco:
         await self.close_background()
 
         if self._shutdown_stop_server:
-            for method_name in ('StopServer', 'QuitServer'):
+            lifecycle = self.get_service('management.lifecycle')
+            if lifecycle is not None and lifecycle.manages_dedicated:
                 try:
-                    await self.client.query_ignore_result(method_name)
-                    logger.info('Dedicated server stop requested via %s', method_name)
-                    break
+                    await lifecycle.stop_dedicated()
+                    logger.info('Paired dedicated-server service stopped')
                 except Exception:
-                    continue
+                    logger.error('Paired service stop failed; no raw QuitServer fallback was sent', exc_info=True)
+            else:
+                for method_name in ('StopServer', 'QuitServer'):
+                    try:
+                        await self.client.query_ignore_result(method_name)
+                        logger.info('Dedicated server stop requested via %s', method_name)
+                        break
+                    except Exception:
+                        continue
 
         # Best-effort disconnect
         try:
