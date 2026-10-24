@@ -5,17 +5,17 @@ PyXaseco v1.4 is a Python-based server controller for TrackMania Forever.
 It is built to cover the familiar XAseco-style server workflow while using a cleaner app-based runtime layout under the hood.
 
 ## New Additions
-app/match_overlay
-app/alternate_scoretable
-app/server_neighborhood
-app/records_ultimania
-app/dbtools
-app/serverstats
-app/forcemods
-app/hidechat
-app/quotes
-app/cgps
-app/seqinfomsg
+- app/match_overlay
+- app/alternate_scoretable
+- app/server_neighborhood
+- app/records_ultimania
+- app/dbtools
+- app/serverstats
+- app/forcemods
+- app/hidechat
+- app/quotes
+- app/cgps
+- app/seqinfomsg
 
 Additional details in [APP CREDITS](APP_CREDITS.md)
 
