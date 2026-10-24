@@ -65,7 +65,8 @@ def enabled_integrations(aseco):
     karma = _module('apps.ui.karma')
     if 'ui' in active and getattr(getattr(karma, '_cfg', None), 'enabled', False):
         rows.append(('karma', 'ManiaKarma'))
-    for app, label in (('records_trial', 'Trial Records'), ('records_rpg', 'RPG Records')):
+    for app, label in (('records_trial', 'Trial Records'), ('records_rpg', 'RPG Records'),
+                       ('records_ultimania', 'Ultimania Records')):
         service = _module(f'apps.{app}.service')
         if app in active and service is not None and service.is_enabled():
             rows.append((app, label))
@@ -73,9 +74,9 @@ def enabled_integrations(aseco):
     if 'discord' in active and discord is not None and (
             discord.enabled_for('admin') or discord.enabled_for('chat')):
         rows.append(('discord', 'Discord'))
-    stats = _module('apps.server_info.public_stats')
-    if 'server_info' in active and stats is not None and stats._is_enabled():
-        rows.append(('public_stats', 'Public Stats'))
+    stats = _module('apps.pyxa_stats.service')
+    if 'pyxa_stats' in active and stats is not None and stats._is_enabled():
+        rows.append(('public_stats', 'PYXA Stats'))
     updates = _module('apps.server_info.uptodate')
     if 'server_info' in active and getattr(updates, 'VERSION_URL', ''):
         rows.append(('update_check', 'Version Check'))

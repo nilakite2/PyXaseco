@@ -153,7 +153,7 @@ def _live_metric(aseco, item: dict, cfg: WidgetCfg, plimit: int) -> str:
     return format_time(best) if best > 0 else '--'
 
 
-def _live_entries_for(aseco, login: str, cfg: WidgetCfg, plimit: int) -> list:
+def _live_entries_for(aseco, login: str, cfg: WidgetCfg, plimit: int, include_no_record=True) -> list:
     all_entries = []
     for i, item in enumerate(_state.live_cache):
         il = str(item.get('Login') or '')
@@ -195,6 +195,8 @@ def _live_entries_for(aseco, login: str, cfg: WidgetCfg, plimit: int) -> list:
         ctu_count -= cfg.topcount
 
     if self_r is None:
+        if not include_no_record:
+            return (top + (better[-ctu_count:] if ctu_count > 0 else []))[:cfg.entries]
         placeholder = {
             'rank': '--',
             'login': login,
@@ -276,17 +278,18 @@ async def _draw_live_player(aseco: 'Aseco', login: str):
 
     plimit = _point_limit(aseco)
     team_mode = _is_team_live_mode(aseco, mode)
+    lookup = getattr(aseco, 'get_service', None)
+    ui_style = lookup('ui/uistyle') if callable(lookup) else None
+    player = aseco.server.players.get_player(login)
+    modern = ui_style is not None and ui_style.resolve(player).base == 1
 
     if team_mode:
         raw_entries = _live_team_entries(aseco)
     else:
-        raw_entries = _live_entries_for(aseco, login, cfg, plimit)
-
-    digest = _digest_entries(raw_entries, login)
-    if _state.player_live_digest.get(login) == digest:
-        return
+        raw_entries = _live_entries_for(aseco, login, cfg, plimit, include_no_record=not modern)
 
     xml = _build_record_widget(
+        aseco=aseco,
         ml_id=ML_LIVE,
         cfg=cfg,
         login=login,
@@ -296,6 +299,9 @@ async def _draw_live_player(aseco: 'Aseco', login: str):
         is_live=True,
         click_action=91806,
     )
+    digest = str(hash(xml))
+    if _state.player_live_digest.get(login) == digest:
+        return
     await _send(aseco, login, xml)
     _state.player_live_digest[login] = digest
 

@@ -26,6 +26,19 @@ enabled = [
 "app/ui"
 ]
 disabled = [
+"app/server_admin_bridge",
+"app/match_overlay",
+"app/pyxa_stats",
+"app/alternate_scoretable",
+"app/server_neighborhood",
+"app/records_ultimania",
+"app/dbtools",
+"app/serverstats",
+"app/forcemods",
+"app/hidechat",
+"app/quotes",
+"app/cgps",
+"app/seqinfomsg",
 "app/flexitime",
 "app/bestsecs",
 "app/bestruns",

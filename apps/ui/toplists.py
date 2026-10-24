@@ -898,6 +898,17 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
             'action_id': action_id,
         })
 
+    # Ultimania owns the shared external-records position in Stunts.
+    from .record_views import _is_ultimania_track_active
+    if await _is_ultimania_track_active(aseco):
+        ulti = aseco.services.get('service/records_ultimania')
+        toplists.append({
+            'manialinkid': '04', 'icon_style': 'Icons128x128_1', 'icon_substyle': 'Rankings',
+            'title': 'Ultimania Records', 'special': False, 'action_id': 8590000,
+            'rows': [{'rank': row['rank'], 'score': str(row['score']), 'nickname': row['nickname'],
+                      'login': row['login'], 'online': row['login'] in players} for row in ulti.rows[:25]],
+        })
+
     # Preserve the expected display order.
     dedi_cfg = _state.dedi.get(_effective_mode(aseco))
     if gamemode != Gameinfo.STNT and getattr(dedi_cfg, 'enabled', False):

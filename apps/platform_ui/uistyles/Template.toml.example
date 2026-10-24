@@ -1,0 +1,13 @@
+# Copy into custom/<your-name>.toml. The example itself is not selectable.
+[preset]
+id = 8 # Choose an unused ID >= 2; supplied color variants use 2-7. Keep it stable.
+name = "My UI"
+description = "My custom preset based on Classic."
+base = 0
+# Optional window-style override from apps/platform_ui/styles.toml:
+# window_style = "DarkBlur"
+# Set base = 1 above to use Modern HUD, windows, menus and panels.
+# Optional Modern-only color overrides; 3 or 4 hexadecimal digits (TMF RGBA):
+# [palette]
+# accent = "3CFF"
+# background = "1118"

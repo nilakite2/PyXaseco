@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import lastwin, panels, settings, style
+from . import lastwin, panels, settings, style, uistyle
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -16,6 +16,10 @@ APP_METADATA = {
     "description": "Shared style, panel, and personal UI preference infrastructure.",
     "modules": [
         "apps/platform_ui/style.py",
+        "apps/platform_ui/uistyle.py",
+        "apps/platform_ui/uistyle_catalog.py",
+        "apps/platform_ui/modern.py",
+        "apps/platform_ui/presentation.py",
         "apps/platform_ui/panels.py",
         "apps/platform_ui/settings.py",
         "apps/platform_ui/lastwin.py",
@@ -25,6 +29,7 @@ APP_METADATA = {
     ],
     "provides": [
         "ui/style",
+        "ui/uistyle",
         "ui/panels",
         "chat/settings",
         "chat/lastwin",
@@ -66,6 +71,11 @@ class PlatformUiApp(App):
             entry_modules=("app/platform_ui",),
         )
         self.ui_surfaces = (
+            PlatformUiModuleSurface(
+                component_id='platform_ui.uistyle',
+                description='Personal UI preset selection and persistence.',
+                module=uistyle,
+            ),
             PlatformUiModuleSurface(
                 component_id='platform_ui.style',
                 description='Shared style loading and style preference surface.',

@@ -1,0 +1,10 @@
+[preset]
+id = 2
+name = "Modern-Purple"
+description = "Modern graphite UI with purple accents."
+base = 1
+
+[palette]
+header = "325A"
+accent = "B7FF"
+selection = "325F"

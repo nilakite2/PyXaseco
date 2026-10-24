@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pyxaseco.core.widget_delivery import deliver_ui, is_score_phase
+from pyxaseco.core.chat_visibility import visible as chat_visible
 
 from typing import TYPE_CHECKING
 
@@ -37,6 +38,14 @@ _BAR_WIDGET_IDS = (
 # ---------------------------------------------------------------------------
 # Event handlers
 # ---------------------------------------------------------------------------
+
+async def _on_ui_style_changed(aseco: 'Aseco', data):
+    login = data.get('login') if isinstance(data, dict) else None
+    if login and aseco.server.players.get_player(login) is not None:
+        for cache in (_state.player_local_digest, _state.player_dedi_digest, _state.player_live_digest):
+            cache.pop(login, None)
+        await _redraw_player(aseco, login)
+
 
 async def _on_sync(aseco: 'Aseco', _data):
     from ..hud_views import _fetch_live, _refresh_cp_targets_all
@@ -773,7 +782,7 @@ async def _on_checkpoint(aseco: 'Aseco', params: list):
 # Custom UI — hides native TM HUD elements
 # ---------------------------------------------------------------------------
 
-async def _apply_custom_ui_all(aseco: 'Aseco'):
+def _custom_ui_xml(aseco: 'Aseco', login: str):
     def b(v: bool) -> str:
         return 'true' if v else 'false'
 
@@ -796,6 +805,16 @@ async def _apply_custom_ui_all(aseco: 'Aseco'):
     if override is not None:
         checkpoint_list = bool(override)
 
+    chat = chat_visible(aseco, login, chat)
+
+    lookup = getattr(aseco, 'get_service', None)
+    scoretable_visibility = lookup('ui/scoretable_visibility') if callable(lookup) else None
+    if callable(scoretable_visibility):
+        scoretable = scoretable_visibility(login, scoretable)
+    round_scores_visibility = lookup('ui/round_scores_visibility') if callable(lookup) else None
+    if callable(round_scores_visibility):
+        round_scores = round_scores_visibility(login, round_scores)
+
     xml = (
         '<manialinks>'
         '<manialink id="0"><line></line></manialink>'
@@ -810,13 +829,24 @@ async def _apply_custom_ui_all(aseco: 'Aseco'):
         '</manialinks>'
     )
 
-    await deliver_ui(aseco, 
-        'SendDisplayManialinkPage', xml, 0, False
-    )
+    return xml
 
 
-async def _apply_custom_ui(aseco: 'Aseco', login: str):
-    await _apply_custom_ui_all(aseco)
+async def _apply_custom_ui_all(aseco: 'Aseco'):
+    groups = {}
+    for player in aseco.server.players.all():
+        groups.setdefault(_custom_ui_xml(aseco, player.login), []).append(player.login)
+    for xml, logins in groups.items():
+        for start in range(0, len(logins), 100):
+            await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin',
+                             ','.join(logins[start:start + 100]), xml, 0, False)
+
+
+async def _apply_custom_ui(aseco: 'Aseco', login: str, *, force: bool = False):
+    if force and getattr(aseco, 'ui_delivery', None):
+        aseco.ui_delivery.invalidate_page(login, 0)
+    await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin',
+                     login, _custom_ui_xml(aseco, login), 0, False)
 
 
 # ---------------------------------------------------------------------------
@@ -904,9 +934,12 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
 
 
 async def _draw_dedi_player(aseco: 'Aseco', login: str):
+    from ..record_views import _is_ultimania_track_active
     from ..record_views import _is_rpg_track_active
     from ..record_views import _is_trial_track_active
-    if await _is_rpg_track_active(aseco):
+    if await _is_ultimania_track_active(aseco):
+        from ..record_views import _draw_ultimania_player as impl
+    elif await _is_rpg_track_active(aseco):
         from ..record_views import _draw_rpg_player as impl
     elif await _is_trial_track_active(aseco):
         from ..record_views import _draw_trial_player as impl

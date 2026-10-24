@@ -1,0 +1,10 @@
+[preset]
+id = 7
+name = "Modern-Pink"
+description = "Modern graphite UI with pink accents."
+base = 1
+
+[palette]
+header = "523A"
+accent = "F8CF"
+selection = "523F"

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.command_queries import command_label, iter_commands, visible_chat_commands_for_player
 from pyxaseco.models import ChatCommand
+from pyxaseco.core.widget_delivery import deliver_ui
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -243,7 +244,7 @@ async def _display_window_message_history(aseco: 'Aseco', messages: list[str], t
         pos -= 2.5
     xml += '</frame></manialink>'
 
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', aseco.format_colors(xml), timeout, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', aseco.format_colors(xml), timeout, False)
 
 
 async def send_window_message(aseco: 'Aseco', message: str, scoreboard: bool) -> None:
@@ -282,6 +283,20 @@ async def send_window_message(aseco: 'Aseco', message: str, scoreboard: bool) ->
 # Public API
 # ---------------------------------------------------------------------------
 
+def _player_window_style(aseco, player):
+    legacy = getattr(player, 'style', None) or {}
+    lookup = getattr(aseco, 'get_service', None)
+    service = lookup('ui/uistyle') if callable(lookup) else None
+    return service.window_style(player, legacy) if service is not None else legacy
+
+
+def _modern_command_window(aseco, player, header, rows, widths, page=1, total=1, refresh_action=None, icon=None):
+    lookup = getattr(aseco, 'get_service', None)
+    service = lookup('ui/uistyle') if callable(lookup) else None
+    renderer = getattr(service, 'command_window_xml', None)
+    return renderer(player, header, rows, widths, page, total, refresh_action, icon=icon) if callable(renderer) else None
+
+
 def display_manialink(aseco: 'Aseco', login: str, header: str,
                       icon: list, data: list, widths: list, button: str):
     """
@@ -298,17 +313,19 @@ def display_manialink(aseco: 'Aseco', login: str, header: str,
     player = aseco.server.players.get_player(login)
     if not player:
         return
-    style = player.style if player.style else {}
+    style = _player_window_style(aseco, player)
 
-    if not style:
-        xml = _build_plain_window(header, data, widths, button)
-    else:
-        xml = _build_styled_window(header, icon, data, widths, button, style)
+    xml = _modern_command_window(aseco, player, header, data, widths, icon=icon)
+    if xml is None:
+        if not style:
+            xml = _build_plain_window(header, data, widths, button)
+        else:
+            xml = _build_styled_window(header, icon, data, widths, button, style)
 
     xml = aseco.format_colors(xml)
     # Send a single-page window with autoclose enabled.
     asyncio.ensure_future(
-        aseco.client.query_ignore_result(
+        deliver_ui(aseco,
             'SendDisplayManialinkPageToLogin', login, xml, 0, True
         )
     )
@@ -385,7 +402,7 @@ async def _allwindows_off(aseco: 'Aseco', _data=None):
            f'<manialink id="{ML_ID_MAIN}"></manialink>'
            f'<manialink id="{ML_ID_RECS}"></manialink>'
            f'</manialinks>')
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
 
 
 async def _event_manialink(aseco: 'Aseco', answer: list):
@@ -411,7 +428,7 @@ async def _event_manialink(aseco: 'Aseco', answer: list):
     # action 0 = close main window
     if action == 0:
         xml = f'<manialink id="{ML_ID_MAIN}"></manialink>'
-        await aseco.client.query_ignore_result(
+        await deliver_ui(aseco,
             'SendDisplayManialinkPageToLogin', login, xml, 0, False
         )
         return
@@ -491,14 +508,20 @@ async def _send_multipage(aseco: 'Aseco', player: 'Player'):
         # Pad current page rows to page1 length with empty spacer rows
         rows = list(rows) + [[] for _ in range(page1_len - len(rows))]
 
-    style = player.style if player.style else {}
+    style = _player_window_style(aseco, player)
     refresh_action = meta[6] if len(meta) > 6 else None
-    xml   = _build_multi_page_window(header, icon, rows, widths,
-                                     page_idx, total_pages, style, refresh_action=refresh_action)
+    # A window owner can opt into its own renderer without restyling other windows.
+    renderer = meta[7] if len(meta) > 7 else None
+    xml = renderer(player, header, rows, widths, page_idx, total_pages) if callable(renderer) else None
+    if xml is None:
+        xml = _modern_command_window(aseco, player, header, rows, widths, page_idx, total_pages, refresh_action, icon=icon)
+    if xml is None:
+        xml = _build_multi_page_window(header, icon, rows, widths,
+                                      page_idx, total_pages, style, refresh_action=refresh_action)
     xml = aseco.format_colors(xml)
 
     # Keep autoclose disabled for multi-page windows.
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco,
         'SendDisplayManialinkPageToLogin', player.login, xml, 0, False
     )
 

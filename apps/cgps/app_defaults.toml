@@ -1,0 +1,16 @@
+[cgps]
+enabled = true
+
+[cgps.widget]
+enabled = true
+pos_x = 44.4
+pos_y = 32.8
+width = 4.6
+height = 6.5
+text_color = 'FC0F'
+background_style = 'BgsPlayerCard'
+background_substyle = 'ProgressBar'
+# Optional flat background override. Leave empty for Classic/Modern styling.
+background_color = ''
+icon_style = 'Icons64x64_1'
+icon_substyle = 'Camera'

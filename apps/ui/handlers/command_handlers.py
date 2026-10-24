@@ -96,6 +96,8 @@ async def chat_togglewidgets(aseco: 'Aseco', command: dict):
             await _hide(aseco, login, ml_id)
         await _send_chat(aseco, login, '{#server}>> Your record widgets are now hidden.')
 
+    await aseco.release_event('onWidgetVisibilityChanged', {'login': login, 'visible': visible})
+
 
 async def chat_eyepiece(aseco: 'Aseco', command: dict):
     from ..internal.utils import _mode_name
@@ -444,6 +446,10 @@ async def chat_estat(aseco: 'Aseco', command: dict) -> None:
         return
 
     if params == 'DEDIRECS':
+        from ..record_views import _is_ultimania_track_active, _open_ultimania_window
+        if await _is_ultimania_track_active(aseco):
+            await _open_ultimania_window(aseco, login)
+            return
         if await _is_rpg_track_active(aseco):
             xml = await _build_rpg_records_window(aseco, 0)
         elif await _is_trial_track_active(aseco):
@@ -472,7 +478,7 @@ async def chat_estat(aseco: 'Aseco', command: dict) -> None:
         ['$s/estat <param> — opens a stats window:', ''],
         [],
         ['LOCALRECS',    'Scrollable list of all local records on this track'],
-        ['DEDIRECS',     'Scrollable list of visible RPG/Trial/Dedimania records on this track'],
+        ['DEDIRECS',     'Scrollable list of visible Ultimania/RPG/Trial/Dedimania records'],
         ['TOPRANKS',     'Top-ranked players (by total rank sum)'],
         ['TOPWINNERS',   'Players with most race wins on this server'],
         ['MOSTRECORDS',  'Players holding the most local records'],

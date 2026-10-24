@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import shutil
+import sys
+from copy import deepcopy
 from contextvars import ContextVar
 from datetime import datetime
 from functools import wraps
@@ -72,6 +74,16 @@ def _guard_config_change(function):
 
 
 CONFIG_APPS: dict[str, dict[str, str]] = {
+    'pyxa_stats': {
+        'label': 'PYXA Stats',
+        'save_mode': 'reload',
+        'description': 'Optional external server snapshots and recent local records',
+    },
+    'seqinfomsg': {
+        'label': 'Sequential Info Messages',
+        'save_mode': 'reload',
+        'description': 'Periodic chat messages and broadcast interval',
+    },
     'admin': {
         'label': 'Admin',
         'save_mode': 'restart',
@@ -347,14 +359,21 @@ def _is_ui_discovery_excluded(table_path: tuple[str, ...]) -> bool:
     return any(tuple(lowered[:len(prefix)]) == tuple(str(part).strip().lower() for part in prefix) for prefix in UI_DISCOVERY_EXCLUDE_PREFIXES)
 
 
+def _can_configure_app(aseco, app_key):
+    if not (_apps_dir(aseco) / app_key).is_dir() or _standalone_loadout_state(aseco, app_key) != 'enabled':
+        return False
+    active = getattr(aseco, 'active_apps', None)
+    return active is None or app_key in active
+
+
 def _discover_config_apps(aseco: 'Aseco') -> dict[str, dict[str, str]]:
-    discovered = dict(CONFIG_APPS)
+    discovered = {key: spec for key, spec in CONFIG_APPS.items() if _can_configure_app(aseco, key)}
     apps_dir = _apps_dir(aseco)
     if not apps_dir.exists():
         return discovered
     for path in sorted(apps_dir.glob('*/app_defaults.toml')):
         app_key = path.parent.name
-        if app_key == '00removed' or app_key in CONFIG_APP_DISCOVERY_EXCLUDE:
+        if app_key == '00removed' or app_key in CONFIG_APP_DISCOVERY_EXCLUDE or not _can_configure_app(aseco, app_key):
             continue
         discovered.setdefault(app_key, {
             'label': app_key.replace('_', ' ').title(),
@@ -1075,6 +1094,23 @@ def _editable_fields(aseco: 'Aseco', item: dict[str, Any]) -> list[dict[str, Any
     return _editable_fields_from_info(aseco, item, _config_item_target_info(aseco, item))
 
 
+def _write_config_value(aseco, item, file_path, table_path, field_key, value):
+    parts = Path(item['file']).parts
+    module = sys.modules.get(f'apps.{parts[1]}.app') if len(parts) == 3 and parts[0] == 'apps' else None
+    validator = getattr(module, 'validate_config', None)
+    if callable(validator):
+        document = deepcopy(read_toml(file_path))
+        table = document
+        for key in table_path:
+            table = table.setdefault(key, {})
+        table[field_key] = value
+        try:
+            validator(document, _root_dir(aseco))
+        except ValueError as error:
+            raise ValueError(f'Not saved: {error}') from error
+    update_toml_table_scalar(file_path, table_path, field_key, value)
+
+
 @_guard_config_change
 def _update_config_field(aseco: 'Aseco', item: dict[str, Any], field_key: str, delta: float) -> str:
     info = _config_item_target_info(aseco, item)
@@ -1099,7 +1135,7 @@ def _update_config_field(aseco: 'Aseco', item: dict[str, Any], field_key: str, d
     if spec['kind'] == 'bool':
         next_value = True if delta >= 0 else False
         stored_value: Any = str(next_value).lower() if spec.get('storage') == 'string' else next_value
-        update_toml_table_scalar(file_path, table_path, write_field_key, stored_value)
+        _write_config_value(aseco, item, file_path, table_path, write_field_key, stored_value)
         return f'{item["key"]}.{field_key} = {_display_value(next_value)}'
 
     current = float(spec['value'])
@@ -1112,7 +1148,7 @@ def _update_config_field(aseco: 'Aseco', item: dict[str, Any], field_key: str, d
             x = float(next_value)
         else:
             y = float(next_value)
-        update_toml_table_scalar(file_path, table_path, 'position', f'{_display_value(x)} {_display_value(y)}')
+        _write_config_value(aseco, item, file_path, table_path, 'position', f'{_display_value(x)} {_display_value(y)}')
     elif field_key in {'size_w', 'size_h'}:
         pair = _parse_pair(table.get('size')) or (0.0, 0.0)
         w, h = pair
@@ -1120,10 +1156,10 @@ def _update_config_field(aseco: 'Aseco', item: dict[str, Any], field_key: str, d
             w = float(next_value)
         else:
             h = float(next_value)
-        update_toml_table_scalar(file_path, table_path, 'size', f'{_display_value(w)} {_display_value(h)}')
+        _write_config_value(aseco, item, file_path, table_path, 'size', f'{_display_value(w)} {_display_value(h)}')
     else:
         stored_value: Any = str(next_value) if spec.get('storage') == 'string' else next_value
-        update_toml_table_scalar(file_path, table_path, write_field_key, stored_value)
+        _write_config_value(aseco, item, file_path, table_path, write_field_key, stored_value)
 
     return f'{item["key"]}.{field_key} = {_display_value(next_value)}'
 
@@ -1244,12 +1280,7 @@ def _find_config_item(aseco: 'Aseco', app_key: str, item_key: str) -> dict[str, 
 
 
 def _can_reload_app(aseco: 'Aseco', app_key: str) -> bool:
-    if app_key not in RELOADABLE_APPS:
-        return False
-    if app_key in MANAGEABLE_STANDALONE_APPS:
-        return _standalone_status(aseco, app_key) == 'enabled'
-    state = _standalone_loadout_state(aseco, app_key)
-    return state != 'disabled'
+    return app_key in RELOADABLE_APPS and _can_configure_app(aseco, app_key)
 
 
 def _config_save_mode(aseco: 'Aseco', app_key: str) -> str:
@@ -1461,7 +1492,7 @@ async def _apply_config_toggle(
 
     info = _config_item_target_info(aseco, item)
     write_path = _config_field_write_path(item, info, 'enabled')
-    update_toml_table_scalar(info['file_path'], write_path, 'enabled', enabled)
+    _write_config_value(aseco, item, info['file_path'], write_path, 'enabled', enabled)
 
     if _config_save_mode(aseco, app_key) == 'reload' and await _reload_app_runtime(aseco, app_key, item_key):
         return _reload_done_message(f'{app_key}.{item_key}.enabled = {str(enabled).lower()}')
@@ -1469,6 +1500,14 @@ async def _apply_config_toggle(
 
 
 async def handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
+    try:
+        return await _handle_apps_action(aseco, admin, answer)
+    except (ValueError, OSError) as error:
+        await _reply(aseco, getattr(admin, 'login', ''), '{#server}> {#error}Configuration not applied: ' + str(error))
+        return True
+
+
+async def _handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
     if not answer or len(answer) < 3:
         return False
     action_id = int(answer[2])
@@ -1482,6 +1521,13 @@ async def handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
         return True
 
     kind = payload[0]
+
+    if kind in {'open_config', 'open_edit', 'toggle_config', 'adjust_field', 'reload_app'}:
+        app_key = str(payload[1])
+        if not _can_configure_app(aseco, app_key):
+            await _reply(aseco, login, '{#server}> {#error}App ' + app_key +
+                         ' is not enabled and loaded, or its files are absent. No configuration was changed.')
+            return True
 
     if kind == 'open_config':
         _show_app_config_window(aseco, admin, str(payload[1]))
@@ -1563,6 +1609,13 @@ async def handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
 
 
 async def _handle_apps_command(aseco: 'Aseco', login: str, admin, args: list[str]) -> None:
+    try:
+        await _dispatch_apps_command(aseco, login, admin, args)
+    except (ValueError, OSError) as error:
+        await _reply(aseco, login, '{#server}> {#error}Configuration not applied: ' + str(error))
+
+
+async def _dispatch_apps_command(aseco: 'Aseco', login: str, admin, args: list[str]) -> None:
     if not _is_masteradmin(aseco, admin, login):
         await _reply(aseco, login, '{#server}> {#error}Only MasterAdmins may change app and feature states.')
         return
@@ -1592,6 +1645,10 @@ async def _handle_apps_command(aseco: 'Aseco', login: str, admin, args: list[str
     if action == 'reload':
         if not name:
             await _reply_apps_usage(aseco, login)
+            return
+        if not _can_configure_app(aseco, name):
+            await _reply(aseco, login, '{#server}> {#error}App ' + name +
+                         ' is not enabled and loaded, or its files are absent. Nothing reloaded.')
             return
         if await _reload_app_runtime(aseco, name):
             await _reply(aseco, login, _reload_done_message(f'app/{name}'))
@@ -1625,7 +1682,7 @@ async def _handle_apps_command(aseco: 'Aseco', login: str, admin, args: list[str
             await _reply_apps_usage(aseco, login)
             return
         # Dedimania has editable settings but also supports a service loadout toggle.
-        if name in config_apps and name != 'records_dedimania':
+        if name in config_apps and name not in MANAGEABLE_STANDALONE_APPS:
             await _reply(aseco, login, '{#server}> {#error}Use {#highlite}/admin apps config ' + name + '{#error} for merged features and UI-owned items.')
             return
         if _is_manageable_standalone_app(aseco, name):

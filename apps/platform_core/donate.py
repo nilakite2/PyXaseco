@@ -11,6 +11,8 @@ Also exposes:
 
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 import logging
 from html import escape
 from typing import TYPE_CHECKING
@@ -330,7 +332,7 @@ async def _display_payment(aseco: "Aseco", login: str, server: str, label: str):
         f'<label pos="-0.73 -0.19 -0.2" halign="center" style="CardButtonMedium" text="No" action="{ANSWER_PAY_NO}"/>'
         '</frame></manialink>'
     )
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco,
         "SendDisplayManialinkPageToLogin",
         login,
         aseco.format_colors(xml),

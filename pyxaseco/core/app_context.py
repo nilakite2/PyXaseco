@@ -118,7 +118,8 @@ class AppUiManager:
         self._context = context
 
     async def show(self, login: str, xml: str, timeout: int = 0, hide_click: bool = False) -> None:
-        await self._context.aseco.client.query_ignore_result(
+        from .widget_delivery import deliver_ui
+        await deliver_ui(self._context.aseco,
             "SendDisplayManialinkPageToLogin",
             login,
             xml,
@@ -127,7 +128,8 @@ class AppUiManager:
         )
 
     async def broadcast(self, xml: str, timeout: int = 0, hide_click: bool = False) -> None:
-        await self._context.aseco.client.query_ignore_result(
+        from .widget_delivery import deliver_ui
+        await deliver_ui(self._context.aseco,
             "SendDisplayManialinkPage",
             xml,
             timeout,

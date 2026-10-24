@@ -37,6 +37,7 @@ from .handlers.events import (
     _on_sync,
     _on_tracklist_changed,
     _on_trial_record,
+    _on_ui_style_changed,
     _on_voting_restart,
 )
 
@@ -55,7 +56,9 @@ class RecordsEyepieceCallbackSurface(Component):
                 Callback('onTmxMetadataLoaded', _metadata_loaded),
                 Callback('onTrialRecordsLoaded', _metadata_loaded),
                 Callback('onRpgRecordsLoaded', _metadata_loaded),
+                Callback('onUltimaniaRecordsLoaded', _on_dedi_record),
                 Callback('onSync', _on_sync),
+                Callback('onUiStyleChanged', _on_ui_style_changed),
                 Callback('onPlayerConnect', _on_player_connect),
                 Callback('onPlayerConnect2', _on_player_connect2),
                 Callback('onPlayerDisconnect', _on_player_disconnect),

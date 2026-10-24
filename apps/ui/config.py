@@ -592,9 +592,7 @@ def _load_config(aseco: 'Aseco') -> None:
     _state.dedi = _parse_gm_widgets(root, 'DEDIMANIA_RECORDS', 'Dedimania Records')
     _state.live = _parse_gm_widgets(root, 'LIVE_RANKINGS', 'Live Rankings', live=True)
 
-    # Stunts has no Dedimania
-    if Gameinfo.STNT in _state.dedi:
-        _state.dedi[Gameinfo.STNT].enabled = False
+    # Stunts shares this slot with optional Ultimania; Dedimania guards its own view.
 
     # ── Bar widgets (Phase 2) ─────────────────────────────────────────────
 
@@ -927,10 +925,6 @@ def apply_phase1_defaults(aseco: 'Aseco') -> None:
     _state.app_version = PLUGIN_VERSION
     _state.manialink_prefix = PLUGIN_MANIALINK_PREFIX
     _state.line_height = PLUGIN_LINE_HEIGHT
-
-    # No Ultimania or Music, but keep package Python-native.
-    if Gameinfo.STNT in _state.dedi:
-        _state.dedi[Gameinfo.STNT].enabled = False
 
     # Default format if placeholders are missing.
     rounds = _state.live.get(Gameinfo.RNDS)

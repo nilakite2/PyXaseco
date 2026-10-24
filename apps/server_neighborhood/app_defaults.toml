@@ -1,0 +1,20 @@
+[server_neighborhood]
+enabled = true
+# Every linked controller must use the SAME absolute local folder, for example
+# directory = 'C:\TrackMania_Servers\Neighborhood'
+# The default below is private to this controller until you configure a shared path.
+directory = 'server-neighborhood'
+# Empty discovers all files. Otherwise list server logins separated by commas.
+server_logins = ''
+refresh_interval = 10
+stale_seconds = 60
+
+[server_neighborhood.widget]
+enabled = true
+# Allowed range: 1-10.
+entries = 3
+pos_x = -64.7
+pos_y = -8.3
+# Allowed range: 15.5-40.
+width = 21.0
+show_on_score = false

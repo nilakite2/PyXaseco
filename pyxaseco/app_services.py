@@ -74,6 +74,22 @@ async def localdb_set_style(aseco, login: str, style_name: str):
     return None
 
 
+async def localdb_get_ui_style(aseco, login: str) -> int | None:
+    service = get_localdb_service(aseco)
+    impl = getattr(service, 'ldb_get_ui_style', None)
+    if not callable(impl):
+        raise RuntimeError('Local database UI style service is unavailable')
+    return await impl(aseco, login)
+
+
+async def localdb_set_ui_style(aseco, login: str, preset_id: int | None):
+    service = get_localdb_service(aseco)
+    impl = getattr(service, 'ldb_set_ui_style', None)
+    if not callable(impl):
+        raise RuntimeError('Local database UI style service is unavailable')
+    await impl(aseco, login, preset_id)
+
+
 async def localdb_get_panels(aseco, login: str):
     service = get_localdb_service(aseco)
     impl = getattr(service, 'ldb_get_panels', None) if service is not None else None

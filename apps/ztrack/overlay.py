@@ -11,6 +11,8 @@ Shows time delta vs a chosen local or dedi record at each checkpoint.
 """
 
 from __future__ import annotations
+
+from pyxaseco.core.widget_delivery import deliver_ui
 from typing import TYPE_CHECKING
 
 from pyxaseco.models import Gameinfo
@@ -126,7 +128,7 @@ async def chat_ztrack(aseco: 'Aseco', command: dict):
         _zt[login] = {'Mode': '', 'Rec': 0, 'Target': login}
 
         xml = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}"></manialink>'
-        await aseco.client.query_ignore_result(
+        await deliver_ui(aseco,
             'SendDisplayManialinkPageToLogin',
             login,
             xml,
@@ -152,12 +154,12 @@ async def zt_new_challenge(aseco: 'Aseco', _challenge):
     _zt = {}
 
     xml = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}"></manialink>'
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
 
 
 async def zt_end_race(aseco: 'Aseco', _params):
     xml = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}"></manialink>'
-    await aseco.client.query_ignore_result('SendDisplayManialinkPage', xml, 0, False)
+    await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
 
 
 async def zt_player_connect(aseco: 'Aseco', player: 'Player'):
@@ -336,7 +338,7 @@ async def _send_ml(aseco: 'Aseco', login: str, time_val):
     else:
         xml = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}"></manialink>'
 
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco,
         'SendDisplayManialinkPageToLogin', login, xml, 0, False
     )
 
@@ -367,7 +369,7 @@ async def _send_ml_self(aseco: 'Aseco', login: str, time_val):
     else:
         xml = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}"></manialink>'
 
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco,
         'SendDisplayManialinkPageToLogin', login, xml, 0, False
     )
 

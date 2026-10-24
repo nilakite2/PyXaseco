@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 import logging
 import time
 from typing import TYPE_CHECKING
@@ -103,11 +105,11 @@ class FreezoneState:
         if login:
             player = self.aseco.server.players.get_player(login)
             if player and not getattr(player, 'rights', False):
-                await self.aseco.client.query_ignore_result('SendDisplayManialinkPageToLogin', login, xml, 0, False)
+                await deliver_ui(self.aseco, 'SendDisplayManialinkPageToLogin', login, xml, 0, False)
             return
         for player in self.aseco.server.players.all():
             if not getattr(player, 'rights', False):
-                await self.aseco.client.query_ignore_result('SendDisplayManialinkPageToLogin', player.login, xml, 0, False)
+                await deliver_ui(self.aseco, 'SendDisplayManialinkPageToLogin', player.login, xml, 0, False)
 
     async def _api(self, method: str, path: str, data=None):
         if self.testmode:

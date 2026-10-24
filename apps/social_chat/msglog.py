@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+
 from typing import TYPE_CHECKING
 
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_bool, as_float, as_int, bind_app_settings
@@ -68,7 +70,7 @@ async def _msglog_button(aseco: 'Aseco', player):
         f'<quad sizen="1.65 1.65" style="Icons64x64_1" substyle="ArrowUp" action="{ML_ACTION_ID}"/>'
         '</frame></manialink>'
     )
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco,
         'SendDisplayManialinkPageToLogin',
         player.login,
         xml,

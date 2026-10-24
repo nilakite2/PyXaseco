@@ -1,0 +1,15 @@
+[seqinfomsg]
+enabled = true
+# Positive whole seconds. Invalid/zero/negative intervals fall back to 30.
+interval_seconds = 30
+
+# One message per row, broadcast in numeric ID order, then repeated.
+# /seq uses message_01 as ID 1, message_02 as ID 2, etc.; IDs are not renumbered.
+# New messages use the lowest free positive ID, filling gaps before adding IDs.
+# Other row names remain usable as exact IDs and follow numbered rows in file order.
+# Empty/whitespace-only messages are skipped. An empty table pauses broadcasting.
+# TMF formatting ($fff, $o, $l[http://...]...$l) and {#message} colors are supported.
+[seqinfomsg.messages]
+message_01 = 'Fufi is nice!'
+message_02 = 'TrackMania is awesome!'
+message_03 = 'Yay, this Plugin rocks bigtime!'

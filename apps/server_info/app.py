@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import commands, public_stats, uptodate
+from . import commands, uptodate
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -17,7 +17,6 @@ APP_METADATA = {
     "modules": [
         "apps/server_info/commands.py",
         "apps/server_info/overview.py",
-        "apps/server_info/public_stats.py",
         "apps/server_info/uptodate.py",
     ],
     "entries": [
@@ -25,8 +24,6 @@ APP_METADATA = {
     ],
     "provides": [
         "chat/server",
-        "app/public_stats",
-        "bridge/public_stats",
         "core/uptodate",
     ],
 }
@@ -50,11 +47,6 @@ class ServerInfoApp(App):
                 component_id='server_info.uptodate',
                 description='Version check and update notice surface.',
                 module=uptodate,
-            ),
-            ServerInfoModuleSurface(
-                component_id='server_info.public_stats',
-                description='External public statistics publishing surface.',
-                module=public_stats,
             ),
         )
         self.components = self.server_info_surfaces

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import Command, Component
 
-from . import lists, map, player, server, stalker_actionids, stalker_tools
+from . import lists, map, matchsettings, player, server, stalker_actionids, stalker_tools
 from .command_router import (
     chat_admin,
     chat_listadmins,
@@ -22,6 +22,16 @@ class AdminCommandSurface(Component):
             component_id='admin.commands',
             description='Admin chat commands and command metadata surface.',
             commands=(
+                Command(
+                    name='ms',
+                    help_text='Select and load MatchSettings (MasterAdmin only)',
+                    handler=matchsettings.command,
+                    is_admin=True,
+                    owner='chat/admin',
+                    usage='/ms [list]',
+                    category='admin-entry',
+                    role='masteradmin',
+                ),
                 Command(
                     name='admin',
                     help_text='Provides admin commands (see: /admin help)',

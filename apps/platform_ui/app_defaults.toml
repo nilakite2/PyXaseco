@@ -1,0 +1,2 @@
+[platform_ui.uistyle]
+default = 0 # Default for players without a personal UI preset.

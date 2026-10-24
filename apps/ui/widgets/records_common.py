@@ -11,6 +11,64 @@ if TYPE_CHECKING:
 
 
 ENTRY_OFFSET = 3.0
+ML_DEDI = 91811  # Shared external-provider slot, not owned by Dedimania.
+ML_WINDOW = 91800
+ML_SUBWIN = 91801
+
+
+def _digest_entries(entries: list, login: str) -> str:
+    return str(hash(str((login, [(e.get('rank'), e.get('login'), e.get('score'), e.get('self'))
+                                for e in entries]))))
+
+
+def _same_login(left: str, right: str) -> bool:
+    return str(left or '').strip().lower() == str(right or '').strip().lower()
+
+
+def _dedi_close_to_you(recs, login, limit, topcount, player_nick=None, include_no_record=True):
+    """Shared provider row selection; preserve the established Classic/Modern layout."""
+    if limit <= 0:
+        return []
+    topcount = max(0, min(topcount, limit))
+    better, worse, self_row = [], [], None
+    before_self = True
+    for index, record in enumerate(recs):
+        if not isinstance(record, dict):
+            continue
+        rec_login = str(record.get('login') or record.get('Login') or '')
+        entry = {'rank': int(record.get('rank') or index + 1), 'login': rec_login,
+                 'nickname': str(record.get('nickname') or record.get('NickName') or rec_login or '?'),
+                 'score': record.get('score'), 'self': -1, 'highlitefull': False}
+        if _same_login(rec_login, login):
+            self_row, before_self = entry, False
+        elif before_self:
+            better.append(entry)
+        else:
+            entry['self'] = 1
+            worse.append(entry)
+    pinned = better[:topcount] if len(better) > topcount else []
+    if pinned:
+        better = better[topcount:]
+    remaining = limit - len(pinned)
+    if self_row is None:
+        if not include_no_record:
+            return (pinned + (better[-remaining:] if remaining else []))[:limit]
+        placeholder = {'rank': '--', 'login': login, 'nickname': player_nick or login,
+                       'score': None, 'self': 0, 'highlitefull': False}
+        return (pinned + (better[-(remaining - 1):] if remaining > 1 else []) + [placeholder])[:limit]
+    selected = [dict(self_row, self=0)]
+    index = 0
+    while len(selected) < remaining and (index < len(better) or index < len(worse)):
+        if index < len(better):
+            selected.insert(0, dict(better[-1 - index], self=-1))
+        if len(selected) < remaining and index < len(worse):
+            selected.append(dict(worse[index], self=1))
+        index += 1
+    result = pinned + selected
+    for index, row in enumerate(result):
+        if row['self'] == 0:
+            row['highlitefull'] = index >= topcount
+    return result[:limit]
 
 
 def _build_online_marker(
@@ -85,10 +143,23 @@ def _build_record_widget(
     mode: int,
     is_live: bool = False,
     click_action: int | None = None,
+    aseco=None,
 ) -> str:
     """
     Builds the full ManiaLink XML for a record widget.
     """
+    if aseco is not None:
+        lookup = getattr(aseco, 'get_service', None)
+        service = lookup('ui/uistyle') if callable(lookup) else None
+        renderer = getattr(service, 'record_widget_xml', None)
+        if callable(renderer):
+            player = aseco.server.players.get_player(login)
+            xml = renderer(player, ml_id=ml_id, cfg=cfg, login=login,
+                           entries=[{**e, 'nickname': _handle_special_chars(e.get('nickname', ''))} for e in entries],
+                           online=online, mode=mode, is_live=is_live, mark_online=_state.mark_online and not is_live,
+                           click_action=click_action if click_action is not None else 382009003)
+            if xml is not None:
+                return xml
     st = _state.style
     w = cfg.width
 

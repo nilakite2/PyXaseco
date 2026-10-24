@@ -1,0 +1,14 @@
+[hidechat]
+enabled = true
+# on: always show; off: always hide; auto: hide after CP1 until finish/retire.
+# Initial mode on every connection. Player selections last for that session only.
+default_mode = 'on'
+# In Rounds/Team/Cup, auto can hide immediately when the round starts.
+auto_rounds = false
+global_messages = false
+
+[hidechat.button]
+enabled = true
+pos_x = -63.9
+pos_y = -40.0
+size = 1.6

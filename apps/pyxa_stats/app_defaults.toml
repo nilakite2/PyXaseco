@@ -1,0 +1,7 @@
+[pyxa_stats]
+enabled = true
+heartbeat_seconds = 240
+recent_keep = 5
+request_timeout = 20
+# Configure PYXA_STATS_API_BASE and PYXA_STATS_API_TOKEN in .env.
+# Legacy PUBLIC_STATS_API_BASE / PUBLIC_STATS_API_TOKEN remain supported.

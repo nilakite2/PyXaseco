@@ -1,0 +1,10 @@
+[preset]
+id = 4
+name = "Modern-Green"
+description = "Modern graphite UI with green accents."
+base = 1
+
+[palette]
+header = "253A"
+accent = "6E9F"
+selection = "253F"

@@ -157,7 +157,8 @@ async def _send_login(aseco: "Aseco", login: str, msg: str):
 
 
 async def _send_panel_xml(aseco: "Aseco", login: str, xml: str, timeout: int = 0, autoclose: bool = False):
-    await aseco.client.query_ignore_result(
+    from pyxaseco.core.widget_delivery import deliver_ui
+    await deliver_ui(aseco,
         "SendDisplayManialinkPageToLogin",
         login,
         aseco.format_colors(xml),
@@ -552,8 +553,9 @@ async def votepanel_off(aseco: "Aseco", login: str):
     await _send_panel_xml(aseco, login, _empty_panel_xml(PANEL_ID_VOTE), 0, False)
 
 async def allvotepanels_off(aseco: "Aseco"):
+    from pyxaseco.core.widget_delivery import deliver_ui
     xml = _empty_panel_xml(PANEL_ID_VOTE)
-    await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+    await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 def _is_spectator(player) -> bool:
     """Canonical spec check via spectatorstatus % 10."""

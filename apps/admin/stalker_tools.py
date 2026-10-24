@@ -13,6 +13,9 @@ Implements:
 
 from __future__ import annotations
 
+from pyxaseco.core.widget_delivery import deliver_ui
+from pyxaseco.core.chat_visibility import set_override as set_chat_override
+
 import html
 import logging
 import re
@@ -46,7 +49,6 @@ PLUGIN_NAME = "STALKER's Tools"
 PLUGIN_PREFIX = "$w$s$f00S$f80T$ff0A$0F0L$0FFK$00FE$009R$z$s"
 CHATALL_WRAP = 80
 CHATALL_PAGE = 15
-CHAT_HIDE_MLID = 998877
 feature_stalker_tools = False
 _st_state: "_StalkerToolsState | None" = None
 
@@ -135,20 +137,7 @@ async def _send_global(aseco: "Aseco", message: str):
 
 
 async def _set_chat_visible(aseco: "Aseco", login: str, visible: bool):
-    xml = (
-        "<manialinks>"
-        f"<manialink id=\"{CHAT_HIDE_MLID}\">"
-        f"<custom_ui><chat visible=\"{'true' if visible else 'false'}\"/></custom_ui>"
-        "</manialink>"
-        "</manialinks>"
-    )
-    await aseco.client.query_ignore_result(
-        "SendDisplayManialinkPageToLogin",
-        login,
-        xml,
-        0,
-        False,
-    )
+    await set_chat_override(aseco, login, 'admin', None if visible else False)
 
 
 @dataclass
@@ -443,7 +432,7 @@ async def st_log_all(aseco: "Aseco", chat: list):
 async def st_close_manialinks(aseco: "Aseco", _data=None):
     try:
         xml = f'<manialink id="{ML_ID_MAIN}"></manialink>'
-        await aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+        await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
     except Exception:
         pass
 
@@ -461,7 +450,7 @@ async def st_clean_manialinks(aseco: "Aseco", data=None):
     login = getattr(data, "login", getattr(data, "player", ""))
     if login:
         xml = f'<manialink id="{ML_ID_MAIN}"></manialink>'
-        await aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, 0, False)
+        await deliver_ui(aseco, "SendDisplayManialinkPageToLogin", login, xml, 0, False)
 
 
 async def st_clean_music(aseco: "Aseco", _data=None):
@@ -935,8 +924,7 @@ async def chat_st(aseco: "Aseco", command: dict):
         for login in list(_st_state.chat_ignored.keys()):
             found = True
             _st_state.chat_ignored.pop(login, None)
-            if aseco.server.players.get_player(login):
-                await chat_ui_send(aseco, login, True)
+            await chat_ui_send(aseco, login, True)
         if not found:
             await _send_login(aseco, player.login, "{#server}> {#error}No ignored players found!")
             return

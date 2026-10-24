@@ -1,0 +1,8 @@
+[quotes]
+enabled = true
+# Seconds between public quotes per player; administrators have the same limit.
+cooldown_seconds = 5
+
+# No automatic broadcasts. New quotes fill the lowest unused positive ID.
+# TMF formatting and {#message} colors are supported, just like seqinfomsg.
+[quotes.messages]

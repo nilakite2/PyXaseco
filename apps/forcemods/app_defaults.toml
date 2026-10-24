@@ -1,0 +1,24 @@
+[forcemods]
+enabled = true
+# off, sequential or random. Forcing is server-wide, not per player.
+mode = 'sequential'
+# false: respect mods embedded in maps; true: replace them.
+override = false
+
+# Add one named table per mod. Entries rotate in file order for each environment.
+# Empty environments = all seven TMF environments. Names or IDs 1-7 are accepted.
+# HTTPS input is converted to HTTP: the host must serve the ZIP over plain HTTP.
+# Examples (replace the URLs before enabling):
+# [forcemods.mods.stadium_one]
+# name = 'My Stadium Mod'
+# url = 'http://your-host.example/mods/stadium.zip'
+# environments = 'Stadium'
+# enabled = true
+#
+# [forcemods.mods.multi_environment]
+# name = 'Another Mod'
+# url = 'http://your-host.example/mods/multi.zip'
+# environments = 'Island,Speed,Alpine'
+# enabled = false
+
+[forcemods.mods]

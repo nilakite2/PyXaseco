@@ -202,6 +202,11 @@ row_height = 1.8
 
 [ui.dedimania_records.gamemode.stunts]
 enabled = true
+pos_x = -64.7
+pos_y = 23.65
+entries = 12
+topcount = 3
+row_height = 1.8
 
 [ui.dedimania_records.gamemode.cup]
 enabled = true

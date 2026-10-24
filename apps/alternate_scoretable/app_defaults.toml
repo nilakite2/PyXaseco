@@ -1,0 +1,28 @@
+[alternate_scoretable]
+enabled = true
+# Rows per page: 5-20. No empty rows are drawn.
+entries = 20
+show_at_score = true
+show_at_finish = true
+# Delays: 0-30 seconds. Durations: 1-120 seconds.
+delay_score_display = 5
+delay_finish_display = 3
+score_display_time = 20
+finish_display_time = 8
+
+[alternate_scoretable.columns]
+pb = true
+finishes = true
+ladder = true
+online = true
+
+[alternate_scoretable.button]
+enabled = true
+pos_x = -52.5
+pos_y = -28.5
+width = 4.6
+height = 6.5
+text_color = 'FC0F'
+background_style = 'BgsPlayerCard'
+background_substyle = 'ProgressBar'
+background_color = ''

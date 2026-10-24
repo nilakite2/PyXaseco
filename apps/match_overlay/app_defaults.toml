@@ -1,0 +1,16 @@
+[match_overlay]
+enabled = true
+# Like the original: activate manually using /moverlay enable in Team mode.
+autoenable = false
+audience = 'spectators'
+refresh_interval = 5
+show_on_score = false
+
+[match_overlay.teams]
+blue = 'Blue Team'
+red = 'Red Team'
+
+[match_overlay.display]
+pos_x = -42.5
+pos_y = 45.0
+width = 85.0

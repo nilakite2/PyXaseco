@@ -35,7 +35,8 @@ def _digest_entries(entries: list, login: str) -> str:
     return str(hash(key))
 
 
-def _close_to_you(records, login: str, limit: int, topcount: int, player_nick: str | None = None) -> list:
+def _close_to_you(records, login: str, limit: int, topcount: int, player_nick: str | None = None,
+                  include_no_record: bool = True) -> list:
     better: list = []
     worse: list = []
     self_r = None
@@ -72,6 +73,9 @@ def _close_to_you(records, login: str, limit: int, topcount: int, player_nick: s
 
     # ── No record for this player — show placeholder at the bottom ─────────
     if self_r is None:
+        if not include_no_record:
+            neighbours = better[-ctu_count:] if ctu_count > 0 else []
+            return (array_top + neighbours)[:limit]
         placeholder = {
             'rank': '--',
             'login': login,
@@ -155,21 +159,30 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
     player = aseco.server.players.get_player(login)
     player_nick = player.nickname if player and getattr(player, 'nickname', '') else login
 
-    entries = _close_to_you(all_recs, login, cfg.entries, cfg.topcount, player_nick)
-
-    digest = _digest_entries(entries, login)
+    lookup = getattr(aseco, 'get_service', None)
+    service = lookup('ui/uistyle') if callable(lookup) else None
+    renderer = getattr(service, 'local_records_xml', None)
+    preset = service.resolve(player) if service is not None else None
+    preset_id = preset.id if preset is not None else 0
+    entries = _close_to_you(all_recs, login, cfg.entries, cfg.topcount, player_nick,
+                            include_no_record=preset is None or preset.base != 1)
+    xml = renderer(player, ml_id=ML_LOCAL, cfg=cfg, login=login,
+                   entries=[{**entry, 'nickname': _handle_special_chars(entry.get('nickname', ''))} for entry in entries],
+                   online=online, mode=mode, mark_online=_state.mark_online) if callable(renderer) else None
+    if xml is None:
+        xml = _build_record_widget(
+            ml_id=ML_LOCAL,
+            cfg=cfg,
+            login=login,
+            entries=entries,
+            online=online,
+            mode=mode,
+            click_action=91805,
+        )
+    # Full presentation participates: preset, nicknames, online markers and layout.
+    digest = str(hash((preset_id, xml)))
     if _state.player_local_digest.get(login) == digest:
         return
-
-    xml = _build_record_widget(
-        ml_id=ML_LOCAL,
-        cfg=cfg,
-        login=login,
-        entries=entries,
-        online=online,
-        mode=mode,
-        click_action=91805,
-    )
     await _send(aseco, login, xml)
     _state.player_local_digest[login] = digest
 

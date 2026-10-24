@@ -17,6 +17,7 @@ Port notes:
 """
 
 import logging
+from pyxaseco.core.widget_delivery import deliver_ui
 import json
 import sys
 import tomllib
@@ -279,7 +280,7 @@ class FufiMenu:
                         "plugin.panels.php",
                         "chat.lastwin.php",
                     ],
-                    "app/server_info": ["bridge.public_stats.php"],
+                    "app/pyxa_stats": ["bridge.public_stats.php"],
                     "app/discord": ["bridge.discord.php", "plugin.discord_webhook.php"],
                     "app/jukebox": [
                         "plugin.rasp_jukebox.php",
@@ -713,11 +714,11 @@ class FufiMenu:
                 self.first_challenge = False
             if getattr(self.aseco, "debug", False):
                 self.aseco.console("[FufiMenu] sending menu button to all")
-            await self.aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+            await deliver_ui(self.aseco, "SendDisplayManialinkPage", xml, 0, False)
         else:
             if getattr(self.aseco, "debug", False):
                 self.aseco.console("[FufiMenu] sending menu button to login: {1}", login)
-            await self.aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, 0, False)
+            await deliver_ui(self.aseco, "SendDisplayManialinkPageToLogin", login, xml, 0, False)
 
     async def handle_click(self, playerid: int, login: str, action: str):
         if not self.blocks:
@@ -858,7 +859,7 @@ class FufiMenu:
 
     async def close_menu(self, login: str):
         xml = f'<?xml version="1.0" encoding="UTF-8"?><manialinks><manialink id="{self.manialink_id}0001"></manialink></manialinks>'
-        await self.aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, 0, False)
+        await deliver_ui(self.aseco, "SendDisplayManialinkPageToLogin", login, xml, 0, False)
 
     async def hide_menu_everywhere(self):
         xml = (
@@ -867,7 +868,7 @@ class FufiMenu:
             f'<manialink id="{self.manialink_id}0001"></manialink>'
             '</manialinks>'
         )
-        await self.aseco.client.query_ignore_result("SendDisplayManialinkPage", xml, 0, False)
+        await deliver_ui(self.aseco, "SendDisplayManialinkPage", xml, 0, False)
 
     async def update_menu(self, login: str, id_: str):
         ids = self.get_window_ids(id_)
@@ -953,7 +954,7 @@ class FufiMenu:
         footer = self.blocks["footer"]
         xml = header + content + footer
 
-        await self.aseco.client.query_ignore_result("SendDisplayManialinkPageToLogin", login, xml, self.menutimeout, False)
+        await deliver_ui(self.aseco, "SendDisplayManialinkPageToLogin", login, xml, self.menutimeout, False)
 
     def get_item_offset(self, entries: list[FufiMenuEntry], id_: str) -> float:
         result = 0.0

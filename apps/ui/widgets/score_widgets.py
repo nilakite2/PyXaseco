@@ -219,7 +219,11 @@ def build_dedi_records_for_score(aseco: 'Aseco') -> str:
             rpg_track = None
             rpg_rows = []
 
-        if isinstance(rpg_track, dict) and rpg_rows:
+        ulti = aseco.services.get('service/records_ultimania') if 'records_ultimania' in getattr(aseco, 'active_apps', ()) else None
+        if ulti is not None and ulti.active(aseco):
+            score_cfg['title'] = 'Ultimania Records'
+            source_rows = ulti.rows
+        elif isinstance(rpg_track, dict) and rpg_rows:
             score_cfg['title'] = _rpg_title(rpg_track.get('stars'))
             source_rows = rpg_rows
         else:

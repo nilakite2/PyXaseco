@@ -14,26 +14,14 @@ from apps.ui.hud import (
     append_four_player_columns,
 )
 from apps.ui.internal.utils import _handle_special_chars
+from apps.ui.widgets.records_common import (
+    ML_DEDI, ML_WINDOW, ML_SUBWIN, _digest_entries, _same_login, _dedi_close_to_you,
+)
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
 logger = logging.getLogger(__name__)
-
-ML_DEDI = 91811
-ML_WINDOW = 91800
-ML_SUBWIN = 91801
-
-
-def _digest_entries(entries: list, login: str) -> str:
-    key = str((login, [(e.get('rank'), e.get('login'), e.get('score'), e.get('self'))
-                       for e in entries]))
-    return str(hash(key))
-
-
-def _same_login(left: str, right: str) -> bool:
-    return str(left or '').strip().lower() == str(right or '').strip().lower()
-
 
 def _normalise_dedi_record(rec: dict, rank: int) -> dict | None:
     if not isinstance(rec, dict):
@@ -74,114 +62,6 @@ def _normalise_dedi_record(rec: dict, rank: int) -> dict | None:
     }
 
 
-def _dedi_close_to_you(
-    recs: list,
-    login: str,
-    limit: int,
-    topcount: int,
-    player_nick: str | None = None,
-) -> list:
-    better: list = []
-    worse: list = []
-    self_r = None
-    is_better = True
-
-    for i, rec in enumerate(recs):
-        if not isinstance(rec, dict):
-            continue
-
-        rl = str(rec.get('login') or rec.get('Login') or '')
-        nick = str(rec.get('nickname') or rec.get('NickName') or rl or '?')
-        score = rec.get('score')
-
-        entry = {
-            'rank': int(rec.get('rank') or (i + 1)),
-            'login': rl,
-            'nickname': nick,
-            'score': score,
-            'self': -1,
-            'highlitefull': False,
-        }
-
-        if _same_login(rl, login):
-            self_r = entry
-            is_better = False
-        elif is_better:
-            better.append(entry)
-        else:
-            entry['self'] = 1
-            worse.append(entry)
-
-    
-    # Top-X pinning
-    array_top: list = []
-    ctu_count = limit
-    if len(better) > topcount:
-        for _ in range(topcount):
-            e = better.pop(0)
-            e['self'] = -1
-            array_top.append(e)
-        ctu_count -= topcount
-    
-    # No record for this player - keep the placeholder row
-    if self_r is None:
-        placeholder = {
-            'rank': '--',
-            'login': login,
-            'nickname': player_nick or login,
-            'score': None,
-            'self': 0,
-            'highlitefull': False,
-        }
-        result: list = [None] * ctu_count
-        last_idx = ctu_count - 1
-        result[last_idx] = placeholder
-        for i in range(len(better) - 1, -1, -1):
-            last_idx -= 1
-            if last_idx >= 0:
-                result[last_idx] = better[i]
-                result[last_idx]['self'] = -1
-        result = [r for r in result if r is not None]
-        return (array_top + result)[:limit]
-
-    # Alternate one-before / one-after around self
-    result_new: list = [dict(self_r)]
-    result_new[0]['self'] = 0
-    idx = 0
-    has_better = True
-    has_worse = True
-
-    while len(result_new) < ctu_count and (has_better or has_worse):
-        if has_better and len(better) >= idx + 1:
-            r = dict(better[len(better) - 1 - idx])
-            r['self'] = -1
-            result_new = [r] + result_new
-        else:
-            has_better = False
-
-        if len(result_new) < ctu_count:
-            if has_worse and len(worse) >= idx + 1:
-                r = dict(worse[idx])
-                r['self'] = 1
-                result_new.append(r)
-            else:
-                has_worse = False
-        idx += 1
-
-    result = array_top + result_new
-
-    result_clean: list = []
-    count = 0
-    for item in result:
-        if item is not None:
-            if item.get('self') == 0:
-                item['highlitefull'] = count >= topcount
-            result_clean.append(item)
-            count += 1
-    
-    return result_clean[:limit]
-
-
 def _get_dedi_records(aseco: 'Aseco' | None = None) -> list:
     try:
         runtime = aseco or getattr(_state, 'aseco', None)
@@ -219,7 +99,7 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
 
     mode = _effective_mode(aseco)
     cfg = _state.dedi.get(mode)
-    if not cfg or not cfg.enabled:
+    if mode == Gameinfo.STNT or not cfg or not cfg.enabled:
         await _hide(aseco, login, ML_DEDI)
         return
 
@@ -231,9 +111,12 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
     player = aseco.server.players.get_player(login)
     player_nick = player.nickname if player and getattr(player, 'nickname', '') else login
 
-    entries = _dedi_close_to_you(raw_recs, login, cfg.entries, cfg.topcount, player_nick)
+    lookup = getattr(aseco, 'get_service', None)
+    ui_style = lookup('ui/uistyle') if callable(lookup) else None
+    modern = ui_style is not None and ui_style.resolve(player).base == 1
+    entries = _dedi_close_to_you(raw_recs, login, cfg.entries, cfg.topcount, player_nick, include_no_record=not modern)
     # Hard fallback: never allow an empty Dedi widget body.
-    if not entries:
+    if not entries and not modern:
         entries = [{
             'rank': '--',
             'login': login,
@@ -243,11 +126,8 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
             'highlitefull': False,
         }]
 
-    digest = _digest_entries(entries, login)
-    if _state.player_dedi_digest.get(login) == digest:
-        return
-
     xml = _build_record_widget(
+        aseco=aseco,
         ml_id=ML_DEDI,
         cfg=cfg,
         login=login,
@@ -256,6 +136,9 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
         mode=mode,
         click_action=91804,
     )
+    digest = str(hash(xml))
+    if _state.player_dedi_digest.get(login) == digest:
+        return
     await _send(aseco, login, xml)
     _state.player_dedi_digest[login] = digest
 

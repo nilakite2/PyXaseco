@@ -52,6 +52,12 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
     if not player:
         return
 
+    from ..record_views import _is_ultimania_track_active, _open_ultimania_window
+    if (action == 8590000 or action == 91804 or 918200 <= action < 918300
+            or -918300 <= action <= -918200) and await _is_ultimania_track_active(aseco):
+        await _open_ultimania_window(aseco, login)
+        return
+
     # Delayed imports to avoid circular dependencies between split modules.
     from .command_handlers import chat_togglewidgets
     from ..tracklist import (

@@ -48,6 +48,7 @@ APP_METADATA = {
         "app/fufi_menu",
         "app/mania_karma",
         "ui/records_eyepiece/app",
+        "ui/custom_ui",
         "ui/fufi_menu",
         "ui/banner",
         "service/mania_karma",
@@ -122,6 +123,8 @@ class UiApp(App):
         )
 
     def register_runtime(self, aseco: 'Aseco') -> None:
+        from .handlers.events import _apply_custom_ui
+        aseco.register_service('ui/custom_ui', _apply_custom_ui, owner='ui')
         for component in self.components:
             component.register(aseco)
 

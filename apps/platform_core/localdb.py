@@ -89,6 +89,11 @@ async def get_pool() -> aiomysql.Pool:
     return _pool
 
 
+def connection_settings() -> dict:
+    """Local maintenance can reconnect after the normal app pool has closed."""
+    return dict(_settings)
+
+
 def register(aseco: 'Aseco'):
     aseco.register_service(
         'service/localdb',
@@ -217,6 +222,21 @@ async def ldb_reconnect(aseco: 'Aseco', _param=None):
         aseco.console('[LocalDB] Reconnected to MySQL Server')
 
 
+async def _ensure_ui_style_column(cur):
+    await cur.execute("SHOW COLUMNS FROM `players_extra` LIKE 'ui_style'")
+    if await cur.fetchone():
+        return
+    try:
+        await cur.execute('ALTER TABLE `players_extra` ADD COLUMN `ui_style` INT UNSIGNED NULL DEFAULT NULL')
+    except aiomysql.OperationalError as exc:
+        # Another controller may have completed the same additive migration.
+        if not exc.args or exc.args[0] != 1060:
+            raise
+        await cur.execute("SHOW COLUMNS FROM `players_extra` LIKE 'ui_style'")
+        if not await cur.fetchone():
+            raise
+
+
 async def _ensure_tables(aseco: 'Aseco'):
     """Create tables and apply the required schema migrations."""
     async with _pool.acquire() as conn:
@@ -268,6 +288,7 @@ async def _ensure_tables(aseco: 'Aseco'):
                   `dedicps` smallint(3) NOT NULL DEFAULT -1,
                   `donations` mediumint(9) NOT NULL DEFAULT 0,
                   `style` varchar(20) NOT NULL DEFAULT '',
+                  `ui_style` INT UNSIGNED NULL DEFAULT NULL,
                   `panels` varchar(255) NOT NULL DEFAULT '',
                   PRIMARY KEY (`playerID`), KEY `donations` (`donations`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -303,6 +324,8 @@ async def _ensure_tables(aseco: 'Aseco'):
                   KEY `challengeID` (`challengeID`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """)
+
+            await _ensure_ui_style_column(cur)
 
             # Repair legacy databases that still use older utf8 charsets.
             # This prevents backfill/insert failures on 4-byte TM formatting chars.
@@ -680,6 +703,34 @@ async def ldb_set_style(aseco: 'Aseco', login: str, style: str):
         async with conn.cursor() as cur:
             await cur.execute(
                 'UPDATE players_extra SET style=%s WHERE playerID=%s', (style, pid))
+
+
+async def ldb_get_ui_style(aseco: 'Aseco', login: str) -> int | None:
+    if _pool is None:
+        raise RuntimeError('Local database is unavailable')
+    pid = await _get_player_id(login)
+    if not pid:
+        raise LookupError('Player is not registered in the local database')
+    async with _pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute('SELECT ui_style FROM players_extra WHERE playerID=%s', (pid,))
+            row = await cur.fetchone()
+            return int(row[0]) if row and row[0] is not None else None
+
+
+async def ldb_set_ui_style(aseco: 'Aseco', login: str, preset_id: int | None) -> None:
+    if preset_id is not None and (type(preset_id) is not int or not 0 <= preset_id <= 2147483647):
+        raise ValueError('Invalid UI style ID')
+    if _pool is None:
+        raise RuntimeError('Local database is unavailable')
+    pid = await _get_player_id(login)
+    if not pid:
+        raise LookupError('Player is not registered in the local database')
+    async with _pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                'INSERT INTO players_extra (playerID, ui_style) VALUES (%s, %s) '
+                'ON DUPLICATE KEY UPDATE ui_style=VALUES(ui_style)', (pid, preset_id))
 
 
 async def ldb_get_panels(aseco: 'Aseco', login: str) -> dict:

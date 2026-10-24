@@ -1,0 +1,19 @@
+[preset]
+id = 1
+name = "Modern-Default"
+description = "Transparent graphite HUD, compact records, windows and menus."
+base = 1
+
+[palette]
+background = "1118"
+header = "123A"
+row = "2236"
+row_alt = "1126"
+accent = "3CFF"
+text = "EFFF"
+muted = "89AF"
+self = "164E"
+self_text = "9FFF"
+top = "FD8F"
+online = "7DAF"
+selection = "245F"

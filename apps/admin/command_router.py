@@ -9,6 +9,8 @@ Tier: MasterAdmin > Admin > Operator (with per-command ability checks).
 """
 
 from __future__ import annotations
+
+from pyxaseco.core.widget_delivery import deliver_ui
 import asyncio
 import importlib
 import logging
@@ -222,7 +224,7 @@ async def _hide_admin_panel(aseco: 'Aseco', login: str):
     Hide admin panel directly. Ownership lives in the admin chat runtime now.
     """
     try:
-        await aseco.client.query_ignore_result(
+        await deliver_ui(aseco,
             'SendDisplayManialinkPageToLogin',
             login,
             aseco.format_colors('<manialink id="3"></manialink>'),
@@ -367,7 +369,7 @@ def _auth_check(aseco: 'Aseco', admin, sub: str):
     sub = (sub or '').strip().lower()
 
     public_admin_commands = {'help', 'helpall', 'listmasters', 'listadmins', 'listops'}
-    masteradmin_only = {'addadmin', 'removeadmin'}
+    masteradmin_only = {'addadmin', 'removeadmin', 'cleanupserver'}
     admin_or_master_only = {'addop', 'removeop'}
 
     if sub in public_admin_commands:

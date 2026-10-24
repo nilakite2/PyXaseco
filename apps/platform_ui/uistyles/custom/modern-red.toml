@@ -1,0 +1,10 @@
+[preset]
+id = 3
+name = "Modern-Red"
+description = "Modern graphite UI with red accents."
+base = 1
+
+[palette]
+header = "522A"
+accent = "F66F"
+selection = "522F"

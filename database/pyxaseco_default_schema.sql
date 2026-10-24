@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS `players_extra` (
   `dedicps` smallint(3) NOT NULL DEFAULT -1,
   `donations` mediumint(9) NOT NULL DEFAULT 0,
   `style` varchar(20) NOT NULL DEFAULT '',
+  `ui_style` INT UNSIGNED NULL DEFAULT NULL,
   `panels` varchar(255) NOT NULL DEFAULT '',
   PRIMARY KEY (`playerID`),
   KEY `donations` (`donations`)

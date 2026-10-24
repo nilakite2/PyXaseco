@@ -5,6 +5,8 @@ players_chat.py - Port of plugins/chat.players.php
 """
 
 from __future__ import annotations
+
+from pyxaseco.core.widget_delivery import deliver_ui
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import ML_ID_MAIN, strip_colors, display_manialink_multi
 from pyxaseco.app_services import localdb_get_pool
@@ -186,7 +188,7 @@ async def event_players(aseco: 'Aseco', answer: list):
             target_login = player.playerlist[idx]['login']
             aseco.console('player {1} clicked command "/stats {2}"', login, target_login)
             xml = f'<manialink id="{ML_ID_MAIN}"></manialink>'
-            await aseco.client.query_ignore_result(
+            await deliver_ui(aseco,
                 'SendDisplayManialinkPageToLogin', login, xml, 0, False)
             from apps.players.stats import chat_stats
             await chat_stats(aseco, {'author': player, 'params': target_login})

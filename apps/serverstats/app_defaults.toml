@@ -1,0 +1,13 @@
+[serverstats]
+enabled = true
+# Sample every five minutes; valid range 60-3600 seconds.
+interval_seconds = 300
+# Keep seven days of samples; valid range 1-8760 hours. Sampled peaks persist.
+retention_hours = 168
+
+[serverstats.graph]
+# External website export, not an in-game ManiaLink image. No web hosting is started.
+enabled = false
+file = 'stats/serverstats.svg'
+width = 900
+height = 240

@@ -19,7 +19,7 @@ from apps.ui.internal.utils import _handle_special_chars, _safe_ml_text
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
 
-from apps.records_dedimania.records_widget import (
+from apps.ui.widgets.records_common import (
     ML_DEDI,
     ML_SUBWIN,
     ML_WINDOW,
@@ -189,8 +189,11 @@ async def _draw_rpg_player(aseco: "Aseco", login: str):
     player = aseco.server.players.get_player(login)
     player_nick = player.nickname if player and getattr(player, "nickname", "") else login
 
-    entries = _dedi_close_to_you(raw_recs, login, cfg.entries, cfg.topcount, player_nick)
-    if not entries:
+    lookup = getattr(aseco, 'get_service', None)
+    ui_style = lookup('ui/uistyle') if callable(lookup) else None
+    modern = ui_style is not None and ui_style.resolve(player).base == 1
+    entries = _dedi_close_to_you(raw_recs, login, cfg.entries, cfg.topcount, player_nick, include_no_record=not modern)
+    if not entries and not modern:
         entries = [{
             "rank": "--",
             "login": login,
@@ -202,14 +205,11 @@ async def _draw_rpg_player(aseco: "Aseco", login: str):
 
     track = await _get_rpg_track(aseco)
     title = safe_manialink_text(_rpg_title(track.get("stars") if isinstance(track, dict) else None), keep_colors=True)
-    digest = str(hash((title, _digest_entries(entries, login))))
-    if _state.player_dedi_digest.get(login) == digest:
-        return
-
     cfg_runtime = copy.copy(cfg)
     cfg_runtime.title = title
 
     xml = _build_record_widget(
+        aseco=aseco,
         ml_id=ML_DEDI,
         cfg=cfg_runtime,
         login=login,
@@ -218,6 +218,9 @@ async def _draw_rpg_player(aseco: "Aseco", login: str):
         mode=mode,
         click_action=91830,
     )
+    digest = str(hash(xml))
+    if _state.player_dedi_digest.get(login) == digest:
+        return
     await _send(aseco, login, xml)
     _state.player_dedi_digest[login] = digest
 

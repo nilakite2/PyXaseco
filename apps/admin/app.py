@@ -17,7 +17,9 @@ APP_METADATA = {
     "modules": [
         "apps/admin/command_router.py",
         "apps/admin/server.py",
+        "apps/admin/cleanup.py",
         "apps/admin/map.py",
+        "apps/admin/matchsettings.py",
         "apps/admin/player.py",
         "apps/admin/lists.py",
         "apps/admin/stalker_actionids.py",
@@ -32,7 +34,6 @@ APP_METADATA = {
         "chat/admin",
         "plugin_stalker_actionids",
         "plugin_stalker_tools",
-        "bridge/server_admin_bridge",
     ],
     "depends_on": [
         "platform_core",

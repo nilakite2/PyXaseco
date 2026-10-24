@@ -351,6 +351,9 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
     p.append('<frame posn="2.5 -5.7 0.05">')
 
     cur_challenge_uid = getattr(getattr(aseco.server, 'challenge', None), 'uid', '')
+    lookup = getattr(aseco, 'get_service', None)
+    service = lookup('ui/uistyle') if callable(lookup) else None
+    controls_renderer = getattr(service, 'tracklist_controls_xml', None)
 
     col = 0
     row = 0
@@ -390,11 +393,15 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
             p.append('<quad posn="0.7 -0.35 0.06" sizen="3 1.96" style="Icons128x128_1" substyle="Challenge"/>')
 
         can_drop = (aseco.allow_ability(player, 'dropjukebox') or jb_login == player.login)
+        controls = None
+        if callable(controls_renderer):
+            action = (-(TL_DROP_BASE + juked) if can_drop else None) if is_juked else TL_JB_BASE + global_idx
+            controls = controls_renderer(player, action=action, queue_position=juked)
 
         if is_recent and is_juked:
             p.append('<format textsize="1" textcolor="FFF8"/>')
             p.append(f'<quad posn="0 0 0.02" sizen="{CARD_W} {CARD_H}" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
-            if can_drop:
+            if can_drop and controls is None:
                 p.append(_drop_button_xml(-(TL_DROP_BASE + juked)))
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="Bgs1InRace" substyle="BgListLine"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textcolor="000F" textsize="1" text="Track #{i+1}"/>')
@@ -404,7 +411,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
         elif is_recent:
             p.append('<format textsize="1" textcolor="FFF8"/>')
             p.append(f'<quad posn="0 0 0.02" sizen="{CARD_W} {CARD_H}" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
-            p.append(_add_button_xml(TL_JB_BASE + global_idx))
+            if controls is None:
+                p.append(_add_button_xml(TL_JB_BASE + global_idx))
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textsize="1" text="Track #{i+1}"/>')
             p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')
@@ -413,7 +421,7 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
         elif is_juked:
             p.append('<format textsize="1" textcolor="FFFF"/>')
             p.append(f'<quad posn="0 0 0.02" sizen="{CARD_W} {CARD_H}" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
-            if can_drop:
+            if can_drop and controls is None:
                 p.append(_drop_button_xml(-(TL_DROP_BASE + juked)))
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="Bgs1InRace" substyle="BgListLine"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textcolor="000F" textsize="1" text="Track #{i+1}"/>')
@@ -423,7 +431,8 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
         else:
             p.append('<format textsize="1" textcolor="FFFF"/>')
             p.append(f'<quad posn="0 0 0.02" sizen="{CARD_W} {CARD_H}" style="BgsPlayerCard" substyle="BgRacePlayerName"/>')
-            p.append(_add_button_xml(TL_JB_BASE + global_idx))
+            if controls is None:
+                p.append(_add_button_xml(TL_JB_BASE + global_idx))
             p.append('<quad posn="0.4 -0.36 0.04" sizen="16.95 2" style="BgsPlayerCard" substyle="ProgressBar"/>')
             p.append(f'<label posn="3.8 -0.55 0.05" sizen="17.3 0" textsize="1" text="Track #{i+1}"/>')
             p.append(f'<label posn="1 -2.7 0.04" sizen="16 2" scale="1" text="{safe_manialink_text(name, keep_colors=True)}"/>')
@@ -432,18 +441,21 @@ def _build_tracklist_window(aseco, page, tracks, player, player_recs, title):
         if uid == cur_challenge_uid:
             p.append('<quad posn="15.3 0.4 0.06" sizen="3.4 3.4" style="BgRaceScore2" substyle="Fame"/>')
 
+        detail_offset = .8 if controls is not None else 0
         atime_str = format_time(atime_ms) if atime_ms else '--:--'
-        p.append('<quad posn="0.7 -6.9 0.04" sizen="1.6 1.5" style="BgRaceScore2" substyle="ScoreReplay"/>')
-        p.append(f'<label posn="2.4 -7.15 0.04" sizen="5 1.5" scale="0.75" text="{atime_str}"/>')
+        p.append(f'<quad posn="0.7 {-6.9 + detail_offset:g} 0.04" sizen="1.6 1.5" style="BgRaceScore2" substyle="ScoreReplay"/>')
+        p.append(f'<label posn="2.4 {-7.15 + detail_offset:g} 0.04" sizen="5 1.5" scale="0.75" text="{atime_str}"/>')
 
         rec = player_recs.get(uid)
         rank = rec['rank'] if rec and 1 <= rec['rank'] <= maxrecs else 0
         rank_str = f'{rank:0{len(str(maxrecs))}d}.' if rank > 0 else '$ZNone'
-        p.append('<quad posn="6.3 -6.8 0.04" sizen="2 1.6" style="Icons128x128_1" substyle="Rankings"/>')
-        p.append(f'<label posn="8.1 -7.15 0.04" sizen="3.8 1.5" scale="0.75" text="{rank_str}"/>')
+        p.append(f'<quad posn="6.3 {-6.8 + detail_offset:g} 0.04" sizen="2 1.6" style="Icons128x128_1" substyle="Rankings"/>')
+        p.append(f'<label posn="8.1 {-7.15 + detail_offset:g} 0.04" sizen="3.8 1.5" scale="0.75" text="{rank_str}"/>')
 
-        p.append('<quad posn="11.2 -6.8 0.04" sizen="1.6 1.6" style="Icons64x64_1" substyle="StateFavourite"/>')
-        p.append(f'<label posn="12.8 -7.15 0.04" sizen="2.2 1.5" scale="0.75" text="L{karma}"/>')
+        p.append(f'<quad posn="11.2 {-6.8 + detail_offset:g} 0.04" sizen="1.6 1.6" style="Icons64x64_1" substyle="StateFavourite"/>')
+        p.append(f'<label posn="12.8 {-7.15 + detail_offset:g} 0.04" sizen="2.2 1.5" scale="0.75" text="L{karma}"/>')
+        if controls is not None:
+            p.append(controls)
 
         p.append('</frame>')
 

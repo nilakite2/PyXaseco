@@ -182,6 +182,12 @@ def _overlay_env_from_config(data: dict[str, Any]) -> None:
             "public_stats/api_token",
             "server_info/public_stats/api_token",
         ),
+        "PYXA_STATS_API_BASE": (
+            "pyxa_stats/api_base",
+        ),
+        "PYXA_STATS_API_TOKEN": (
+            "pyxa_stats/api_token",
+        ),
         "DISCORD_ADMIN_WEBHOOK_URL": (
             "discord_webhook/admin_webhook_url",
             "discord_webhook/config/discord_webhook/admin_webhook_url",

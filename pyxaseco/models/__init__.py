@@ -145,6 +145,8 @@ class Player:
         self.mutelist: list = []
         self.mutebuf: list = []
         self.style: dict = {}
+        self.ui_style: int | None = None
+        self.ui_style_loaded: bool = False
         self.panels: dict = {}
         self.speclogin: str = ''
         self.dedirank: int = 0

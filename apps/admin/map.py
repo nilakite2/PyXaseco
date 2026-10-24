@@ -44,7 +44,7 @@ COMMAND_SPECS = [
     ('shuffle', 'Randomizes current track list'),
     ('shufflemaps', 'Randomizes current track list'),
     ('writetracklist', 'Saves current track list'),
-    ('readtracklist', 'Loads current track list'),
+    ('readtracklist', 'Loads MatchSettings [filename], or the selected/default list'),
     ('listdupes', 'Displays list of duplicate tracks'),
     ('delrec', 'Deletes specific record on current track'),
     ('prunerecs', 'Deletes records for specified track'),
@@ -380,13 +380,16 @@ async def handle_subcommand(
 
     if sub == 'readtracklist':
         try:
-            await aseco.client.query_ignore_result('LoadMatchSettings', 'MatchSettings/MatchSettings.txt')
-            await admin_chat._broadcast(
-                aseco,
-                admin_chat._fmt_admin(aseco, admin, chattitle, 'reloads track list!')
-            )
+            from .matchsettings import load
+            filename = await load(aseco, arg)
         except Exception as e:
-            await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{e}')
+            await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}Could not load MatchSettings: {e}')
+            return True
+        aseco.console('{1} [{2}] loaded track list: {3}', logtitle, login, filename)
+        await admin_chat._broadcast(
+            aseco,
+            admin_chat._fmt_admin(aseco, admin, chattitle, f'loads track list: {filename}')
+        )
         return True
 
     if sub in ('shuffle', 'shufflemaps'):

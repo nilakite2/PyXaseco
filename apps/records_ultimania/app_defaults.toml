@@ -1,0 +1,12 @@
+[records_ultimania]
+enabled = true
+# Matches the original service; HTTP sends data without transport encryption.
+api_base = 'http://ultimania5.askuri.de'
+refresh_interval = 180
+request_timeout = 15
+register_maps = true
+submit_records = true
+# Requires local access to GameData/Tracks/Replays. Failed uploads retain files.
+upload_replays = true
+show_record_messages = true
+public_rank_limit = 25

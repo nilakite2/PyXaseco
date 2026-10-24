@@ -48,7 +48,7 @@ from pyxaseco.models import (
 
 logger = logging.getLogger(__name__)
 
-PYXASECO_VERSION = '1.3'
+PYXASECO_VERSION = '1.4'
 TMF_BUILD = '2011-02-21'   # minimum required TMF dedicated server build
 
 # Dedicated server callbacks we handle
@@ -121,6 +121,7 @@ class Aseco:
         self._restart_requested: bool = False
         self._transport_noise_logged: bool = False
         self._shutdown_events_fired: bool = False
+        self._after_shutdown = None
 
         # Chat commands: name → ChatCommand
         self._chat_commands: dict[str, ChatCommand] = {}
@@ -463,13 +464,14 @@ class Aseco:
             'restart': self._restart_requested,
         })
 
-    async def shutdown(self, stop_server: bool = False):
+    async def shutdown(self, stop_server: bool = False, *, after_close=None):
         """
         Request a graceful shutdown of PyXaseco.
         If stop_server=True, also try to stop the dedicated server.
         """
         self._shutdown_requested = True
         self._shutdown_stop_server = bool(stop_server)
+        self._after_shutdown = after_close
 
         logger.info('Shutdown requested (stop_server=%s)', stop_server)
 
@@ -516,6 +518,15 @@ class Aseco:
         await self.performance.stop()
 
         await self.close_background()
+
+        if self._after_shutdown is not None:
+            action, self._after_shutdown = self._after_shutdown, None
+            # Maintenance must never re-exec into partially reset data on failure.
+            self._restart_requested = False
+            try:
+                self._restart_requested = await action() is True
+            except Exception:
+                logger.exception('Post-shutdown maintenance failed; controller remains stopped. Review the cleanup log and backups.')
 
         if self._shutdown_stop_server:
             lifecycle = self.get_service('management.lifecycle')
@@ -856,7 +867,7 @@ class Aseco:
             logger.warning('Callback backlog is %s; processing FIFO without dropping gameplay events',
                            len(self._callback_backlog))
         started, count = time.monotonic(), 0
-        while self._callback_backlog and count < 64:
+        while self._callback_backlog and count < 64 and not self._shutdown_requested:
             if count and time.monotonic() - started >= 0.01:
                 break
             method, params, received_at = self._callback_backlog.popleft()

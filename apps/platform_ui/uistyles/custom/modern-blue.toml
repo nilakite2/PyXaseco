@@ -1,0 +1,10 @@
+[preset]
+id = 6
+name = "Modern-Blue"
+description = "Modern graphite UI with blue accents."
+base = 1
+
+[palette]
+header = "235A"
+accent = "79FF"
+selection = "235F"

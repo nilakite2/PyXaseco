@@ -10,6 +10,7 @@ TMX HTTP calls are made with aiohttp.
 from __future__ import annotations
 
 import asyncio
+from pyxaseco.core.widget_delivery import deliver_ui
 from hashlib import sha256
 import html
 import logging
@@ -171,7 +172,7 @@ async def _display_manialink_track(
     )
     xml = xml.replace('{#black}', style['WINDOW'][0]['BLACKCOLOR'][0])
 
-    await aseco.client.query_ignore_result(
+    await deliver_ui(aseco,
         'SendDisplayManialinkPageToLogin',
         login,
         aseco.format_colors(xml),

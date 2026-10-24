@@ -45,6 +45,7 @@ COMMAND_SPECS = [
     ('pm', 'Sends private message to all available admins'),
     ('pmlog', 'Displays log of recent private admin messages'),
     ('apps', 'Opens the apps manager and optional app config tools'),
+    ('uistyle', 'Sets the server default UI preset: default <id>'),
     ('relays', 'Displays relays list or shows relay master'),
     ('access', 'Handles player access control'),
     ('mergegbl', 'Merges a global black list {URL}'),
@@ -54,6 +55,7 @@ COMMAND_SPECS = [
     ('pyres', 'Reinitializes the entire PyXaseco controller'),
     ('shutdown', 'Shuts down PyXaseco'),
     ('shutdownall', 'Shuts down Server & PyXaseco'),
+    ('cleanupserver', 'MasterAdmin only: preview/reset database or MatchSettings {db/ms/all}'),
 ]
 
 HANDLED_SUBCOMMANDS = {name for name, _help in COMMAND_SPECS}
@@ -1554,6 +1556,11 @@ async def handle_subcommand(
 ) -> bool:
     from . import command_router as admin_chat
 
+    if sub == 'cleanupserver':
+        from .cleanup import command as cleanup_command
+        await cleanup_command(aseco, admin, args)
+        return True
+
     if sub == 'unlock':
         lock_password = admin_chat._lock_password_enabled(aseco)
         if not lock_password:
@@ -1566,6 +1573,14 @@ async def handle_subcommand(
         else:
             aseco.console('{1} [{2}] failed unlock attempt', logtitle, login)
             await admin_chat._reply(aseco, login, '{#server}> {#error}Invalid unlock password.')
+        return True
+
+    if sub == 'uistyle':
+        service = aseco.get_service('ui/uistyle')
+        if service is None:
+            await admin_chat._reply(aseco, login, '{#server}> {#error}UI style management is unavailable.')
+        else:
+            await service.admin_command(admin, args)
         return True
 
     if sub == 'apps':
@@ -1629,7 +1644,22 @@ async def handle_subcommand(
             current_mode = getattr(getattr(aseco.server, 'gameinfo', None), 'mode', None)
             changing_mode = bool(getattr(aseco, 'changingmode', False))
             if changing_mode or current_mode != mode:
-                await aseco.client.query_ignore_result('SetGameMode', mode)
+                acknowledged = False
+                try:
+                    result = await aseco.client.query('SetGameMode', mode)
+                    if result is not True:
+                        raise RuntimeError(f'SetGameMode returned {result!r}')
+                    acknowledged = True
+                    next_info = await aseco.client.query('GetNextGameInfo')
+                    queued_mode = next_info.get('GameMode') if isinstance(next_info, dict) else None
+                    if queued_mode != mode:
+                        raise RuntimeError(f'requested mode {mode}, but GetNextGameInfo reports {queued_mode!r}')
+                except Exception as error:
+                    detail = ('Server acknowledged the request, but the queued mode could not be confirmed'
+                              if acknowledged else 'Server did not confirm the mode change')
+                    logger.warning('[Admin] Could not confirm game mode %s: %s', mode_name, error)
+                    await admin_chat._reply(aseco, login, f'{{#server}}> {{#error}}{detail}: {error}')
+                    return True
                 setattr(aseco, 'changingmode', True)
                 aseco.console('{1} [{2}] set new game mode [{3}]', logtitle, login, mode_name.upper())
                 await admin_chat._broadcast(

@@ -1,0 +1,10 @@
+[preset]
+id = 5
+name = "Modern-Orange"
+description = "Modern graphite UI with orange accents."
+base = 1
+
+[palette]
+header = "542A"
+accent = "FB6F"
+selection = "542F"

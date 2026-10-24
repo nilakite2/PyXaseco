@@ -1,0 +1,15 @@
+[dbtools]
+enabled = true
+# Keep backups private. This must be a subfolder inside the controller folder.
+directory = 'backups/dbtools'
+compress = true
+# Limit uncompressed SQL output. Background operations also have a 5-minute deadline.
+max_size_mb = 1024
+# Prune only after a successful backup. 0 disables automatic pruning.
+retention_days = 14
+# Always retain at least this many successful backups (minimum 1).
+keep_last = 3
+
+[dbtools.schedule]
+enabled = false
+interval_hours = 24

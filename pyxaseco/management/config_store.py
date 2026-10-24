@@ -282,6 +282,39 @@ def edit_toml(text: str, path: tuple[str, ...], value) -> str:
     return result
 
 
+def remove_toml_value(text: str, path: tuple[str, ...]) -> str:
+    """Remove one value while preserving unrelated TOML and comments."""
+    if not path or not all(isinstance(key, str) and key for key in path):
+        raise ManagementError('Setting path must contain nonempty keys')
+    wanted = deepcopy(tomllib.loads(text))
+    node = wanted
+    for key in path[:-1]:
+        node = node.get(key) if isinstance(node, dict) else None
+    if not isinstance(node, dict) or path[-1] not in node:
+        raise ManagementError('Setting does not exist')
+    if isinstance(node[path[-1]], dict):
+        raise ManagementError('Removing whole tables is not supported')
+    del node[path[-1]]
+    section = ()
+    for start, end, statement in _statements(text):
+        stripped = statement.lstrip()
+        if stripped.startswith('['):
+            section = None if stripped.startswith('[[') else _leaf_path(tomllib.loads(statement))
+            continue
+        if not stripped or stripped.startswith('#') or section is None:
+            continue
+        equals = next((i for i, char in _syntax(statement) if char == '='), None)
+        if equals is None:
+            continue
+        local_path = _leaf_path(tomllib.loads(statement[:equals] + '= 0'))
+        if (*section, *local_path) == path:
+            result = text[:start] + text[end:]
+            if tomllib.loads(result) == wanted:
+                return result
+            break
+    raise ManagementError('Unsupported TOML removal; original file was not changed')
+
+
 class ConfigStore:
     def __init__(self, root: str | Path):
         self.root = Path(root).resolve()

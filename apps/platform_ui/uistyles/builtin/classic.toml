@@ -1,0 +1,5 @@
+[preset]
+id = 0
+name = "Classic"
+description = "Existing PyXaseco HUD and personal window style."
+base = 0
