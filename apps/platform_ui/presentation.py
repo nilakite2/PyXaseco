@@ -54,6 +54,22 @@ def _remove_open_indicators(root):
     return changed
 
 
+def _style_cplive(root, palette):
+    """Keep clickable CP Live surfaces from becoming opaque selection buttons."""
+    changed = False
+    for page in root.iter('manialink'):
+        if page.get('id') not in ('1928378', '1928379'):
+            continue
+        for node in page.iter('quad'):
+            if not node.get('style', '').startswith('Bgs') or node.get('image'):
+                continue
+            node.attrib.pop('style', None)
+            node.attrib.pop('substyle', None)
+            node.set('bgcolor', palette['header'] if page.get('id') == '1928378' else '0000')
+            changed = True
+    return changed
+
+
 def _normalise_headers(root, palette):
     changed = False
     for frame in root.iter('frame'):
@@ -149,6 +165,7 @@ def style_xml(xml, palette):
         logger.warning('[UIStyle] Could not parse a UI page; preserving its original markup')
         return xml
     changed = _remove_open_indicators(root)
+    changed |= _style_cplive(root, palette)
     for parent in root.iter():
         seen = set()
         accent_added = False
