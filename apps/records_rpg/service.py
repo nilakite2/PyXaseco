@@ -22,6 +22,7 @@ import urllib.parse
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pyxaseco.core.gbx_client import GbxError
 from pyxaseco.helpers import display_manialink_multi, format_time, strip_colors
 
 if TYPE_CHECKING:
@@ -415,7 +416,12 @@ async def _upload_replay(path: Path) -> int:
 
 
 async def _save_best_ghost_replay(aseco: "Aseco", login: str, relative_path: str) -> bool:
-    result = await aseco.client.query("SaveBestGhostsReplay", login, relative_path)
+    try:
+        result = await aseco.client.query("SaveBestGhostsReplay", login, relative_path)
+    except GbxError as exc:
+        if exc.code == -1000 and exc.message.strip().rstrip('.').casefold() == 'no new replay':
+            return False
+        raise
     return bool(result)
 
 
@@ -585,7 +591,9 @@ async def _rpg_local_record(aseco: "Aseco", new_rec):
     # Capture the ghost before leaving the map. File stability/network work
     # belongs to the worker, not the authoritative finish callback.
     if not await _save_best_ghost_replay(aseco, login, relative):
-        logger.warning('[RPGRecords] Replay capture not acknowledged for %s', uid)
+        logger.warning(
+            '[RPGRecords] No replay captured for %s on %s (%s); RPG upload skipped, local record unchanged',
+            login, uid, format_time(score))
         return
     await _rpg_delivery(aseco).retain({
         'uid': uid, 'login': login, 'nickname': str(player.nickname), 'score': score,
