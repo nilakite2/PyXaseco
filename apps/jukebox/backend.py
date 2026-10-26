@@ -451,15 +451,82 @@ def _gbx_xml_attr(attributes: str, name: str) -> str:
     return html.unescape(match.group(1) if match.group(1) is not None else match.group(2)).strip()
 
 
+def _gbx_binary_metadata(data: bytes) -> dict:
+    if len(data) < 17 or data[:7] != b'GBX\x06\x00BU':
+        return {}
+    class_id = int.from_bytes(data[9:13], 'little')
+    if class_id not in (0x03043000, 0x24003000):
+        return {}
+    header_size = int.from_bytes(data[13:17], 'little')
+    if len(data) < 21 or header_size < 4:
+        raise ValueError('Invalid GBX map header')
+    count = int.from_bytes(data[17:21], 'little')
+    if not 1 <= count <= 4096 or 4 + count * 8 > header_size or 21 + count * 8 > len(data):
+        raise ValueError('Invalid GBX map chunk table')
+    offset, header_end, strings = 21 + count * 8, 17 + header_size, None
+    for index in range(count):
+        entry = 21 + index * 8
+        chunk_id = int.from_bytes(data[entry:entry + 4], 'little')
+        size = int.from_bytes(data[entry + 4:entry + 8], 'little') & 0x7fffffff
+        end = offset + size
+        if end > header_end:
+            raise ValueError('Invalid GBX map chunk size')
+        if chunk_id == class_id + 3:
+            if strings is not None:
+                raise ValueError('Duplicate GBX map identity chunk')
+            strings = (offset, end)
+        offset = end
+    if offset != header_end:
+        raise ValueError('Invalid GBX map header size')
+    if strings is None:
+        return {}
+    start, end = strings
+    if end > len(data) or start >= end:
+        raise ValueError('GBX map identity chunk is truncated')
+    position = start + 1  # The identity chunk begins with a one-byte chunk version.
+
+    def read(size):
+        nonlocal position
+        if size < 0 or position + size > end:
+            raise ValueError('GBX map identity is truncated')
+        value = data[position:position + size]
+        position += size
+        return value
+
+    def integer():
+        return int.from_bytes(read(4), 'little')
+
+    def text():
+        return read(integer() & 0x7fffffff).decode('utf-8', errors='replace').lstrip('\ufeff')
+
+    if integer() != 3:
+        raise ValueError('Unsupported GBX map lookback version')
+    lookbacks = []
+
+    def lookback():
+        marker = integer()
+        if marker == 0xffffffff:
+            return ''
+        if marker & 0xc0000000 == 0:
+            return ''  # External collection references; XML supplies their names.
+        index = marker & 0x3fffffff
+        if index == 0:
+            value = text()
+            lookbacks.append(value)
+            return value
+        if index > len(lookbacks):
+            raise ValueError('Invalid GBX map lookback reference')
+        return lookbacks[index - 1]
+
+    uid, environment, author = lookback(), lookback(), lookback()
+    name = text()
+    if not uid or '\x00' in uid:
+        raise ValueError('GBX map identity has no readable UID')
+    return {'uid': uid, 'name': name, 'author': author, 'environment': environment}
+
+
 def _parse_gbx_metadata(path: pathlib.Path) -> dict:
-    """
-    Parse track metadata from the GBX header XML embedded near the start of the file.
-    Extracts:
-      - uid
-      - name
-      - author
-      - environment
-    """
+    """Read the binary map identity, using embedded XML for supplementary metadata."""
     with open(path, 'rb') as f:
         data = f.read(262144)
 
@@ -475,12 +542,16 @@ def _parse_gbx_metadata(path: pathlib.Path) -> dict:
     author = _gbx_xml_attr(ident_attrs, 'author')
     environment = _gbx_xml_attr(desc_attrs, 'envir')
 
-    return {
+    metadata = {
         'uid': uid,
         'name': name,
         'author': author,
         'environment': environment,
     }
+    # Edited maps can retain an old <ident> UID. XAseco reads the actual binary
+    # identity chunk instead; use that too, keeping API/server identity checks.
+    metadata.update({key: value for key, value in _gbx_binary_metadata(data).items() if value})
+    return metadata
 
 def _sanitize_windows_filename(name: str) -> str:
     """
