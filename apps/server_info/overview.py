@@ -83,7 +83,7 @@ def enabled_integrations(aseco):
     return rows
 
 
-def server_rows(aseco, player):
+async def server_rows(aseco, player):
     server = aseco.server
     players = list(server.players.all())
     spectators = sum(bool(getattr(p, 'isspectator', False)) for p in players)
@@ -103,7 +103,11 @@ def server_rows(aseco, player):
     ]
     rights = 'United' if server.rights else 'Nations'
     if server.rights and aseco.allow_ability(player, 'server_coppers'):
-        rights += f" / Coppers: {int(getattr(server, 'coppers', 0) or 0)}"
+        try:
+            coppers = int(await aseco.client.query('GetServerCoppers'))
+        except Exception:
+            coppers = 'Unavailable'
+        rights += f' / Coppers: {coppers}'
     rows += [['Rights', rights], ['Ladder Limits', f'{server.laddermin} - {server.laddermax}']]
     # Retain dedicated voting settings where they were already displayed, but
     # remove the redundant "Voting info /helpvote" row.
@@ -179,7 +183,7 @@ async def show(aseco, player, view='server', page=0):
         await aseco.client.query_ignore_result('ChatSendServerMessageToLogin',
             aseco.format_colors('{#server}> {#error}Server overview details require the server admin ability.'), player.login)
         return
-    sections = [('server', server_rows(aseco, player))]
+    sections = [('server', await server_rows(aseco, player))]
     if privileged:
         sections += [('runtime', runtime_rows(aseco)), ('services', service_rows(aseco))]
     pages = []
