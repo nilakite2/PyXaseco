@@ -3,10 +3,9 @@
 enabled = false
 channel = "stable"
 # Exact same signed catalogue published on independent GitHub and website URLs.
-github_manifest = ""
-validation_manifest = ""
+github_manifest = "https://github.com/nilakite2/PyXaseco/releases/download/Stable/catalogue.json"
+validation_manifest = "https://tmtrialgy.com/api/pyxaseco/updates/stable.json"
 # Base64 of the 32-byte Ed25519 public key, provided locally by the publisher.
-# Never put the private signing key here, on GitHub, or on the website.
-public_key = ""
+public_key = "RhFrpVtHh0VICQisqx+JqvYZFAC9ce7qqokJhIR5Ir4="
 check_interval_seconds = 3600
 notice_interval_seconds = 1800
