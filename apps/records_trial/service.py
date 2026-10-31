@@ -14,6 +14,7 @@ Configure the API base/token below before deployment.
 from __future__ import annotations
 
 import logging
+import textwrap
 import time
 import urllib.parse
 from typing import TYPE_CHECKING
@@ -76,9 +77,10 @@ def _pick_display_name(*candidates: object) -> str:
     return values[0]
 
 
-async def _json_request(url: str) -> object:
+async def _json_request(url: str, *, timeout=30) -> object:
     from pyxaseco.core.external_io import request_legacy_json
-    return await request_legacy_json(_runtime_aseco, 'GET', url, headers=_build_headers(), owner='records_trial')
+    return await request_legacy_json(_runtime_aseco, 'GET', url, headers=_build_headers(),
+                                     timeout=timeout, owner='records_trial')
 
 
 async def _json_post(url: str, payload: dict) -> object:
@@ -219,12 +221,13 @@ def get_current_track_cache() -> dict | None:
     return dict(_current_track) if isinstance(_current_track, dict) else None
 
 
-async def get_trial_track(uid: str) -> dict | None:
+async def get_trial_track(uid: str, *, timeout=30, include_links=False) -> dict | None:
     if not is_enabled() or not uid:
         return None
-    payload = await _json_request(
-        f"{_trial_api_base()}/api/trial-tracks/{urllib.parse.quote(str(uid).strip(), safe='')}"
-    )
+    url = f"{_trial_api_base()}/api/trial-tracks/{urllib.parse.quote(str(uid).strip(), safe='')}"
+    if include_links:
+        url += '?include_links=1'
+    payload = await _json_request(url, timeout=timeout)
     row = _normalize_trial_track_payload(payload)
     if isinstance(row, dict) and not _track_matches_uid(row, uid):
         logger.info(
@@ -237,11 +240,11 @@ async def get_trial_track(uid: str) -> dict | None:
     return row if isinstance(row, dict) and row else None
 
 
-async def get_trial_records(uid: str, limit: int | None = None) -> list[dict]:
+async def get_trial_records(uid: str, limit: int | None = None, *, timeout=30) -> list[dict]:
     if not is_enabled() or not uid:
         return []
     payload = await _json_request(
-        f"{_trial_api_base()}/api/trial-records/{urllib.parse.quote(str(uid).strip(), safe='')}"
+        f"{_trial_api_base()}/api/trial-records/{urllib.parse.quote(str(uid).strip(), safe='')}", timeout=timeout
     )
     rows = _normalize_trial_records_payload(payload)
     if isinstance(limit, int) and limit > 0:
@@ -293,6 +296,10 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onShutdown', _tr_shutdown)
     aseco.add_chat_command('trialrecs', 'Displays all Trial Records on current track')
     aseco.register_event('onChat_trialrecs', chat_trialrecs)
+    aseco.add_chat_command('trialinfo', 'Displays Trial API information about the current track')
+    aseco.register_event('onChat_trialinfo', chat_trialinfo)
+    aseco.add_chat_command('trialpb', 'Displays your Trial personal best and saved checkpoint statistics')
+    aseco.register_event('onChat_trialpb', chat_trialpb)
 
 
 async def _tr_load_settings(aseco: 'Aseco', _param=None):
@@ -477,6 +484,238 @@ async def _send_chat(aseco: 'Aseco', login: str, message: str):
     await aseco.client.query_ignore_result(
         'ChatSendServerMessageToLogin', aseco.format_colors(message), login
     )
+
+
+async def chat_trialinfo(aseco: 'Aseco', command: dict):
+    await _chat_trial_details(aseco, command)
+
+
+async def chat_trialpb(aseco: 'Aseco', command: dict):
+    await _chat_trial_details(aseco, command, personal=True)
+
+
+async def _load_trial_pb(uid, login):
+    from . import info
+    track = await get_trial_track(uid, timeout=12)
+    result = {'track': track, 'record': None, 'stats': [], 'unavailable': False, 'limited': False, 'run': None}
+    if not track:
+        return result
+    records = await get_trial_records(uid, timeout=12)
+    storage_uid = _track_storage_uid(track)
+    if not records and storage_uid and storage_uid != uid:
+        records = await get_trial_records(storage_uid, timeout=12)
+    record = info.personal_record(records, login)
+    result['record'] = record
+    if record is None:
+        return result
+    try:
+        params = urllib.parse.urlencode({'login': record['best_login'], 'limit': 5000})
+        endpoint = urllib.parse.quote(uid, safe='')
+        payload = await _json_request(
+            f'{_trial_api_base()}/api/trial-checkpoint-runs/{endpoint}?{params}', timeout=12)
+        result['stats'], result['run'], result['limited'] = info.personal_splits(
+            payload, _track_all_uids(track), record)
+    except Exception as error:
+        logger.warning('[TrialRecords] Personal checkpoint information unavailable (%s)', type(error).__name__)
+        result['unavailable'] = True
+    return result
+
+
+async def _chat_trial_details(aseco: 'Aseco', command: dict, *, personal=False):
+    player = command['author']
+    login = player.login
+    name = 'trialpb' if personal else 'trialinfo'
+    if (command.get('params') or '').strip():
+        await _send_chat(aseco, login, f'{{#server}}> Usage: /{name} (current track).')
+        return
+    if not is_enabled():
+        await _send_chat(aseco, login, '{#server}> {#error}Trial records are disabled.')
+        return
+    uid = str(getattr(aseco.server.challenge, 'uid', '') or '').strip()
+    if not uid:
+        await _send_chat(aseco, login, '{#server}> {#error}No current challenge UID available.')
+        return
+
+    from pyxaseco.core.background_jobs import Admission, JobEnvelope, JobPolicy
+    from . import info
+    job = JobEnvelope.capture(aseco.capture_job_context(login=login), {'uid': uid, 'login': login})
+
+    async def operation(envelope):
+        requested_uid = envelope.payload()['uid']
+        if personal:
+            return await _load_trial_pb(requested_uid, envelope.payload()['login'])
+        track = await get_trial_track(requested_uid, include_links=True)
+        if not track:
+            return {'track': None, 'stats': [], 'unavailable': False}
+        try:
+            endpoint = urllib.parse.quote(requested_uid, safe='')
+            payload = await _json_request(
+                f'{_trial_api_base()}/api/trial-checkpoint-stats/{endpoint}', timeout=12)
+            stats = info.checkpoint_stats(payload, _track_all_uids(track))
+        except Exception as error:
+            logger.warning('[TrialRecords] Checkpoint information unavailable (%s)', type(error).__name__)
+            return {'track': track, 'stats': [], 'unavailable': True}
+        return {'track': track, 'stats': stats, 'unavailable': False}
+
+    async def apply(result):
+        if aseco.server.players.get_player(login) is not player:
+            return
+        if result.status != 'completed':
+            await _send_chat(aseco, login, '{#server}> {#error}Trial information unavailable; please try again later.')
+            return
+        data = result.value
+        track, stats, unavailable = data['track'], data['stats'], data['unavailable']
+        if not track:
+            await _send_chat(aseco, login, '{#server}> {#error}Current track was not found on the Trial API.')
+            return
+        if personal and data['record'] is None:
+            await _send_chat(aseco, login, '{#server}> No saved Trial personal best for you on this map.')
+            return
+        title = ('$zTrial PB: {#black}' if personal else '$zTrial Info: {#black}') + _trialinfo_text(track.get('name') or uid)
+        rows = _trialpb_rows(data) if personal else _trialinfo_rows(track)
+
+        def valid_page(controller, viewer):
+            context = controller.capture_job_context(login=login)
+            return (viewer is player
+                    and controller.server.players.get_player(login) is player
+                    and context == job.context)
+
+        await info.show(aseco, player, title, rows, stats, valid_page,
+                        unavailable=unavailable, personal=personal)
+
+    outcome = aseco.jobs.service('trial_lookup', JobPolicy(deadline_seconds=120)).submit(
+        job, operation, apply, dedupe_key=f'{name}:{id(player)}')
+    if outcome == Admission.ACCEPTED:
+        message = 'Loading your Trial personal best...' if personal else 'Loading fresh Trial information...'
+        await _send_chat(aseco, login, '{#server}> ' + message)
+    elif outcome != Admission.DUPLICATE:
+        await _send_chat(aseco, login, '{#server}> {#error}Trial lookup busy; please try again shortly.')
+
+
+def _trialinfo_text(value):
+    return str(value).replace('$', '$$')
+
+
+def _trialpb_rows(data):
+    track, record = data['track'], data['record']
+    values = [('Track', track.get('name') or track.get('uid_primary')),
+              ('Player', record['nickname']), ('Login', record['best_login']),
+              ('Trial rank', record['rank']), ('PB time', format_time(record['best_score'])),
+              ('List', track.get('note'))]
+    if data['run']:
+        values.append(('Run source', data['run'].get('source') or 'Unknown'))
+        respawns = [row['respawns_segment'] for row in data['stats']]
+        if any(value is not None for value in respawns):
+            suffix = ' (partial)' if any(value is None for value in respawns) else ''
+            values.append(('Recorded respawns', str(int(sum(value or 0 for value in respawns))) + suffix))
+    if data['limited']:
+        values.append(('Checkpoint search', 'API limit reached; only complete matching PB runs can be displayed.'))
+    rows = []
+    for label, value in values:
+        if value is None or str(value).strip() == '':
+            continue
+        for index, line in enumerate(textwrap.wrap(str(value), width=64)):
+            rows.append(['$z' + label if index == 0 else '', '{#black}' + _trialinfo_text(line)])
+    return rows
+
+
+def _trialinfo_link(url, label):
+    try:
+        parsed = urllib.parse.urlsplit(str(url or '').strip())
+        if parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username or parsed.password:
+            return ''
+        if any(char in parsed.netloc for char in '[]$'):
+            return ''
+        # TMF browser links require HTTP, including links returned as HTTPS by the API.
+        target = urllib.parse.urlunsplit(parsed._replace(scheme='http'))
+        target = target.replace('[', '%5B').replace(']', '%5D').replace('$', '%24')
+        if any(char.isspace() or ord(char) < 32 for char in target):
+            return ''
+        return f'$z$l[{target}]{label}$l'
+    except ValueError:
+        return ''
+
+
+def _trialinfo_map_links(track):
+    official = ''
+    links = track.get('map_links')
+    for item in links if isinstance(links, list) else []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            url = urllib.parse.urlsplit(str(item.get('url') or ''))
+            if (url.scheme not in ('http', 'https') or url.hostname not in ('tmrpgtrial.com', 'www.tmrpgtrial.com')
+                    or url.username or url.password or url.port is not None):
+                continue
+            map_id = url.path.removeprefix('/map/')
+            if (not url.path.startswith('/map/') or not 1 <= len(map_id) <= 191
+                    or not map_id.isascii() or not map_id.replace('-', '').replace('_', '').isalnum()):
+                continue
+            official = _trialinfo_link(f'http://tmrpgtrial.com/map/{map_id}', 'Open map on tmrpgtrial.com')
+            break
+        except ValueError:
+            continue
+    rows = [['$zTrial page', official or '$zNot available']]
+    tmx_id = int(track.get('tmx_id') or 0)
+    if tmx_id > 0:
+        path = f'/trial/{tmx_id}'
+        if track.get('tmx_section'):
+            path += '?' + urllib.parse.urlencode({'section': track['tmx_section']})
+    else:
+        uid = str(track.get('uid_primary') or track.get('challenge_uid') or _track_storage_uid(track) or '')
+        path = '/trial/uid/' + urllib.parse.quote(uid, safe='') if uid else ''
+    if path:
+        link = _trialinfo_link(_trial_api_base() + path, 'Open map on TMTG')
+        if link:
+            rows.append(['$zTMTG', link])
+    return rows
+
+
+def _trialinfo_rows(track):
+    rows = []
+
+    def add(label, value):
+        if value is None or str(value).strip() == '':
+            return
+        for index, line in enumerate(textwrap.wrap(str(value), width=64)):
+            rows.append(['$z' + label if index == 0 else '', '{#black}' + _trialinfo_text(line)])
+
+    add('Track', track.get('name'))
+    add('Author', track.get('author'))
+    add('Environment', track.get('environment'))
+    add('Points', track.get('points'))
+    if 'enabled' in track:
+        add('Trial enabled', 'No' if str(track['enabled']).strip().lower() in ('0', 'false', 'no', '') else 'Yes')
+    add('Records', track.get('total_records'))
+    best = int(track.get('best_score') or 0)
+    add('Best time', format_time(best) if best > 0 else 'No records')
+    add('TMX section', track.get('tmx_section'))
+    tmx_id = int(track.get('tmx_id') or 0)
+    if tmx_id > 0:
+        add('TMX ID', tmx_id)
+    rows.extend(_trialinfo_map_links(track))
+    tmx_link = _trialinfo_link(track.get('tmx_url'), 'Open map on TMX')
+    if tmx_link:
+        rows.append(['$zTMX page', tmx_link])
+    add('Added', track.get('created_at'))
+    add('Updated', track.get('updated_at'))
+    add('Last synced', track.get('last_synced_at'))
+    add('List', track.get('note'))
+    if track.get('raw_name') != track.get('name'):
+        add('Original name', track.get('raw_name'))
+    if track.get('normalized_name') != track.get('name'):
+        add('Normalized name', track.get('normalized_name'))
+    add('Track ID', track.get('track_id') or track.get('id'))
+    add('Primary UID', track.get('uid_primary') or track.get('challenge_uid'))
+    storage_uid = _track_storage_uid(track)
+    if storage_uid != (track.get('uid_primary') or track.get('challenge_uid')):
+        add('Storage UID', storage_uid)
+    shown_uids = {str(track.get('uid_primary') or track.get('challenge_uid') or ''), storage_uid}
+    for uid in _track_all_uids(track):
+        if uid not in shown_uids:
+            add('UID alias', uid)
+            shown_uids.add(uid)
+    return rows
 
 
 async def chat_trialrecs(aseco: 'Aseco', command: dict):

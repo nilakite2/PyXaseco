@@ -1814,6 +1814,10 @@ async def handle_subcommand(
         return True
 
     if sub == 'pyres':
+        updater = aseco.get_service('apps_manager')
+        if updater is not None and getattr(updater, 'copying', False):
+            await admin_chat._reply(aseco, login, '{#server}> {#message}Update file copying is in progress; wait for its completion notice before //pyres.')
+            return True
         await admin_chat._broadcast(
             aseco,
             admin_chat._fmt_admin(aseco, admin, chattitle, 'reinitializes the PyXaseco controller!')

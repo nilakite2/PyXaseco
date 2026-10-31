@@ -53,6 +53,11 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         return
 
     from ..record_views import _is_ultimania_track_active, _open_ultimania_window
+    from ..record_views import _is_wrmania_visible, _open_wrmania_window
+    if (action == 8590100 or action == 91804 or 918200 <= action < 918300
+            or -918300 <= action <= -918200) and await _is_wrmania_visible(aseco):
+        await _open_wrmania_window(aseco, login)
+        return
     if (action == 8590000 or action == 91804 or 918200 <= action < 918300
             or -918300 <= action <= -918200) and await _is_ultimania_track_active(aseco):
         await _open_ultimania_window(aseco, login)

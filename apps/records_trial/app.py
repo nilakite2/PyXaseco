@@ -16,6 +16,7 @@ APP_METADATA = {
     "description": "Trial API-backed records service and related records widget ownership.",
     "modules": [
         "apps/records_trial/service.py",
+        "apps/records_trial/info.py",
         "apps/records_trial/records_widget.py",
     ],
     "entries": [

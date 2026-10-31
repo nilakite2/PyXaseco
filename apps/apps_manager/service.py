@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import shutil
 import sys
+from time import monotonic
 from copy import deepcopy
 from contextvars import ContextVar
 from datetime import datetime
@@ -140,7 +141,8 @@ CONFIG_APP_DISCOVERY_EXCLUDE = {
 
 _APPS_USAGE = (
     'Usage: /admin apps <list|status [name]|config <app>|reload <app>|enable <app>|disable <app>|'
-    ' add <app>|remove <app>|rem <app>|fremove <app> confirm|frem <app> confirm>'
+    ' add <app>|remove <app>|rem <app>|fremove <app> confirm|frem <app> confirm|'
+    ' updates|download <package>|review <package>|update <package> [force] [confirm]>'
 )
 
 
@@ -312,6 +314,139 @@ def get_service(aseco: 'Aseco') -> 'AppsManagerService | None':
 
 
 class AppsManagerService:
+    def __init__(self):
+        self.release_busy = False
+        self.release_catalogue = None
+        self.copying = False
+        self.restart_needed = False
+        self.update_settings = {}
+        self.next_check = 0
+        self.next_notice = 0
+
+    def configure_updates(self, aseco):
+        try:
+            self.update_settings = read_toml(_root_dir(aseco) / 'apps/apps_manager/app_defaults.toml').get('apps_manager', {}).get('updates', {})
+        except (OSError, ValueError, AttributeError):
+            self.update_settings = {}
+        if not isinstance(self.update_settings, dict):
+            self.update_settings = {}
+
+    async def notice(self, aseco, player=None):
+        from pyxaseco.core.aseco import PYXASECO_VERSION
+        from pyxaseco.management.release_manifest import version
+        if self.restart_needed:
+            text = 'PyXaseco update installed. Run //pyres when ready to load the changes.'
+        else:
+            package = next((item for item in (self.release_catalogue or {}).get('packages', [])
+                            if item['id'] == 'controller'), None)
+            if package is None or version(package['version']) <= version(PYXASECO_VERSION):
+                return
+            text = 'PyXaseco ' + package['version'] + ' is available. Use //apps updates to review it.'
+        for owner in ([player] if player is not None else aseco.server.players.all()):
+            if _is_masteradmin(aseco, owner, owner.login):
+                await _reply(aseco, owner.login, '{#server}> {#highlite}' + text)
+
+    async def update_tick(self, aseco, _data=None):
+        if self.update_settings.get('enabled') is not True:
+            return
+        owners = [player for player in aseco.server.players.all() if _is_masteradmin(aseco, player, player.login)]
+        if not owners:
+            return
+        now = monotonic()
+        if now >= self.next_notice:
+            self.next_notice = now + self._interval('notice_interval_seconds', 1800)
+            await self.notice(aseco)
+        if not self.restart_needed and not self.release_busy and now >= self.next_check:
+            self.next_check = now + self._interval('check_interval_seconds', 3600)
+            await self.releases(aseco, owners[0], quiet=True)
+
+    def _interval(self, key, default):
+        value = self.update_settings.get(key, default)
+        return max(60, value) if type(value) is int else default
+
+    async def update_connect(self, aseco, player):
+        if _is_masteradmin(aseco, player, player.login):
+            await self.notice(aseco, player)
+
+    async def releases(self, aseco, admin, identity=None, *, review=False, force=False,
+                       install=False, reviewed=None, quiet=False):
+        login = getattr(admin, 'login', '')
+        if not _is_masteradmin(aseco, admin, login):
+            await _reply(aseco, login, '{#server}> {#error}Only MasterAdmins may check or download releases.')
+            return
+        if self.release_busy:
+            if not quiet:
+                await _reply(aseco, login, '{#server}> {#message}An update operation is already running.')
+            return
+        from pyxaseco.core.aseco import PYXASECO_VERSION
+        from pyxaseco.management.config_store import ManagementError
+        from pyxaseco.management.update_client import UpdateClient
+        from pyxaseco.core.background_jobs import Admission, JobEnvelope, JobPolicy
+        if not aseco.jobs.running:
+            return
+        self.configure_updates(aseco)
+        client = UpdateClient(_root_dir(aseco), PYXASECO_VERSION, settings=dict(self.update_settings))
+        self.release_busy = True
+        self.copying = install
+        job = JobEnvelope.capture(aseco.capture_job_context(login=login), {'package': identity})
+
+        async def operation(_envelope):
+            try:
+                if install:
+                    return await client.apply(identity, reviewed=reviewed, force=force, confirmed=True)
+                if review:
+                    return await client.preview(identity, force=force)
+                if identity:
+                    return await client.stage(identity)
+                return await client.check()
+            except (ManagementError, OSError) as error:
+                return {'error': str(error) if isinstance(error, ManagementError) else 'Could not read/write local update files.'}
+
+        async def done(result):
+            self.release_busy = False
+            self.copying = False
+            data = result.value if result.status == 'completed' else {'error': 'Update operation did not complete; check the local backup report before retrying.'}
+            connected = aseco.server.players.get_player(login) is admin and _is_masteradmin(aseco, admin, login)
+            if 'error' in data:
+                if identity is None:
+                    self.release_catalogue = None
+                logger.warning('[Updates] %s', data['error'])
+                if connected and not quiet:
+                    await _reply(aseco, login, '{#server}> {#error}' + data['error'])
+                return
+            if install:
+                self.restart_needed = self.restart_needed or data['restart_required']
+                logger.info('[Updates] Copied %s files; report: %s', data['copied'], data['report'])
+                if connected:
+                    await _reply(aseco, login, f"{{#server}}> {{#message}}Copied {data['copied']} files; kept {data['kept_modified']} modified files. Backups and diffs saved.")
+                await self.notice(aseco)
+                self.next_notice = monotonic() + self._interval('notice_interval_seconds', 1800)
+            elif review and connected:
+                _show_package_review_window(aseco, admin, data)
+            elif identity and connected:
+                await _reply(aseco, login, f"{{#server}}> {{#message}}{data['id']} {data['version']} downloaded and verified. Use //apps update {identity} to review changes.")
+            elif not identity:
+                self.release_catalogue = data
+                self.next_check = monotonic() + self._interval('check_interval_seconds', 3600)
+                if connected and not quiet:
+                    _show_release_window(aseco, admin, data)
+                if quiet:
+                    await self.notice(aseco)
+
+        async def discarded(_result):
+            self.release_busy = False
+            self.copying = False
+
+        outcome = aseco.jobs.service('apps_updates', JobPolicy(capacity=1, workers=1,
+            deadline_seconds=300, max_attempts=1)).submit(job, operation, done,
+            current_map=False, revision_guard=False, discard=discarded)
+        if outcome != Admission.ACCEPTED:
+            self.release_busy = self.copying = False
+            if not quiet:
+                await _reply(aseco, login, '{#server}> {#message}Update request deferred; try again shortly.')
+        elif not quiet:
+            await _reply(aseco, login, '{#server}> {#message}Validating both publishers in the background. No automatic restart.')
+
     async def handle_action(self, aseco: 'Aseco', admin, answer: list[Any]) -> bool:
         return await handle_apps_action(aseco, admin, answer)
 
@@ -1299,6 +1434,9 @@ def _show_apps_manager_window(aseco: 'Aseco', admin) -> None:
     _reset_apps_action_map(admin)
     rows: list[list[Any]] = []
 
+    rows.append(['Verified Releases', 'Packages', 'Download only',
+                 _action_cell(admin, 'Check', ('check_releases',)), '', ''])
+
     rows.append(['{#highlite}Configurable App Homes', '', '', '', '', ''])
     config_apps = list(_discover_config_apps(aseco).items())
     config_apps.sort(key=lambda pair: (0 if _standalone_loadout_state(aseco, pair[0]) != 'disabled' else 1, pair[1]['label'].lower()))
@@ -1356,6 +1494,53 @@ def _show_apps_manager_window(aseco: 'Aseco', admin) -> None:
         ['Name', 'Type', 'State', 'Primary', 'Secondary', 'Reload'],
         rows,
     )
+
+
+def _show_release_window(aseco, admin, catalogue):
+    from pyxaseco.core.aseco import PYXASECO_VERSION
+    from pyxaseco.management.release_manifest import compatibility
+    _reset_apps_action_map(admin)
+    rows = [['Nothing is installed or restarted by this window.', '', '', '', '', '']]
+    for package in catalogue['packages']:
+        reasons = compatibility(package, PYXASECO_VERSION, '.'.join(map(str, sys.version_info[:3])))
+        dependencies = len(package['requires_apps']) + len(package['python_requirements'])
+        rows.append([package['id'], package['version'],
+                     'Incompatible' if reasons else 'Verified',
+                     _action_cell(admin, 'Download', ('stage_release', package['id'])) if not reasons else '',
+                     _action_cell(admin, 'Review', ('review_release', package['id'])),
+                     '; '.join(reasons) if reasons else str(dependencies) + ' requirements'])
+    rows.append(['Recheck publishers', '', '', _action_cell(admin, 'Check', ('check_releases',)), '', ''])
+    _show_apps_window(aseco, admin, 'Verified Releases', ['Icons128x128_1', 'LoadTrack'],
+                      ['Package', 'Version', 'State', 'Download', 'Preview', 'Compatibility'], rows)
+
+
+def _show_package_review_window(aseco, admin, plan, *, confirm=False):
+    _reset_apps_action_map(admin)
+    rows = [
+        [plan['package'], plan['version'], 'Force Replace' if plan['force'] else 'Keep modified code'],
+        ['Settings', 'Preserved', 'All app_defaults.toml files are backed up first.'],
+        ['Restart', 'Manual', 'Run //pyres after files are copied.'],
+        ['Optional app', 'Not auto-enabled', 'New apps are added to the disabled loadout.'],
+    ]
+    for requirement in plan.get('requirements', []):
+        rows.append(['Before copying', 'Owner action', requirement])
+    for item in plan['files']:
+        if item['action'] != 'unchanged':
+            rows.append([item['file'], item['action'].replace('_', ' '), 'Backed up before replacement'])
+    payload = ('apply_release' if confirm else 'confirm_release', plan['package'], plan['review'], plan['force'])
+    if plan.get('requirements'):
+        rows.append(['Requirements not met', 'No files copied', 'Use the existing Python; then review again.'])
+    elif confirm:
+        rows.append(['Confirm file replacement', '', _action_cell(admin, 'Confirm', payload)])
+        rows.append(['Modified official code', 'Replaced' if plan['force'] else 'Kept', 'Existing configuration is always preserved.'])
+    else:
+        rows.append(['Copy reviewed files', '', _action_cell(admin, 'Apply...', payload)])
+        if not plan['force']:
+            rows.append(['Also replace modified code', '', _action_cell(admin, 'Force Replace...', ('force_review', plan['package']))])
+    rows.append(['Recheck publishers', '', _action_cell(admin, 'Packages', ('check_releases',))])
+    admin._release_review = plan
+    _show_apps_window(aseco, admin, 'Confirm Update' if confirm else 'Update Review', ['Icons128x128_1', 'LoadTrack'],
+                     ['File / Item', 'Change / State', 'Details'], rows, widths=[1.38, 0.58, 0.18, 0.62])
 
 
 @_with_config_snapshot
@@ -1522,6 +1707,25 @@ async def _handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
 
     kind = payload[0]
 
+    if kind in {'confirm_release', 'apply_release'}:
+        plan = getattr(admin, '_release_review', None)
+        if plan and tuple(payload[1:]) == (plan['package'], plan['review'], plan['force']):
+            if kind == 'confirm_release':
+                _show_package_review_window(aseco, admin, plan, confirm=True)
+            else:
+                service = get_service(aseco)
+                if service is not None:
+                    await service.releases(aseco, admin, plan['package'], install=True,
+                                           reviewed=plan['review'], force=plan['force'])
+        return True
+
+    if kind in {'check_releases', 'stage_release', 'review_release', 'force_review'}:
+        service = get_service(aseco)
+        if service is not None:
+            await service.releases(aseco, admin, str(payload[1]) if kind != 'check_releases' else None,
+                                   review=kind in {'review_release', 'force_review'}, force=kind == 'force_review')
+        return True
+
     if kind in {'open_config', 'open_edit', 'toggle_config', 'adjust_field', 'reload_app'}:
         app_key = str(payload[1])
         if not _can_configure_app(aseco, app_key):
@@ -1626,6 +1830,25 @@ async def _dispatch_apps_command(aseco: 'Aseco', login: str, admin, args: list[s
 
     action = str(args[0]).strip().lower()
     name = _normalize_app_name(args[1]) if len(args) > 1 else ''
+    if action == 'update':
+        options = [str(arg).lower() for arg in args[2:]]
+        if not name or options not in ([], ['force'], ['confirm'], ['force', 'confirm']):
+            await _reply(aseco, login, '{#server}> {#message}Usage: //apps update <package> [force] [confirm]')
+            return
+        service = get_service(aseco)
+        if service is not None:
+            confirmed = 'confirm' in options
+            await service.releases(aseco, admin, name, review=not confirmed,
+                                   install=confirmed, force='force' in options)
+        return
+    if action in {'updates', 'download', 'review'}:
+        if (action == 'updates' and len(args) != 1) or (action != 'updates' and len(args) != 2):
+            await _reply(aseco, login, '{#server}> {#message}Usage: //apps updates | //apps download <package> | //apps review <package>')
+            return
+        service = get_service(aseco)
+        if service is not None:
+            await service.releases(aseco, admin, name if action != 'updates' else None, review=action == 'review')
+        return
     config_apps = _discover_config_apps(aseco)
 
     if action == 'config':

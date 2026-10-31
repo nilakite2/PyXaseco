@@ -916,6 +916,12 @@ async def _build_toplist_window(aseco: 'Aseco', login: str, page: int = 0) -> st
         source_rows = []
         title = getattr(dedi_cfg, 'title', 'Dedimania Records')
         source_rows = (_get_dedi_records(aseco) or [])[:25]
+        from .record_views import _is_wrmania_visible
+        wrmania_visible = await _is_wrmania_visible(aseco)
+        if wrmania_visible:
+            mania = aseco.services.get('service/records_wrmania')
+            title = 'Mania Records'
+            source_rows = [row for row in mania.rows if row['rank'] <= mania.client.limit][:25]
         dedi_rows = []
 
         for idx, rec in enumerate(source_rows[:25], start=1):

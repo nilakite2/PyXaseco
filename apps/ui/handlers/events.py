@@ -944,7 +944,11 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
     elif await _is_trial_track_active(aseco):
         from ..record_views import _draw_trial_player as impl
     else:
-        from ..record_views import _draw_dedi_player as impl
+        from ..record_views import _is_wrmania_visible
+        if await _is_wrmania_visible(aseco):
+            from ..record_views import _draw_wrmania_player as impl
+        else:
+            from ..record_views import _draw_dedi_player as impl
     await impl(aseco, login)
 
 

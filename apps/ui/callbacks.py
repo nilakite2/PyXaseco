@@ -57,6 +57,7 @@ class RecordsEyepieceCallbackSurface(Component):
                 Callback('onTrialRecordsLoaded', _metadata_loaded),
                 Callback('onRpgRecordsLoaded', _metadata_loaded),
                 Callback('onUltimaniaRecordsLoaded', _on_dedi_record),
+                Callback('onWRManiaRecordsLoaded', _on_dedi_record),
                 Callback('onSync', _on_sync),
                 Callback('onUiStyleChanged', _on_ui_style_changed),
                 Callback('onPlayerConnect', _on_player_connect),

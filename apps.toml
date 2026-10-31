@@ -26,12 +26,14 @@ enabled = [
 "app/ui"
 ]
 disabled = [
+"app/sponsor_banner",
 "app/server_admin_bridge",
 "app/match_overlay",
 "app/pyxa_stats",
 "app/alternate_scoretable",
 "app/server_neighborhood",
 "app/records_ultimania",
+"app/records_wrmania",
 "app/dbtools",
 "app/serverstats",
 "app/forcemods",

@@ -52,10 +52,13 @@ class AppsManagerApp(App):
     def register_runtime(self, aseco: 'Aseco') -> None:
         for component in self.components:
             component.register(aseco)
+        aseco.register_event('onEverySecond', self.service.update_tick)
+        aseco.register_event('onPlayerConnect', self.service.update_connect)
 
     async def startup(self, context) -> None:
         for component in self.components:
             await component.startup(context)
+        self.service.configure_updates(context.aseco)
 
     async def shutdown(self, context) -> None:
         for component in reversed(self.components):

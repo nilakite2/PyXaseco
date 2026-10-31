@@ -220,12 +220,16 @@ def build_dedi_records_for_score(aseco: 'Aseco') -> str:
             rpg_rows = []
 
         ulti = aseco.services.get('service/records_ultimania') if 'records_ultimania' in getattr(aseco, 'active_apps', ()) else None
+        mania = aseco.services.get('service/records_wrmania') if 'records_wrmania' in getattr(aseco, 'active_apps', ()) else None
         if ulti is not None and ulti.active(aseco):
             score_cfg['title'] = 'Ultimania Records'
             source_rows = ulti.rows
         elif isinstance(rpg_track, dict) and rpg_rows:
             score_cfg['title'] = _rpg_title(rpg_track.get('stars'))
             source_rows = rpg_rows
+        elif mania is not None and mania.cached_visible(aseco):
+            score_cfg['title'] = 'Mania Records'
+            source_rows = [row for row in mania.rows if row['rank'] <= mania.client.limit]
         else:
             source_rows = _get_dedi_records(aseco) or []
 

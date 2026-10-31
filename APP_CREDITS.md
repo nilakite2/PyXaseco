@@ -47,12 +47,16 @@
 ## PyXaseco Apps
 
 Apps Manager, Curated GPS, Discord integration, Endless TMX Random,
-Local Management Bridge, PYXA Stats, Quotes, RPG Records and Trial Records
+Local Management Bridge, PYXA Stats, Sponsor Banner, Quotes, RPG Records and Trial Records
 are maintained by Nila / the PyXaseco project.
 Best Finishes' simplified vertical layout, UI presets and the current DBTools
 backup implementation are also PyXaseco development work.
 
 ## License Notices
+
+Mania Records uses the supplied WRMania XASECO adapter 0.19.0 protocol;
+its Records Eyepiece / undef, Slig and TM-Hub credits and GPL-3.0 notice
+are retained in `apps/records_wrmania/`.
 
 Original source and asset notices remain applicable.
 

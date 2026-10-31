@@ -1,6 +1,7 @@
 """App-management capabilities shared with the optional in-game manager."""
 
 MANAGEABLE_STANDALONE_APPS = {
+    'sponsor_banner': 'Sponsor Banner',
     'server_admin_bridge': 'Server Admin Bridge',
     'match_overlay': 'Match Overlay',
     'pyxa_stats': 'PYXA Stats',
@@ -11,6 +12,7 @@ MANAGEABLE_STANDALONE_APPS = {
     'best_cp_times': 'Best CP Times', 'records_rpg': 'RPG Records',
     'records_dedimania': 'Dedimania Records',
     'records_ultimania': 'Ultimania Records',
+    'records_wrmania': 'Mania Records',
     'records_trial': 'Trial Records', 'jfreu': 'JFreu', 'ztrack': 'ZTrack',
     'endlesstmxr': 'Endless TMX Random',
     'seqinfomsg': 'Sequential Info Messages',
@@ -27,11 +29,13 @@ PROTECTED_STANDALONE_APPS = {
 }
 
 RELOADABLE_APPS = {
+    'sponsor_banner',
     'match_overlay',
     'pyxa_stats',
     'alternate_scoretable',
     'server_neighborhood',
     'records_ultimania',
+    'records_wrmania',
     'ui', 'bestcps', 'bestsecs', 'bestruns', 'bestfinishes', 'best_cp_times',
     'checkpoint_tools', 'flexitime', 'endlesstmxr',
     'seqinfomsg',

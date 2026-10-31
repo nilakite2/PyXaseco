@@ -49,6 +49,7 @@ Each app guide explains its purpose, commands, configuration, changes and credit
 | [Quotes](quotes/README.md) | On-demand chat quotes. |
 | [Dedimania Records](records_dedimania/README.md) | Dedimania records and submissions. |
 | [Local Records](records_local/README.md) | Local PBs, records and record lists. |
+| [Mania Records](records_wrmania/README.md) | WRMania submissions and fallback global-record widget. |
 | [RPG Records](records_rpg/README.md) | RPG API records and replay uploads. |
 | [Trial Records](records_trial/README.md) | Trial API records and finish submissions. |
 | [Ultimania Records](records_ultimania/README.md) | Stunts records and replay submissions. |
@@ -57,6 +58,7 @@ Each app guide explains its purpose, commands, configuration, changes and credit
 | [Server Neighborhood](server_neighborhood/README.md) | Status and join links for linked local servers. |
 | [ServerStats](serverstats/README.md) | Population history and optional SVG output. |
 | [Social Chat](social_chat/README.md) | Private messages, emotes and shout-outs. |
+| [Sponsor Banner](sponsor_banner/README.md) | Rotating clickable sponsor images. |
 | [TMX](tmx/README.md) | TMX metadata, records and videos. |
 | [UI](ui/README.md) | Records-Eyepiece, ManiaKarma and HUD menu. |
 | [Voting](voting/README.md) | Chat-based server votes. |

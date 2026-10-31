@@ -99,6 +99,10 @@ _is_ultimania_track_active = _optional_view('records_ultimania', '_is_ultimania_
 _draw_ultimania_player = _optional_view('records_ultimania', '_draw_ultimania_player', lambda: None)
 _open_ultimania_window = _optional_view('records_ultimania', '_open_ultimania_window', lambda: None)
 
+_is_wrmania_visible = _optional_view('records_wrmania', '_is_wrmania_visible', bool)
+_draw_wrmania_player = _optional_view('records_wrmania', '_draw_wrmania_player', lambda: None)
+_open_wrmania_window = _optional_view('records_wrmania', '_open_wrmania_window', lambda: None)
+
 
 def _trial_title(*args, **kwargs):
     module = sys.modules.get('apps.records_trial.records_widget')

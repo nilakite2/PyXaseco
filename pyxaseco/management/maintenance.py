@@ -47,11 +47,11 @@ def _hash(data):
     return revision(data) if data is not None else None
 
 
-def _replace(path, data, expected):
+def _replace(path, data, expected, *, lock_path=None):
     """Atomic binary program-file replacement; config edits use ConfigStore instead."""
     path = safe_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with file_lock(path.with_name('.' + path.name + '.lock')):
+    with file_lock(safe_path(lock_path) if lock_path is not None else path.with_name('.' + path.name + '.lock')):
         before = _bytes(path)
         if _hash(before) != expected:
             raise ManagementError('A maintenance target changed; nothing was overwritten at that path')
@@ -254,7 +254,7 @@ class Maintenance:
                 result.append({key: record[key] for key in ('id', 'action', 'state', 'created_ns')})
         return sorted(result, key=lambda item: item['created_ns'], reverse=True)
 
-    def _commit(self, action, changes, snapshots, *, defaults=None):
+    def _commit(self, action, changes, snapshots, *, defaults=None, release='upgrade'):
         identity = uuid4().hex
         safe_path(self.area)
         self.area.mkdir(mode=0o700, exist_ok=True)
@@ -266,6 +266,9 @@ class Maintenance:
         record = {'schema': 1, 'id': identity, 'instance_id': self.instance.id,
             'controller': str(self.root), 'action': action, 'state': 'prepared',
             'created_ns': time.time_ns(), 'changes': []}
+        if action == 'upgrade':
+            from .config_backup import backup_app_defaults
+            record['app_defaults_backup'] = backup_app_defaults(self.root, folder / 'configuration', release)
         for name in names:
             before = _bytes(self._path(name))
             if _hash(before) != snapshots[name]:
@@ -288,7 +291,8 @@ class Maintenance:
             raise ManagementError('Maintenance stopped before completion. Startup is blocked; review transaction '
                 + identity + ' and use rollback. Backups and data were retained.') from exc
         return {'transaction': identity, 'state': 'committed', 'action': action, 'started': False,
-                'defaults': str(folder / 'defaults') if defaults else None}
+                'defaults': str(folder / 'defaults') if defaults else None,
+                'app_defaults_backup': record.get('app_defaults_backup')}
 
     def apply(self, action, *, reviewed, payload=None, sha256=None):
         if action not in {'upgrade', 'uninstall'}:
@@ -298,7 +302,13 @@ class Maintenance:
             plan, changes, snapshots = self._plan(action, incoming, sha256)
             if plan['review'] != reviewed or not plan['can_apply']:
                 raise ManagementError('Review is stale or contains code/custom-app conflicts; nothing changed')
-            return self._commit(action, changes, snapshots, defaults=incoming)
+            release = 'upgrade-' + sha256[:12] if action == 'upgrade' else action
+            if incoming:
+                text = incoming.get('pyxaseco/core/aseco.py', b'').decode('utf-8-sig')
+                match = re.search(r"(?m)^PYXASECO_VERSION\s*=\s*['\"]([A-Za-z0-9._-]{1,60})['\"]", text)
+                if match:
+                    release = match.group(1) + '-' + sha256[:12]
+            return self._commit(action, changes, snapshots, defaults=incoming, release=release)
 
     def adopt(self, *, payload, sha256, reviewed=None):
         incoming = read_payload(payload, sha256)

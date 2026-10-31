@@ -370,7 +370,7 @@ class BackgroundJobs:
                     else:
                         await work.apply(result)
                 except Exception as error:
-                    logger.error('Background completion %s failed (%s)', service.name, type(error).__name__)
+                    logger.error('Background completion %s failed (%s)', service.name, type(error).__name__, exc_info=True)
                     self.metrics.increment(f'jobs.{service.name}.apply_failed')
                     await self._discard(work, result)
                 finally:

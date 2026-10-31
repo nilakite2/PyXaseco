@@ -1,0 +1,42 @@
+[sponsor_banner]
+enabled = true
+interval_seconds = 30
+show_in_race = true
+show_on_score = true
+# Top-centre by default. Position is independent of ManiaKarma.
+pos_x = -7.88
+pos_y = 47.5
+# Same size as the ManiaKarma widget.
+width = 15.76
+height = 10.75
+# For image_file entries: relative to this app, or an absolute web-server folder.
+local_directory = "images"
+# Public URL serving local_directory. Local disk paths are NOT sent to players.
+asset_base_url = ""
+
+# Each entry needs exactly one image source: image_url OR image_file.
+# duration_seconds = 0 uses interval_seconds; a positive value overrides it.
+# Lower order values are displayed first. Disabled entries are skipped.
+[sponsor_banner.sponsors.hetzner]
+enabled = true
+order = 1
+duration_seconds = 0
+image_url = "http://financesonline.com/uploads/2019/09/Hetzner-logo1.png"
+image_file = ""
+link_url = "http://www.hetzner.com"
+
+[sponsor_banner.sponsors.maniaactu]
+enabled = true
+order = 2
+duration_seconds = 0
+image_url = "https://web.archive.org/web/20140329123830if_/http://mania-actu.com/uploads/images/images/mA%20logos/maniaactu_light_logo.png"
+image_file = ""
+link_url = "http://x.com/maniaActu"
+
+[sponsor_banner.sponsors.esl]
+enabled = true
+order = 3
+duration_seconds = 0
+image_url = "http://1000logos.net/wp-content/uploads/2020/09/ESL-Logo.png"
+image_file = ""
+link_url = "http://esl.com/"

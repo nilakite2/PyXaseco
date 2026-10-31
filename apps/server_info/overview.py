@@ -66,7 +66,7 @@ def enabled_integrations(aseco):
     if 'ui' in active and getattr(getattr(karma, '_cfg', None), 'enabled', False):
         rows.append(('karma', 'ManiaKarma'))
     for app, label in (('records_trial', 'Trial Records'), ('records_rpg', 'RPG Records'),
-                       ('records_ultimania', 'Ultimania Records')):
+                       ('records_ultimania', 'Ultimania Records'), ('records_wrmania', 'Mania Records')):
         service = _module(f'apps.{app}.service')
         if app in active and service is not None and service.is_enabled():
             rows.append((app, label))

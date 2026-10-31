@@ -2,10 +2,12 @@
 ztrack.py — Port of plugins/plugin.ztrack.php (by ZiZa)
 
 CP-delta tracking overlay (ManiaLink id 19861111).
-Shows time delta vs a chosen local or dedi record at each checkpoint.
+Shows checkpoint or sector deltas against a cached record.
 
 /ztrack local <n>  — compare to local record #n
-/ztrack dedi  <n>  — compare to dedi record #n  (stub, requires dedi plugin)
+/ztrack dedi  <n>  — compare to dedi record #n
+/ztrack auto [n]  — Dedi -> Local -> optional WRMania
+/ztrack wrm <n>   — compare to WRMania when its app is loaded
 /ztrack off        — disable
 /ztrack            — show help
 """
@@ -16,7 +18,8 @@ from pyxaseco.core.widget_delivery import deliver_ui
 from typing import TYPE_CHECKING
 
 from pyxaseco.models import Gameinfo
-from pyxaseco.app_services import get_dedi_db
+from pyxaseco.app_services import get_dedi_db, get_dedimania_service
+from pyxaseco.helpers import _send_multipage, format_time
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -24,8 +27,9 @@ if TYPE_CHECKING:
 
 ML_ID = 19861111
 
-# {login: {'Mode': 'Local'|'Dedi'|'', 'Rec': int, 'Target': str}}
+# Mode is the requested source; Source records the provider actually in use.
 _zt: dict = {}
+_runs: dict = {}
 
 # cpll_array reference: {login: {'time': int, 'cp': int}}
 # We read from cpll at checkpoint time
@@ -38,6 +42,7 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onPlayerRetire',           zt_player_retire)
     aseco.register_event('onPlayerFinish1',          zt_player_finish)
     aseco.register_event('onBeginRound',             zt_begin_round)
+    aseco.register_event('onRestartChallenge',       zt_begin_round)
     aseco.register_event('onNewChallenge',           zt_new_challenge)
     aseco.register_event('onCheckpoint',             zt_checkpoint)
     aseco.register_event('onPlayerConnect',          zt_player_connect)
@@ -49,100 +54,135 @@ def register(aseco: 'Aseco'):
 # /ztrack command
 # ---------------------------------------------------------------------------
 
+def _checks(values, score, expected=0):
+    if isinstance(values, str):
+        values = values.split(',')
+    if not isinstance(values, (list, tuple)) or not 1 <= len(values) <= 512:
+        return []
+    try:
+        if any(isinstance(value, bool) or not str(value).isdecimal() for value in values):
+            return []
+        checks = [int(value) for value in values]
+        best = int(score)
+    except (TypeError, ValueError):
+        return []
+    if (checks[0] <= 0 or any(a >= b for a, b in zip(checks, checks[1:]))
+            or checks[-1] != best or (expected > 0 and len(checks) != expected)):
+        return []
+    return checks
+
+
+def _reference(aseco, mode, index):
+    """Read existing caches only; optional record apps are never imported."""
+    if index < 0 or aseco.server.gameinfo.mode == Gameinfo.STNT:
+        return None
+    expected = int(getattr(aseco.server.challenge, 'nbchecks', 0) or 0)
+    active = getattr(aseco, 'active_apps', ()) or ()
+    for source in (('Dedi', 'Local', 'WRMania') if mode == 'Auto' else (mode,)):
+        checks, score, nickname = [], 0, ''
+        if source == 'Local':
+            rec = aseco.server.records.get_record(index)
+            if rec is not None:
+                checks, score = getattr(rec, 'checks', []), getattr(rec, 'score', 0)
+                nickname = getattr(getattr(rec, 'player', None), 'nickname', '')
+        elif source == 'Dedi' and 'records_dedimania' in active:
+            provider = get_dedimania_service(aseco)
+            db = get_dedi_db(aseco)
+            track = db.get('Challenge', {})
+            uid = track.get('UId') or track.get('Uid') or track.get('UID') or aseco.server.challenge.uid
+            rows = track.get('Records', [])
+            if (getattr(provider, '_connected', False) and db.get('RecsValid')
+                    and uid == aseco.server.challenge.uid and isinstance(rows, list) and index < len(rows)):
+                rec = rows[index]
+                if isinstance(rec, dict):
+                    checks, score = rec.get('Checks', []), rec.get('Best') or rec.get('Score', 0)
+                    nickname = rec.get('NickName') or rec.get('Login', '')
+        elif source == 'WRMania' and 'records_wrmania' in active:
+            # No dependency on the WRMania package, even when its folder is absent.
+            provider = aseco.get_service('service/records_wrmania')
+            read = getattr(provider, 'checkpoint_records', None)
+            rows = read(aseco) if callable(read) else []
+            rec = next((row for row in rows if row.get('rank') == index + 1), None)
+            if rec is not None:
+                checks, score = rec.get('checkpointsMs', []), rec.get('score', 0)
+                nickname = rec.get('nickname') or rec.get('login', '')
+        checks = _checks(checks, score, expected)
+        if checks:
+            return {'source': source, 'checks': checks, 'score': int(score), 'nickname': nickname}
+    return None
+
+
+def _source(value):
+    return {'auto': 'Auto', 'dedi': 'Dedi', 'local': 'Local',
+            'wrm': 'WRMania', 'wrmania': 'WRMania'}.get(value.lower())
+
+
+async def _show_splits(aseco, player, reference, rank, sectors):
+    title = f'zTrack - {reference["source"]} {rank} - ' + ('Sector Times' if sectors else 'Checkpoint Times')
+    rows, previous = [], 0
+    for index, time in enumerate(reference['checks'], 1):
+        rows.append([('S' if sectors else 'CP') + str(index), format_time(time - previous if sectors else time)])
+        previous = time
+    uid = aseco.server.challenge.uid
+
+    def valid(runtime, _player):
+        return runtime.server.challenge.uid == uid
+
+    player.msgs = [[1, title, [1.0, .45, .55], ['Icons128x128_1', 'Rankings'], valid]]
+    player.msgs.extend([[['Sector' if sectors else 'Checkpoint', 'Time']] + rows[i:i + 20]
+                       for i in range(0, len(rows), 20)])
+    await _send_multipage(aseco, player)
+
+
 async def chat_ztrack(aseco: 'Aseco', command: dict):
     player: Player = command['author']
     login = player.login
-    args = command['params'].split(None, 2)
+    args = str(command.get('params') or '').split()
     sub = args[0].lower() if args else ''
 
-    def _send(msg: str):
-        import asyncio
-        asyncio.ensure_future(aseco.client.query_ignore_result(
-            'ChatSendServerMessageToLogin', aseco.format_colors(msg), login))
+    async def send(msg):
+        await aseco.client.query_ignore_result(
+            'ChatSendServerMessageToLogin', aseco.format_colors(msg), login)
 
-    if sub == 'local':
-        if len(args) < 2 or not args[1].isdigit():
-            _send('{#message}[zTrack]: Please select a local record')
-            return
-
-        idx = int(args[1]) - 1
-        rec = aseco.server.records.get_record(idx)
-
-        if rec is None:
-            _send(f'{{#message}}[zTrack]: {{#highlite}}Local record {idx+1}{{#message}} does not exist')
-            return
-
-        if not getattr(rec, 'checks', None):
-            _send(f'{{#message}}[zTrack]: {{#highlite}}Local record {idx+1}{{#message}} has no checkpoint data')
-            return
-
-        # When spectating, track the target player's CPs, not the spectator's own.
-        _target = _resolve_view_target(aseco, player)
-        _zt.setdefault(login, {}).update({
-            'Mode': 'Local',
-            'Rec': idx,
-            'Target': _target or login,
-        })
-        _send(f'{{#message}}[zTrack]: CP-tracking is now comparing to {{#highlite}}local record {idx+1}')
-
-        if _is_viewer_spec_like(player):
-            await _send_ml(aseco, login, True)
-        else:
-            await _send_ml_self(aseco, login, True)
-
-    elif sub == 'dedi':
-        if len(args) < 2 or not args[1].isdigit():
-            _send('{#message}[zTrack]: Please select a dedi record')
-            return
-
-        idx = int(args[1]) - 1
-
-        try:
-            dedi_recs = get_dedi_db(aseco).get('Challenge', {}).get('Records', [])
-        except Exception:
-            dedi_recs = []
-
-        if idx < 0 or idx >= len(dedi_recs):
-            _send(f'{{#message}}[zTrack]: {{#highlite}}Dedi record {idx+1}{{#message}} does not exist')
-            return
-
-        checks = dedi_recs[idx].get('Checks', []) or []
-        if not checks:
-            _send(f'{{#message}}[zTrack]: {{#highlite}}Dedi record {idx+1}{{#message}} has no checkpoint data')
-            return
-
-        _target = _resolve_view_target(aseco, player)
-        _zt.setdefault(login, {}).update({
-            'Mode': 'Dedi',
-            'Rec': idx,
-            'Target': _target or login,
-        })
-        _send(f'{{#message}}[zTrack]: CP-tracking comparing to {{#highlite}}Dedi record {idx+1}')
-        if _is_viewer_spec_like(player):
-            await _send_ml(aseco, login, True)
-        else:
-            await _send_ml_self(aseco, login, True)
-
-    elif sub == 'off':
-        _send('{#message}[zTrack]: CP-tracking disabled')
+    if sub == 'off':
+        await send('{#message}[zTrack]: CP-tracking disabled')
         _zt[login] = {'Mode': '', 'Rec': 0, 'Target': login}
+        await _send_ml_self(aseco, login, False)
+        return
 
-        xml = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}"></manialink>'
-        await deliver_ui(aseco,
-            'SendDisplayManialinkPageToLogin',
-            login,
-            xml,
-            0,
-            False
-        )
-        
+    split_view = sub in ('cps', 'sectors')
+    if split_view:
+        values = args[1:]
+        mode = _source(values.pop(0)) if values and _source(values[0]) else 'Auto'
+    elif sub.isdecimal():
+        values, mode = args, 'Auto'
     else:
-        _send(
-            '{#message}[zTrack]: Type {#highlite}/ztrack local <nr> '
-            '{#message}or {#highlite}/ztrack dedi <nr> '
-            "{#message}to compare the current racing time of yourself or the person you're speccing. "
-            'Use {#highlite}/ztrack off {#message}to disable.'
-        )
+        values, mode = args[1:], _source(sub)
+    if mode is None:
+        await send('{#message}[zTrack]: /ztrack auto|local|dedi|wrm <rank> [cp|sector]. '
+            '/ztrack cps|sectors [source] [rank] lists splits; /ztrack off disables tracking.')
+        return
+    rank = int(values.pop(0)) if values and values[0].isdecimal() and len(values[0]) <= 5 else 1
+    comparison = values.pop(0).lower() if values and not split_view else 'cp'
+    if not 1 <= rank <= 10000 or values or comparison not in ('cp', 'sector'):
+        await send('{#message}[zTrack]: Use a positive rank and optional cp or sector; see /ztrack help.')
+        return
+    reference = _reference(aseco, mode, rank - 1)
+    if reference is None:
+        await send(f'{{#message}}[zTrack]: No usable {mode} record {rank} with complete checkpoint data.')
+        return
+    if split_view:
+        await _show_splits(aseco, player, reference, rank, sub == 'sectors')
+        return
+    _zt[login] = {'Mode': mode, 'Source': reference['source'], 'Rec': rank - 1,
+                  'Target': _resolve_view_target(aseco, player) or login, 'Comparison': comparison}
+    await send(f'{{#message}}[zTrack]: {comparison.capitalize()} tracking comparing to '
+               f'{{#highlite}}{reference["source"]} record {rank}.')
+    if _is_viewer_spec_like(player):
+        await _send_ml(aseco, login, True)
+    else:
+        await _send_ml_self(aseco, login, True)
+
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +192,7 @@ async def chat_ztrack(aseco: 'Aseco', command: dict):
 async def zt_new_challenge(aseco: 'Aseco', _challenge):
     global _zt
     _zt = {}
+    _runs.clear()
 
     xml = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}"></manialink>'
     await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
@@ -173,9 +214,11 @@ async def zt_player_connect(aseco: 'Aseco', player: 'Player'):
 
 async def zt_player_disconnect(aseco: 'Aseco', player: 'Player'):
     _zt.pop(player.login, None)
+    _runs.pop(player.login, None)
 
 
 async def zt_begin_round(aseco: 'Aseco', _params=None):
+    _runs.clear()
     for player in aseco.server.players.all():
         login = getattr(player, 'login', '')
         if not login or login not in _zt:
@@ -217,6 +260,7 @@ async def zt_player_info_changed(aseco: 'Aseco', changes: dict):
 
 async def zt_player_retire(aseco: 'Aseco', player: 'Player'):
     login = getattr(player, 'login', '')
+    _runs.pop(login, None)
     if not login:
         return
     if login not in _zt:
@@ -251,56 +295,62 @@ async def zt_player_finish(aseco: 'Aseco', finish_item):
 
 
 async def zt_checkpoint(aseco: 'Aseco', params: list):
-    """params: [uid, login, time, lap, cp_index, ...]"""
-    if len(params) < 5:
+    """Use cumulative splits for CP deltas, adjacent splits for sector deltas."""
+    if len(params) < 5 or aseco.server.gameinfo.mode == Gameinfo.STNT:
         return
-
-    cp_login = params[1]
-    cp_time = int(params[2])
-    cp_index = int(params[4]) + 1  # 1-based
-
+    try:
+        cp_login, absolute, index = params[1], int(params[2]), int(params[4])
+        lap = int(params[3])
+    except (TypeError, ValueError):
+        return
+    if absolute <= 0 or index < 0:
+        return
+    count = int(getattr(aseco.server.challenge, 'nbchecks', 0) or 0)
+    state = _runs.get(cp_login, {'index': -1, 'absolute': 0, 'base': 0, 'time': 0})
+    if index == 0:
+        state = {'index': -1, 'absolute': 0, 'base': 0, 'time': 0}
+    laps = aseco.server.gameinfo.mode == Gameinfo.LAPS and count > 0
+    relative_index = index % count if laps else index
+    if laps and index != state['index'] + 1:
+        state['base'] = None
+    time = absolute - state['base'] if state['base'] is not None else None
+    previous = (0 if relative_index == 0 else state['time']
+                if state['index'] == index - 1 and absolute > state['absolute'] else None)
+    _runs[cp_login] = {'index': index, 'absolute': absolute, 'base': state['base'], 'time': time}
+    if laps and lap > 0 and lap * count == index + 1:
+        _runs[cp_login]['base'] = absolute
     for login, info in list(_zt.items()):
-        if info.get('Target') != cp_login:
+        if info.get('Target') != cp_login or not info.get('Mode'):
             continue
-
-        mode = info.get('Mode', '')
-        if not mode:
-            continue
-
-        rec_idx = int(info.get('Rec', 0) or 0)
+        reference = _reference(aseco, info['Mode'], int(info.get('Rec', 0)))
+        info['Source'] = reference['source'] if reference else info['Mode']
         delta = None
-
-        if mode == 'Local':
-            rec = aseco.server.records.get_record(rec_idx)
-            if rec and getattr(rec, 'checks', None) and cp_index <= len(rec.checks):
-                try:
-                    target_cp = int(rec.checks[cp_index - 1])
-                    delta = cp_time - target_cp
-                except Exception:
-                    delta = None
-
-        elif mode == 'Dedi':
-            try:
-                dedi_recs = get_dedi_db(aseco).get('Challenge', {}).get('Records', [])
-                if 0 <= rec_idx < len(dedi_recs):
-                    rec = dedi_recs[rec_idx]
-                    checks = rec.get('Checks', []) or []
-                    if cp_index <= len(checks):
-                        target_cp = int(checks[cp_index - 1])
-                        delta = cp_time - target_cp
-            except Exception:
-                delta = None
-
-        if delta is not None:
-            if login == cp_login:
-                await _send_ml_self(aseco, login, delta)
+        if reference and time is not None and relative_index < len(reference['checks']):
+            checks = reference['checks']
+            target = checks[relative_index]
+            if info.get('Comparison') == 'sector':
+                if previous is not None:
+                    target -= checks[relative_index - 1] if relative_index else 0
+                    delta = (time - previous) - target
             else:
-                await _send_ml(aseco, login, delta)
+                delta = time - target
+        # Clear the previous number if the selected provider/split is unavailable.
+        if login == cp_login:
+            await _send_ml_self(aseco, login, delta if delta is not None else True)
+        else:
+            await _send_ml(aseco, login, delta if delta is not None else True)
+
 
 
 # ---------------------------------------------------------------------------
 # ManiaLink helpers
 # ---------------------------------------------------------------------------
+
+def _mode_label(info):
+    source = info.get('Source') or info.get('Mode', '')
+    suffix = ' sector' if info.get('Comparison') == 'sector' else ''
+    return f'{source} {info.get("Rec", 0) + 1}{suffix}'
+
 
 def _fmt_delta(ms: int) -> str:
     sign = '$s$f00+' if ms >= 0 else '$s$00f-'
@@ -316,7 +366,7 @@ async def _send_ml(aseco: 'Aseco', login: str, time_val):
     """Spectator overlay — positioned lower on screen."""
     if time_val is True:
         info = _zt.get(login, {})
-        mode_label = f'{info.get("Mode","")} {info.get("Rec",0)+1}'
+        mode_label = _mode_label(info)
         xml = (f'<?xml version="1.0" encoding="UTF-8"?>'
                f'<manialink id="{ML_ID}">'
                f'<frame posn="0 -43.5 1">'
@@ -327,7 +377,7 @@ async def _send_ml(aseco: 'Aseco', login: str, time_val):
     elif isinstance(time_val, int) and not isinstance(time_val, bool):
         txt = _fmt_delta(time_val)
         info = _zt.get(login, {})
-        mode_label = f'{info.get("Mode","")} {info.get("Rec",0)+1}'
+        mode_label = _mode_label(info)
         xml = (f'<?xml version="1.0" encoding="UTF-8"?>'
                f'<manialink id="{ML_ID}">'
                f'<frame posn="0 -43.5 1">'
@@ -347,7 +397,7 @@ async def _send_ml_self(aseco: 'Aseco', login: str, time_val):
     """Self (player) overlay — positioned higher on screen."""
     if time_val is True:
         info = _zt.get(login, {})
-        mode_label = f'{info.get("Mode","")} {info.get("Rec",0)+1}'
+        mode_label = _mode_label(info)
         xml = (f'<?xml version="1.0" encoding="UTF-8"?>'
                f'<manialink id="{ML_ID}">'
                f'<frame posn="0 -30.7 1">'
@@ -358,7 +408,7 @@ async def _send_ml_self(aseco: 'Aseco', login: str, time_val):
     elif isinstance(time_val, int) and not isinstance(time_val, bool):
         txt = _fmt_delta(time_val)
         info = _zt.get(login, {})
-        mode_label = f'{info.get("Mode","")} {info.get("Rec",0)+1}'
+        mode_label = _mode_label(info)
         xml = (f'<?xml version="1.0" encoding="UTF-8"?>'
                f'<manialink id="{ML_ID}">'
                f'<frame posn="0 -30.7 1">'

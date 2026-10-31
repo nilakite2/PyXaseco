@@ -446,6 +446,10 @@ async def chat_estat(aseco: 'Aseco', command: dict) -> None:
         return
 
     if params == 'DEDIRECS':
+        from ..record_views import _is_wrmania_visible, _open_wrmania_window
+        if await _is_wrmania_visible(aseco):
+            await _open_wrmania_window(aseco, login)
+            return
         from ..record_views import _is_ultimania_track_active, _open_ultimania_window
         if await _is_ultimania_track_active(aseco):
             await _open_ultimania_window(aseco, login)
