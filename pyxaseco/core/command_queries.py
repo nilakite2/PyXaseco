@@ -59,11 +59,10 @@ def visible_chat_commands_for_player(
 ) -> list[tuple[str, CommandRegistration]]:
     result: list[tuple[str, CommandRegistration]] = []
     for name, registration in iter_commands(aseco, is_admin=False):
-        try:
-            if not aseco.allow_ability(player, name.split("/")[0]):
-                continue
-        except Exception:
-            pass
+        # Public commands do not require an admin ability matching their name.
+        permission = str(registration.permission or "").strip()
+        if permission and not aseco.allow_ability(player, permission):
+            continue
         result.append((name, registration))
     return result
 
