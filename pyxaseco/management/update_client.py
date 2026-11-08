@@ -131,9 +131,9 @@ class UpdateClient:
         return catalogue, digest
 
     async def _verify_checksums(self, session, catalogue, package):
-        if catalogue['schema'] != 2:
+        if catalogue['schema'] not in (2, 3):
             return
-        filename = package['id'] + '-' + package['version'] + '.zip'
+        filename = package.get('filename', package['id'] + '-' + package['version'] + '.zip')
         for url, allowed in zip(package['urls'], (GITHUB_DOWNLOAD_HOSTS, WEBSITE_HOSTS)):
             checksum = await self._fetch(session, url + '.sha256', allowed, 1024)
             if parse_checksum(checksum, filename) != package['sha256']:
@@ -178,6 +178,17 @@ class UpdateClient:
     @staticmethod
     def _package(catalogue, identity):
         package = next((item for item in catalogue['packages'] if item['id'] == identity), None)
+        if package is None and catalogue['schema'] == 3:
+            from .release_manifest import PUBLIC_APPS
+            full = catalogue['packages'][0]
+            if identity in PUBLIC_APPS:
+                prefix = 'apps/' + identity + '/'
+                files = {name: data for name, data in full['files'].items() if name.startswith(prefix)}
+                if prefix + 'app.py' in files:
+                    package = dict(full, id=identity, kind='app', files=files, archive_files=full['files'])
+                    if 'baseline' in full:
+                        package['baseline'] = dict(full['baseline'], files={
+                            name: data for name, data in full['baseline']['files'].items() if name.startswith(prefix)})
         if package is None:
             raise ManagementError('Package is not present in the approved catalogue')
         return package
@@ -269,7 +280,7 @@ class UpdateClient:
                     raise ManagementError('; '.join(reasons))
                 await self._verify_checksums(session, catalogue, package)
                 blob = None
-                checksum_mode = catalogue['schema'] == 2
+                checksum_mode = catalogue['schema'] in (2, 3)
                 urls = package['urls'][:1] if checksum_mode else package['urls']
                 allowed = GITHUB_DOWNLOAD_HOSTS if checksum_mode else ASSET_HOSTS
                 for url in urls:

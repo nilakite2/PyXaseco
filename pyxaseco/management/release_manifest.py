@@ -96,13 +96,23 @@ def package_path(name, package):
     # Reuse the installer's Windows-safe path checks, also for packages staged on Linux.
     if name.endswith(('/README.md', '/LICENSE')) and name.startswith('apps/'):
         payload_path(name.rsplit('/', 1)[0] + '/app.py')
+    elif name.startswith('apps/') and name.endswith('.toml.example'):
+        payload_path(name.removesuffix('.example'))
+    elif (name == 'APP_CREDITS.md'
+          or (name.startswith(('apps/', 'pyxaseco/')) and name.endswith('.md'))
+          or (name.startswith('apps/') and name.rsplit('/', 1)[-1].startswith(('COPYING', 'LICENSE'))
+              and name.endswith('.txt'))):
+        payload_path(name.rsplit('.', 1)[0] + '.py' if '/' in name else 'README.md')
     else:
         payload_path(name)
     if package['kind'] == 'app':
         if not name.startswith('apps/' + package['id'] + '/'):
             raise ManagementError('An app package may only own files inside its own app folder')
-    elif name.startswith('apps/') and name.split('/')[1] in MANAGEABLE_STANDALONE_APPS:
+    elif (not package.get('filename') and name.startswith('apps/')
+          and name.split('/')[1] in MANAGEABLE_STANDALONE_APPS):
         raise ManagementError('Controller packages must not bundle independently managed optional apps')
+    if not package.get('filename') and name.startswith('apps/server_admin_bridge/'):
+        raise ManagementError('Private tooling is not part of public releases')
 
 
 def _range(value):
@@ -115,13 +125,25 @@ def _range(value):
 def validate_package(package):
     fields = {'id', 'kind', 'version', 'sha256', 'size', 'urls', 'files',
               'python', 'controller', 'requires_apps', 'python_requirements'}
-    if not isinstance(package, dict) or not fields <= package.keys() or set(package) - fields - {'baseline'}:
+    if not isinstance(package, dict) or not fields <= package.keys() or set(package) - fields - {'baseline', 'filename', 'archive_files'}:
         raise ManagementError('Unsupported package metadata fields')
     identity = package['id']
     if not ((package['kind'] == 'controller' and identity == 'controller')
             or (package['kind'] == 'app' and isinstance(identity, str) and identity in PUBLIC_APPS)):
         raise ManagementError('Unknown or private package identity')
     version(package['version'])
+    if 'filename' in package and package['filename'] != 'PyXaseco_v' + package['version'] + '.zip':
+        raise ManagementError('Full-release ZIP must use the name PyXaseco_v<version>.zip')
+    if 'archive_files' in package:
+        if package['kind'] != 'app' or 'filename' not in package:
+            raise ManagementError('Only a selected app may reference a full-release inventory')
+        full = {key: value for key, value in package.items() if key != 'archive_files'}
+        full.update(id='controller', kind='controller', files=package['archive_files'])
+        validate_package(full)
+        selected = {name: item for name, item in full['files'].items()
+                    if name.startswith('apps/' + identity + '/')}
+        if package['files'] != selected:
+            raise ManagementError('Selected app inventory differs from the full release')
     if not _hex(package['sha256']) or not _integer(package['size'], 1, PACKAGE_LIMIT):
         raise ManagementError('Invalid package checksum or size')
     urls = package['urls']
@@ -226,7 +248,11 @@ def verify_catalogue(blob, public_key, channel, *, now=None, verification='signe
         schema = 1
         fields.add('expires')
     elif verification == 'sha256':
-        payload, schema = blob, 2
+        payload = blob
+        candidate = read_json(payload)
+        schema = candidate.get('schema') if isinstance(candidate, dict) else None
+        if type(schema) is not int or schema not in (2, 3):
+            raise ManagementError('Unsupported SHA-256 catalogue schema')
     else:
         raise ManagementError('Unsupported release verification mode')
     catalogue = read_json(payload)
@@ -245,11 +271,16 @@ def verify_catalogue(blob, public_key, channel, *, now=None, verification='signe
     packages = catalogue['packages']
     if not isinstance(packages, list) or not 1 <= len(packages) <= 64:
         raise ManagementError('Invalid catalogue package list')
+    if schema == 3 and (len(packages) != 1 or not isinstance(packages[0], dict) or packages[0].get('id') != 'controller'
+                        or 'filename' not in packages[0]):
+        raise ManagementError('A full-release catalogue must describe exactly one controller ZIP')
     seen = set()
     for package in packages:
         validate_package(package)
-        if schema == 2:
-            filename = package['id'] + '-' + package['version'] + '.zip'
+        if 'archive_files' in package or (schema != 3 and 'filename' in package):
+            raise ManagementError('Unexpected full-release metadata')
+        if schema in (2, 3):
+            filename = package.get('filename', package['id'] + '-' + package['version'] + '.zip')
             urls = package['urls']
             if len(urls) != 2:
                 raise ManagementError('SHA-256 releases require both publishing locations')
@@ -314,5 +345,6 @@ def validate_archive(blob, package):
     validate_package(package)
     if len(blob) != package['size'] or revision(blob) != package['sha256']:
         raise ManagementError('Package download size/checksum differs from the approved release')
-    if archive_inventory(blob, package) != package['files']:
+    scope = {'id': 'controller', 'kind': 'controller', 'filename': package['filename']} if 'archive_files' in package else package
+    if archive_inventory(blob, scope) != package.get('archive_files', package['files']):
         raise ManagementError('ZIP inventory or file checksum differs from the approved package inventory')

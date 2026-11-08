@@ -45,12 +45,24 @@ class FileUpdates:
                 raise ManagementError('Invalid local update inventory')
             version(entry.get('version'))
             for name, item in entry['files'].items():
-                package_path(name, {'id': identity, 'kind': 'controller' if identity == 'controller' else 'app'})
+                package_path(name, {'id': identity, 'kind': 'controller' if identity == 'controller' else 'app',
+                                   'filename': 'local-history'})
                 if (not isinstance(item, dict) or not isinstance(item.get('sha256'), str)
                         or not re.fullmatch('[0-9a-f]{64}', item['sha256'])
                         or type(item.get('size')) is not int or not 0 <= item['size'] <= FILE_LIMIT):
                     raise ManagementError('Invalid local update checksum')
         return data, raw
+
+    def _selected(self, package, files):
+        if package['kind'] != 'controller' or not package.get('filename'):
+            return files
+        from .app_policy import MANAGEABLE_STANDALONE_APPS
+        installed = {app for app in MANAGEABLE_STANDALONE_APPS
+                     if safe_path(self.root / 'apps' / app / 'app.py').is_file()}
+        return {name: data for name, data in files.items()
+                if not name.startswith('apps/server_admin_bridge/')
+                and (not (name.startswith('apps/') and name.split('/')[1] in MANAGEABLE_STANDALONE_APPS)
+                     or name.split('/')[1] in installed)}
 
     def preview(self, package, blob, *, force=False):
         validate_archive(blob, package)
@@ -69,15 +81,29 @@ class FileUpdates:
                         raise ManagementError('Invalid TOML configuration in release: ' + name) from error
         ledger, raw = self._ledger()
         previous = ledger['packages'].get(package['id'], {}).get('files', package.get('baseline', {}).get('files', {}))
+        if package.get('filename'):
+            if package['kind'] == 'controller':
+                for identity, entry in ledger['packages'].items():
+                    if identity != 'controller':
+                        previous = {**previous, **entry['files']}
+            elif package['id'] not in ledger['packages']:
+                prefix = 'apps/' + package['id'] + '/'
+                previous = {**previous, **{name: data for name, data in
+                    ledger['packages'].get('controller', {}).get('files', {}).items() if name.startswith(prefix)}}
+        if (package['kind'] == 'app'
+                and not safe_path(self.root / 'apps' / package['id'] / 'app.py').is_file()):
+            previous = {}
+        previous = self._selected(package, previous)
+        selected = self._selected(package, package['files'])
         rows, snapshots = [], {LEDGER: _hash(raw)}
-        for name in sorted(set(package['files']) | set(previous)):
+        for name in sorted(set(selected) | set(previous)):
             # Only paths authenticated by a package inventory may be considered.
             from .release_manifest import package_path
             package_path(name, package)
             current = _bytes(safe_path(self.root / name))
             before = _hash(current)
             snapshots[name] = before
-            target = package['files'].get(name)
+            target = selected.get(name)
             old = previous.get(name)
             if target is None and configuration_file(name):
                 action = 'preserve_config'
@@ -124,7 +150,7 @@ class FileUpdates:
             if _hash(ledger_raw) != plan['ledger_before']:
                 raise ManagementError('Update history changed during backup; review again')
             with zipfile.ZipFile(io.BytesIO(blob)) as archive:
-                incoming = {name: archive.read(name) for name in package['files']}
+                incoming = {row['file']: archive.read(row['file']) for row in plan['files'] if row['after'] is not None}
             before_files, changes = {}, {}
             for row in plan['files']:
                 name, action = row['file'], row['action']
@@ -163,7 +189,14 @@ class FileUpdates:
                     changes['apps.toml'] = edit_toml(text, ('loadout', 'disabled'), disabled + [entry]).encode()
                     if original is not None:
                         _write(folder / 'before/apps.toml', original, private=True)
-            ledger['packages'][package['id']] = {'version': package['version'], 'sha256': package['sha256'], 'files': package['files']}
+            ledger['packages'][package['id']] = {'version': package['version'], 'sha256': package['sha256'],
+                                                'files': {name: package['files'][name] for name in incoming}}
+            if package['kind'] == 'controller' and package.get('filename'):
+                from .app_policy import MANAGEABLE_STANDALONE_APPS
+                for app in MANAGEABLE_STANDALONE_APPS:
+                    files = {name: package['files'][name] for name in incoming if name.startswith('apps/' + app + '/')}
+                    if files:
+                        ledger['packages'][app] = {'version': package['version'], 'sha256': package['sha256'], 'files': files}
             changes[LEDGER] = (json.dumps(ledger, indent=2) + '\n').encode()
             before_files[LEDGER] = ledger_raw
             report = dict(plan, backup=backup, state='prepared', copied=[])

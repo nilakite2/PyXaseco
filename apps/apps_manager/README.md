@@ -24,9 +24,16 @@ Commands are routed through Admin and restricted to MasterAdmins.
 ## Configuration
 
 apps.toml controls the loadout. Each app owns its app_defaults.toml.
-This app's apps_manager.updates section controls opt-in release URLs, trusted
-public key, channel and owner notification intervals. Checks are disabled until
+This app's apps_manager.updates section controls opt-in release URLs, verification
+mode, channel and owner notification intervals. Checks are disabled until
 publishing is configured. Manual update commands reread those settings.
+SHA-256 mode validates matching catalogues and checksums from both publishers;
+it does not require a signing key. Enable it only after both publishers are ready.
+Full releases use one original `PyXaseco_v<version>.zip` for the controller and
+all apps. Controller updates select only core files and already-installed
+optional apps, including disabled ones. To install a missing app explicitly,
+use its app ID with the download/update commands; only that app is copied
+from the same ZIP and it is added to the disabled loadout.
 
 ## Behavior
 
@@ -40,8 +47,6 @@ publishing is configured. Manual update commands reread those settings.
 - MasterAdmins receive a private notice to run //pyres after copying.
 - No automatic restart, new Python environments or automatic library installation.
 - Managed local removal uses apps/00removed.
-
-Publication and validation instructions: pyxaseco/management/UPDATER.md.
 
 ## Credits
 

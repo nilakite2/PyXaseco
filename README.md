@@ -160,8 +160,8 @@ related files before running `//pyres`.
 
 Apps Manager also supports optional verified file updates with MasterAdmin
 review, configuration backups and manual restart. This is not required to run
-PyXaseco or to maintain it through ordinary file copies. See the
-[updater guide](pyxaseco/management/UPDATER.md) for that workflow.
+PyXaseco or to maintain it through ordinary file copies. See
+[Apps Manager](apps/apps_manager/README.md) for the in-game update commands.
 
 ## Credits And License
 

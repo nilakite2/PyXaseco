@@ -1520,7 +1520,7 @@ def _show_package_review_window(aseco, admin, plan, *, confirm=False):
         [plan['package'], plan['version'], 'Force Replace' if plan['force'] else 'Keep modified code'],
         ['Settings', 'Preserved', 'All app_defaults.toml files are backed up first.'],
         ['Restart', 'Manual', 'Run //pyres after files are copied.'],
-        ['Optional app', 'Not auto-enabled', 'New apps are added to the disabled loadout.'],
+        ['Optional apps', 'Not auto-installed', 'Missing apps stay absent; explicit app installs stay disabled.'],
     ]
     for requirement in plan.get('requirements', []):
         rows.append(['Before copying', 'Owner action', requirement])
