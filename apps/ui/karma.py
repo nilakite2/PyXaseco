@@ -187,6 +187,8 @@ class KarmaConfig:
     api_auth_url: str = "http://worldwide.mania-karma.com/api/tmforever-trackmania-v4.php"
     api_url: str = ""
     website: str = "www.mania-karma.com"
+    fallback_website: str = "karma.wrmania.net"
+    fallback_api_auth_url: str = "http://karma.wrmania.net/api/tmforever-trackmania-v4.php"
     nation: str = ""
 
     show_welcome: bool = True
@@ -326,6 +328,11 @@ _api_authcode = ""
 _api_connected = False
 _retrytime = 0
 _lookup_retrytime = 0
+_api_provider = 0
+_api_endpoint = ''
+_api_website = ''
+_api_epoch = 0
+_auth_pending = False
 _window_state: dict[str, tuple[str, int]] = {}
 _runtime_aseco: Aseco | None = None
 _current_map: dict[str, Any] = {}
@@ -557,7 +564,7 @@ def _track_page_url(aseco: Aseco) -> str:
     uid = urllib.parse.quote(str(_current_map.get("uid", "") or ""))
     env = urllib.parse.quote(str(_current_map.get("environment", "") or ""))
     game = urllib.parse.quote(str(getattr(aseco.server, "game", "TMF") or "TMF"))
-    return f"http://{_cfg.website}/goto?uid={uid}&env={env}&game={game}"
+    return f"http://{_active_website()}/goto?uid={uid}&env={env}&game={game}"
 
 
 def _normalise_web_url(url: str) -> str:
@@ -835,52 +842,122 @@ async def _api_post(url: str, payload: str, timeout: int):
         return response.status, body.decode('utf-8', errors='replace')
 
 
-async def _queue_karma(aseco, url, apply, *, key, current_map=True, timeout=None):
+async def _queue_karma(aseco, url, apply, *, key, current_map=True, timeout=None, operation=None):
     from pyxaseco.core.background_jobs import JobEnvelope, JobPolicy
     # URLs containing session auth tokens stay in this ephemeral closure,
     # never in retained storage or diagnostics.
     job = JobEnvelope.capture(aseco.capture_job_context(), {})
     timeout = _cfg.wait_timeout if timeout is None else timeout
-    async def operation(_envelope):
+    async def read(_envelope):
         return await _api_get(url, timeout)
     async def completed(result):
         await apply(result.value if result.status == 'completed' else None)
     return aseco.jobs.service('karma', JobPolicy(deadline_seconds=120)).submit(
-        job, operation, completed, current_map=current_map, dedupe_key=key)
+        job, operation or read, completed, current_map=current_map, dedupe_key=key)
+
+
+def _providers():
+    providers = []
+    for endpoint, website in ((_cfg.api_auth_url, _cfg.website),
+                               (_cfg.fallback_api_auth_url, _cfg.fallback_website)):
+        if endpoint and not any(endpoint == item[0] for item in providers):
+            providers.append((endpoint, website))
+    return providers
+
+
+def _active_website():
+    return _api_website or _cfg.website
+
+
+def _disconnect_api(*, advance=False, delay=60):
+    global _api_connected, _api_authcode, _api_epoch, _auth_pending
+    global _api_provider, _retrytime, _lookup_retrytime
+    _api_connected, _api_authcode, _cfg.api_url = False, '', ''
+    _api_epoch += 1
+    _auth_pending = False
+    _lookup_retrytime = 0
+    _api_provider = ((_api_provider + 1) % max(1, len(_providers()))) if advance else 0
+    _retrytime = int(asyncio.get_running_loop().time()) + delay
 
 
 async def _api_auth(aseco: Aseco) -> bool:
-    global _retrytime
+    global _retrytime, _api_epoch, _auth_pending, _api_connected, _api_authcode
+    if _auth_pending or not _cfg.enabled:
+        return _api_connected
+    providers = _providers()
+    if not providers:
+        return False
     login = getattr(aseco.server, 'serverlogin', '') or ''
-    url = _cfg.api_auth_url + '?' + urllib.parse.urlencode({
+    query = urllib.parse.urlencode({
         'Action': 'Auth', 'login': login,
         'name': base64.b64encode(str(getattr(aseco.server, 'name', '') or '').encode()).decode(),
         'game': 'TmForever', 'zone': str(getattr(aseco.server, 'zone', '') or ''),
         'nation': _cfg.nation})
+    start = _api_provider % len(providers)
+    _api_epoch += 1
+    epoch = _api_epoch
+    _auth_pending = True
+    _api_connected, _api_authcode, _cfg.api_url = False, '', ''
     _retrytime = int(asyncio.get_running_loop().time()) + 60
-    async def apply(body):
-        global _api_authcode, _api_connected, _retrytime
-        if not _cfg.enabled:
+
+    async def authenticate(_envelope):
+        for offset in range(len(providers)):
+            index = (start + offset) % len(providers)
+            endpoint, _website = providers[index]
+            try:
+                body = await _api_get(endpoint + '?' + query, _cfg.connect_timeout)
+                xml = ET.fromstring(body or '')
+                if int(xml.findtext('status') or 0) == 200 and xml.findtext('authcode'):
+                    return index, body
+            except Exception:
+                # Transport errors, HTML error pages and rejected auth all try
+                # the other provider without forwarding this provider's token.
+                continue
+        return None
+
+    async def apply(result):
+        global _api_authcode, _api_connected, _retrytime, _auth_pending
+        global _api_provider, _api_endpoint, _api_website, _lookup_retrytime
+        if not _cfg.enabled or epoch != _api_epoch:
             return
+        _auth_pending = False
         try:
-            xml = ET.fromstring(body or '')
+            index, body = result if result is not None else (start, '')
+            xml = ET.fromstring(body)
             if int(xml.findtext('status') or 0) != 200:
                 raise ValueError('Karma auth rejected')
             _api_authcode = xml.findtext('authcode') or ''
             if not _api_authcode:
                 raise ValueError('Missing Karma auth code')
-            _cfg.api_url = xml.findtext('api_url') or _cfg.api_auth_url
+            endpoint, website = providers[index]
+            switched = bool(_api_endpoint and _api_endpoint != endpoint)
+            _api_provider, _api_endpoint, _api_website = index, endpoint, website
+            _cfg.api_url = xml.findtext('api_url') or endpoint
+            if switched:
+                _karma['global'] = _set_empty_karma(True)['global']
+                _karma['global_loaded'] = False
+                _karma['lookup_revision'] = _karma.get('lookup_revision', 0) + 1
+                _cfg.import_done = True
             imported = str(xml.findtext('import_done') or '').lower()
             if imported in ('true', 'false'):
                 _cfg.import_done = imported == 'true'
             _api_connected, _retrytime = True, 0
+            _lookup_retrytime = 0
+            if index != start or switched or index != 0:
+                logger.info('[ManiaKarma] Using provider %s', website)
+            if switched:
+                await _send_widget_combination(aseco, ['cups_values'], None)
             await _fetch_global_votes(aseco)
             await _send_connection_status(aseco, True, _cfg.current_state)
         except (ValueError, ET.ParseError):
             _api_connected = False
             _retrytime = int(asyncio.get_running_loop().time()) + 60
-            logger.warning('[ManiaKarma] Authentication unavailable/rejected; retry deferred')
-    await _queue_karma(aseco, url, apply, key='auth', current_map=False, timeout=_cfg.connect_timeout)
+            logger.warning('[ManiaKarma] Configured providers unavailable/rejected; retry deferred')
+    from pyxaseco.core.background_jobs import Admission
+    outcome = await _queue_karma(aseco, '', apply, key=f'auth:{epoch}', current_map=False,
+                                 timeout=_cfg.connect_timeout, operation=authenticate)
+    if outcome != Admission.ACCEPTED and epoch == _api_epoch:
+        _auth_pending = False
     return _api_connected
 
 
@@ -943,24 +1020,31 @@ async def _api_vote_multisend(aseco: Aseco, votes: dict[str, int]) -> None:
 def _karma_delivery(aseco):
     from pyxaseco.core.retained_delivery import delivery
     def ready():
-        return bool(_api_connected and _cfg.api_url and _api_authcode)
+        return bool(_cfg.enabled and _api_connected and _cfg.api_url and _api_authcode)
     async def prepare(data):
         if not ready():
             raise _KarmaAuthenticationPending('Karma authentication not ready')
         return data
     async def send(data):
+        epoch = _api_epoch
+        endpoint, authcode = _cfg.api_url, _api_authcode
         ch = data['map']
         params = {'Action': 'Vote', 'login': str(aseco.server.serverlogin),
-                  'authcode': _api_authcode, 'uid': ch['uid'],
+                  'authcode': authcode, 'uid': ch['uid'],
                   'map': base64.b64encode(str(ch['name']).encode()).decode(),
                   'author': ch['author'], 'atime': 0 if data['stunts'] else ch['authortime'],
                   'ascore': ch['authorscore'] if data['stunts'] else 0,
                   'nblaps': ch['nblaps'], 'nbchecks': ch['nbchecks'],
                   'mood': ch['mood'], 'env': ch['environment'], 'tmx': data['tmx'],
                   'votes': '|'.join(f'{login}={int(vote)}' for login, vote in data['votes'].items())}
-        body = await _api_get(_cfg.api_url + '?' + urllib.parse.urlencode(params), _cfg.wait_timeout)
-        if int(ET.fromstring(body).findtext('status') or 0) != 200:
-            raise RuntimeError('Unconfirmed Karma vote response')
+        try:
+            body = await _api_get(endpoint + '?' + urllib.parse.urlencode(params), _cfg.wait_timeout)
+            if int(ET.fromstring(body).findtext('status') or 0) != 200:
+                raise RuntimeError('Unconfirmed Karma vote response')
+        except Exception:
+            if epoch == _api_epoch:
+                _disconnect_api(advance=True)
+            raise
         return True
     async def apply(_payload, _result, current):
         logger.info('[ManiaKarma] Confirmed %d vote(s) for map %s', len(_payload['votes']), _payload['map']['uid'])
@@ -975,12 +1059,7 @@ def _karma_delivery(aseco):
                     waiting.pop(login)
             _karma['lookup_revision'] = _karma.get('lookup_revision', 0) + 1
             await _fetch_global_votes(aseco)
-    async def failed(_result):
-        global _api_connected, _retrytime
-        if _api_connected:
-            _api_connected = False
-            _retrytime = int(asyncio.get_running_loop().time()) + 60
-    return delivery(aseco, 'karma', send, apply, prepare=prepare, on_failure=failed, ready=ready)
+    return delivery(aseco, 'karma', send, apply, prepare=prepare, ready=ready)
 
 
 # ---------------------------------------------------------------------------
@@ -1039,6 +1118,7 @@ async def _fetch_global_votes(aseco: Aseco, target_login: str | None = None) -> 
         return
     pending_at_request = dict(_karma.get('new', {}).get('players', {}))
     revision = _karma.get('lookup_revision', 0)
+    epoch = _api_epoch
     params = {'Action': 'Get', 'login': str(aseco.server.serverlogin), 'authcode': _api_authcode,
               'uid': str(_current_map.get('uid', '')),
               'map': base64.b64encode(str(_current_map.get('name', '')).encode()).decode(),
@@ -1046,7 +1126,7 @@ async def _fetch_global_votes(aseco: Aseco, target_login: str | None = None) -> 
               'env': str(_current_map.get('environment', '')), 'player': '|'.join(players)}
     async def apply(body):
         global _lookup_retrytime
-        if not _cfg.enabled:
+        if not _cfg.enabled or epoch != _api_epoch:
             return
         if revision != _karma.get('lookup_revision', 0):
             return
@@ -1055,17 +1135,24 @@ async def _fetch_global_votes(aseco: Aseco, target_login: str | None = None) -> 
             if not _players_all(aseco):
                 _lookup_retrytime = 0
                 return
-            # A map lookup failure does not invalidate a successfully authenticated
-            # session or prevent queued Vote requests (the 1.2 behavior).
+            # Map-level errors (notably 607) keep the authenticated session and
+            # Vote delivery intact. Only service failures select another provider.
             _lookup_retrytime = int(asyncio.get_running_loop().time()) + 60
             reason = 'empty or unavailable response'
+            unavailable = not body
             if body:
                 try:
                     response = ET.fromstring(body)
                     status = int(response.findtext('status') or 0)
                     reason = f'API status {status}' if status != 200 else 'missing or invalid vote data'
+                    unavailable = status == 200 or 500 <= status < 600
                 except (ET.ParseError, ValueError, TypeError):
                     reason = 'malformed XML or status'
+                    unavailable = True
+            if unavailable and len(_providers()) > 1:
+                logger.warning('[ManiaKarma] Provider unavailable (%s); trying the other provider', reason)
+                _disconnect_api(advance=True)
+                return
             logger.warning('[ManiaKarma] Vote lookup unavailable (%s); lookup retry deferred', reason)
             return
         _lookup_retrytime = 0
@@ -1188,7 +1275,7 @@ def _build_widget_skeleton(mode: int) -> str:
 def _track_page_url_dummy() -> str:
     uid = urllib.parse.quote(str(_current_map.get("uid", "") or ""))
     env = urllib.parse.quote(str(_current_map.get("environment", "") or ""))
-    return f"http://{_cfg.website}/goto?uid={uid}&amp;env={env}&amp;game=TmForever"
+    return f"http://{_active_website()}/goto?uid={uid}&amp;env={env}&amp;game=TmForever"
 
 
 def _build_widget_cups(mode: int) -> str:
@@ -1334,7 +1421,7 @@ async def _send_window(aseco: Aseco, login: str, window_xml: str) -> None:
 
 
 async def _show_help_window(aseco: Aseco, player: Any, message: str) -> None:
-    logo = f'<quad posn="57.2 -8.0 0.05" sizen="18 18" image="{_cfg.img_maniakarma_logo}" url="http://www.mania-karma.com"/>' if _cfg.img_maniakarma_logo else ''
+    logo = f'<quad posn="57.2 -8.0 0.05" sizen="18 18" image="{_cfg.img_maniakarma_logo}" url="http://{_sanitize_ml_text(_active_website())}"/>' if _cfg.img_maniakarma_logo else ''
     msg = _sanitize_ml_text(aseco.format_colors((message or '').replace('{br}', '\n')))
     xml = (
         f'<manialink id="{ML_WINDOWS}">'
@@ -1357,7 +1444,7 @@ async def _show_help_window(aseco: Aseco, player: Any, message: str) -> None:
         f'</frame>'
         f'<frame posn="28.6 -53.35 0.10">'
         f'<quad posn="0 0 0.01" sizen="21.5 2.5" url="{_track_page_url_dummy()}" style="Bgs1" substyle="BgIconBorder"/>'
-        f'<label posn="1.5 -0.65 0.01" sizen="30 1" textsize="1" scale="0.8" textcolor="000F" text="MORE INFO ON MANIA-KARMA.COM"/>'
+        f'<label posn="1.5 -0.65 0.01" sizen="30 1" textsize="1" scale="0.8" textcolor="000F" text="MORE INFO ON {_sanitize_ml_text(_active_website().removeprefix("www.").upper())}"/>'
         f'</frame>'
         f'</frame></manialink>'
     )
@@ -1403,7 +1490,7 @@ async def _show_details_window(aseco: Aseco, login: str) -> None:
         return (
             '<frame posn="28.6 -53.35 0.10">'
             f'<quad posn="0 0 0.01" sizen="21.5 2.5" url="{_track_page_url_dummy()}" style="Bgs1" substyle="BgIconBorder"/>'
-            '<label posn="1.5 -0.65 0.01" sizen="30 1" textsize="1" scale="0.8" textcolor="000F" text="MORE INFO ON MANIA-KARMA.COM"/>'
+            f'<label posn="1.5 -0.65 0.01" sizen="30 1" textsize="1" scale="0.8" textcolor="000F" text="MORE INFO ON {_sanitize_ml_text(_active_website().removeprefix("www.").upper())}"/>'
             '</frame>'
             '</frame>'
             '</manialink>'
@@ -1557,7 +1644,7 @@ async def _show_who_window(aseco: Aseco, login: str, page: int = 0) -> None:
         return (
             '<frame posn="28.6 -53.35 0.10">'
             f'<quad posn="0 0 0.01" sizen="21.5 2.5" url="{_track_page_url_dummy()}" style="Bgs1" substyle="BgIconBorder"/>'
-            '<label posn="1.5 -0.65 0.01" sizen="30 1" textsize="1" scale="0.8" textcolor="000F" text="MORE INFO ON MANIA-KARMA.COM"/>'
+            f'<label posn="1.5 -0.65 0.01" sizen="30 1" textsize="1" scale="0.8" textcolor="000F" text="MORE INFO ON {_sanitize_ml_text(_active_website().removeprefix("www.").upper())}"/>'
             '</frame>'
             '</frame>'
             '</manialink>'
@@ -1641,7 +1728,7 @@ async def _show_reminder_window(aseco: Aseco, players: str | list[str]) -> None:
         f'<frame posn="{rcfg.pos_x} {rcfg.pos_y} 2">',
         '<quad posn="0 1 0" sizen="81.8 4.5" style="BgsPlayerCard" substyle="BgRacePlayerName"/>',
         f'<label posn="16.5 0.3 1" sizen="18 1.8" textsize="2" scale="0.8" halign="right" textcolor="FFFF" text="{_cfg.msg_reminder_at_score}"/>',
-        '<label posn="16.5 -1.5 1" sizen="14 0.2" textsize="1" scale="0.8" halign="right" textcolor="FFFF" text="powered by mania-karma.com"/>',
+        f'<label posn="16.5 -1.5 1" sizen="14 0.2" textsize="1" scale="0.8" halign="right" textcolor="FFFF" text="powered by {_sanitize_ml_text(_active_website().removeprefix("www."))}"/>',
         '<frame posn="19.2 0.45 1">',
         '</frame>',
         '<frame posn="33 0.3 1">',
@@ -1685,7 +1772,7 @@ async def _show_mx_window(aseco: Aseco, player: Any) -> None:
         f'<manialink id="{ML_REMINDER}"><frame posn="{rcfg.pos_x} {rcfg.pos_y} 2">',
         '<quad posn="0 1 0" sizen="81.8 4.5" style="BgsPlayerCard" substyle="BgRacePlayerName"/>',
         f'<label posn="16.5 0.3 1" sizen="18 1.8" textsize="2" scale="0.8" halign="right" textcolor="FFFF" text="{_cfg.msg_reminder_at_score}"/>',
-        '<label posn="16.5 -1.5 1" sizen="14 0.2" textsize="1" scale="0.8" halign="right" textcolor="FFFF" text="powered by mania-karma.com"/>',
+        f'<label posn="16.5 -1.5 1" sizen="14 0.2" textsize="1" scale="0.8" halign="right" textcolor="FFFF" text="powered by {_sanitize_ml_text(_active_website().removeprefix("www."))}"/>',
         '<frame posn="19.2 0.45 1">',
         '<quad posn="0 0.15 0" sizen="7.5 3.75" style="Bgs1InRace" substyle="BgIconBorder"/>',
         f'<label posn="3.75 -0.5 0" sizen="7 0" textsize="1" halign="center" text="{voted}"/>',
@@ -1872,6 +1959,7 @@ async def _handle_player_vote(aseco: Aseco, player: Any, vote: int) -> None:
 
 async def _load_config(aseco: Aseco) -> None:
     global _cfg, _api_connected, _api_authcode, _retrytime, _lookup_retrytime
+    global _api_provider, _api_website, _api_epoch, _auth_pending
     previous = _cfg
     _cfg = KarmaConfig()
     bound = bind_app_settings(MANIA_KARMA_SETTINGS_SCHEMA, getattr(aseco, '_base_dir', None))
@@ -1881,13 +1969,21 @@ async def _load_config(aseco: Aseco) -> None:
     _cfg.enabled = bool(bound.values["config/enabled"])
     _cfg.api_auth_url = as_str(urls.get('api_auth'), _cfg.api_auth_url)
     _cfg.website = as_str(urls.get('website'), _cfg.website)
+    _cfg.fallback_website = as_str(urls.get('fallback_website'), _cfg.fallback_website)
+    _cfg.fallback_api_auth_url = str(urls.get('fallback_api_auth', _cfg.fallback_api_auth_url) or '').strip()
     _cfg.nation = as_str(_env('MK_NATION'), '').upper()
-    if previous.api_auth_url == _cfg.api_auth_url and previous.nation == _cfg.nation:
+    if (previous.api_auth_url, previous.website, previous.fallback_api_auth_url,
+            previous.fallback_website, previous.nation) == (
+            _cfg.api_auth_url, _cfg.website, _cfg.fallback_api_auth_url,
+            _cfg.fallback_website, _cfg.nation):
         _cfg.api_url = previous.api_url
         _cfg.import_done = previous.import_done
     else:
         _api_connected, _api_authcode = False, ''
         _retrytime = _lookup_retrytime = 0
+        _api_provider, _api_website = 0, ''
+        _api_epoch += 1
+        _auth_pending = False
 
     _cfg.connect_timeout = bound.values["config/connect_timeout"]
     _cfg.wait_timeout = bound.values["config/wait_timeout"]
@@ -2004,7 +2100,7 @@ async def _mk_onSync(aseco: Aseco, _data=None) -> None:
     await _load_config(aseco)
     if not _cfg.enabled:
         return
-    if not _cfg.api_auth_url:
+    if not _providers():
         logger.warning('[ManiaKarma] Disabled: urls.api_auth missing in app_defaults.toml')
         return
     if not _cfg.nation or _cfg.nation == 'YOUR_SERVER_NATION' or _cfg.nation not in ISO3166_ALPHA3:
@@ -2151,7 +2247,7 @@ async def _mk_onPlayerConnect(aseco: Aseco, player: Any) -> None:
     global _current_map
     _ensure_player_state(player)
     if _cfg.show_welcome and _cfg.msg_welcome:
-        msg = _cfg.msg_welcome.replace('{1}', f'http://{_cfg.website}/').replace('{2}', _cfg.website)
+        msg = _cfg.msg_welcome.replace('{1}', f'http://{_active_website()}/').replace('{2}', _active_website())
         await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', _fmt_message(aseco, msg), player.login)
     if _is_master_admin(aseco, player) and not _cfg.import_done:
         warn = '{#server}> {#emotic}#################################################\n{#server}> {#emotic}Please start the export of your current local votes with the command "/karma export". Thanks!\n{#server}> {#emotic}#################################################'
@@ -2435,13 +2531,14 @@ async def _api_export_votes(aseco: Aseco, player: Any) -> None:
         'nation': str(_cfg.nation or '')})
     timeout = _cfg.wait_timeout
     identity = server_login, _api_authcode, str(_cfg.nation or '')
+    epoch, website = _api_epoch, _active_website()
     job = JobEnvelope.capture(aseco.capture_job_context(login=login), {})
     async def operation(_job):
         payload, count = await _build_export_payload(aseco, identity)
         status, _body = await _api_post(url, payload, timeout)
         return status, count
     async def apply(result):
-        if result.status == 'completed' and result.value[0] == 200:
+        if result.status == 'completed' and result.value[0] == 200 and epoch == _api_epoch:
             _cfg.import_done = True
         if aseco.server.players.get_player(login) is not player:
             return
@@ -2450,7 +2547,7 @@ async def _api_export_votes(aseco: Aseco, player: Any) -> None:
         else:
             status, count = result.value
             message = {
-                200: f'{{#server}}>> {{#admin}}Export done ({count} votes). Thanks for supporting mania-karma.com!',
+                200: f'{{#server}}>> {{#admin}}Export done ({count} votes). Thanks for supporting {website}!',
                 406: '{#server}>> {#error}Export rejected! Check server login and MK_NATION.',
                 409: '{#server}>> {#error}Export was already done; only one export is allowed.',
             }.get(status, '{#server}>> {#error}Export failed; check ManiaKarma status before retrying.')
@@ -2513,11 +2610,13 @@ def register(aseco: Aseco) -> None:
 
 
 async def reload_karma_runtime(aseco: Aseco) -> None:
-    global _runtime_aseco, _karma, _current_map
+    global _runtime_aseco, _karma, _current_map, _api_epoch, _auth_pending
 
     _runtime_aseco = aseco
     from pyxaseco.core.background_jobs import JobPolicy
     aseco.jobs.service('karma', JobPolicy(deadline_seconds=120)).invalidate()
+    _api_epoch += 1
+    _auth_pending = False
     await _load_config(aseco)
     _cfg.current_state = _display_mode(aseco)
     _current_map = await _get_current_map_info(aseco)

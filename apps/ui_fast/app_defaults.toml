@@ -1,0 +1,58 @@
+[ui_fast]
+enabled = true
+# IDs 0/1 and existing custom styles are untouched. Change this if ID 8 is used.
+preset_id = 8
+refresh_seconds = 3
+show_on_score = true
+
+[ui_fast.menu]
+enabled = true
+pos_x = -49.9
+pos_y = 47.8
+width = 23.0
+
+[ui_fast.map]
+enabled = true
+pos_x = 49.05
+pos_y = 48.0
+width = 15.5
+
+[ui_fast.records]
+enabled = true
+pos_x = 43.1
+pos_y = 21.95
+width = 21.0
+entries = 10
+topcount = 3
+row_height = 1.8
+
+[ui_fast.splits]
+enabled = true
+pos_x = -23.0
+pos_y = 30.7
+width = 46.0
+# Click the comparison line to cycle best / ideal / reference.
+# reference uses the selected FAST record source and reference_rank.
+comparison = "best"
+reference_rank = 1
+show_position = true
+show_gaps = true
+
+[ui_fast.competition]
+# No match starts automatically. Use //tmatch start; collection begins next map.
+# Independent of visual ui_fast.enabled and each player's selected UI style.
+enabled = true
+blue = "Blue Team"
+red = "Red Team"
+show_panel = true
+show_round = true
+round_history = true
+# These rules are saved when a match starts; they never change native race scoring.
+scoring = "native" # native or map_wins
+target = 0 # 0 means stop manually
+win_margin = 1 # use 2 for a two-point lead at the overall target
+history_rows = 5
+pos_x = -64.7
+pos_y = 23.65
+width = 28.0
+

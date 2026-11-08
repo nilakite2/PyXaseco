@@ -370,7 +370,7 @@ def _auth_check(aseco: 'Aseco', admin, sub: str):
 
     public_admin_commands = {'help', 'helpall', 'listmasters', 'listadmins', 'listops'}
     masteradmin_only = {'addadmin', 'removeadmin', 'cleanupserver'}
-    admin_or_master_only = {'addop', 'removeop'}
+    admin_or_master_only = {'addop', 'removeop', 'tmatch'}
 
     if sub in public_admin_commands:
         level = _role_level(aseco, login)

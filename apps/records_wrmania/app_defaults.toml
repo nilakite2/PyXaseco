@@ -1,10 +1,12 @@
 [records_wrmania]
-enabled = true
+enabled = false
 api_base = "https://api.wrmania.net"
 # Dedicated-server account, not the XML-RPC SuperAdmin account.
-# Blank login uses the actual connected dedicated-server login.
+# Leave these blank to reuse DEDI_LOGIN, DEDI_PASSWORD and DEDI_NATION from .env.
+# Dedimania does not need to be enabled. No credentials are copied into this file.
+# Without DEDI_LOGIN, blank login uses the actual connected dedicated-server login.
 server_login = ""
-# Prefer WRMANIA_SERVER_PASSWORD in the controller's .env instead.
+# Optional override; WRMANIA_SERVER_PASSWORD in .env takes priority over this field.
 server_password = ""
 nation = ""
 request_timeout = 30
@@ -12,13 +14,13 @@ refresh_interval = 45
 # Presence is independent of map support, records refresh and widget visibility.
 heartbeat_interval = 240
 submit_records = true
-widget_enabled = true
+widget_enabled = false
 # false: fallback only; true: replace Dedimania when no RPG/Trial/Ultimania provider is active.
 prefer_widget = false
 # Healthy Dedimania keeps Mania silent. If Dedimania is disabled, Mania announces
 # even when RPG/Trial owns the widget. During a Dedimania outage, announce only
 # when the Mania fallback widget is selected.
-show_record_messages = true
-show_map_messages = true
+show_record_messages = false
+show_map_messages = false
 # Override the chat-priority rules above (does not change widget priority).
 announce_when_hidden = false

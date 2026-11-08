@@ -1223,3 +1223,6 @@ progress_indicator = "http://maniacdn.net/undef.de/xaseco1/mania-karma/progress_
 [ui.karma.urls]
 website = "www.mania-karma.com"
 api_auth = "http://worldwide.mania-karma.com/api/tmforever-trackmania-v4.php"
+# Used only when the primary provider is unavailable. Blank API URL disables fallback.
+fallback_website = "karma.wrmania.net"
+fallback_api_auth = "http://karma.wrmania.net/api/tmforever-trackmania-v4.php"

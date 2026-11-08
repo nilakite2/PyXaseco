@@ -6,12 +6,16 @@ import re
 import xml.etree.ElementTree as ET
 
 from .modern import heading_text
+from .hud_layout import BY_PAGE
+from .player_hud import EDITOR
+from pyxaseco.core.widget_delivery import is_score_phase
 
 
 logger = logging.getLogger(__name__)
-PAGES = re.compile(r'<manialink\b[^>]*(?:/>|>.*?</manialink>)', re.DOTALL)
+PAGES = re.compile(r'<manialink\b[^>]*?(?:/>|>.*?</manialink>)', re.DOTALL)
 DECLARATION = re.compile(r'<\?xml[^>]*\?>')
 COMPACT_SCORE_IDS = {'91815', '91816', '91831', '91834', '91845', '91846', '91847', '91848'} | {str(i) for i in range(91818, 91827)}
+REBUILT_RECORD_IDS = {'91811', '91812', '91813'}
 DECORATIVE_SKINS = {('BgsPlayerCard', 'BgRacePlayerLine')}
 OPEN_CORNER = re.compile(
     r'^https?://maniacdn\.net/undef\.de/xaseco1/(?:mania-karma|records-eyepiece)/'
@@ -232,6 +236,7 @@ class Presentation:
     def __init__(self, service):
         self.service = service
         self.sources = OrderedDict()
+        self.race_sources = set()
         self.source_bytes = 0
         self.cache = OrderedDict()
         self.cache_bytes = 0
@@ -243,6 +248,7 @@ class Presentation:
         xml, lifetime, hide = args[1:] if targeted else args
         players = self.service.aseco.server.players
         recipients = args[0].split(',') if targeted else [p.login for p in players.all()]
+        hud = getattr(self.service, 'hud', None) if not lifetime and not hide and not is_score_phase(self.service.aseco) else None
         groups = {}
         for login in recipients:
             player = players.get_player(login)
@@ -262,6 +268,10 @@ class Presentation:
                             self.cache_bytes -= len(old_key[2].encode('utf-8')) + len(old_xml.encode('utf-8'))
                 else:
                     self.cache.move_to_end(key)
+            if preset is not None and preset.renderer:
+                output = self.service.transform_xml(player, output)
+            if preset is not None and hud is not None:
+                output = hud.transform(player, preset, output)
             groups.setdefault(output, []).append(login)
         if not groups or (len(groups) == 1 and next(iter(groups)) == xml):
             return None
@@ -281,20 +291,25 @@ class Presentation:
                         self._forget((login, match[1]))
         if lifetime or hide:
             return
+        race = not is_score_phase(self.service.aseco)
         for fragment in PAGES.findall(xml):
             match = re.search(r'\bid=["\']([^"\']+)["\']', fragment)
-            if not match or match[1] in ('0', '1', '91800', '91801', '91811', '91812', '91813'):
-                continue  # Modal windows are not reopened; record widgets rebuild from data.
+            if not match or match[1] in ('0', '1', '91800', '91801', EDITOR):
+                continue
             for login in recipients:
                 self._forget((login, match[1]))
                 self.sources[(login, match[1])] = fragment
+                if race and match[1] in BY_PAGE:
+                    self.race_sources.add((login, match[1]))
                 self.source_bytes += len(fragment.encode('utf-8'))
                 self.sources.move_to_end((login, match[1]))
         while len(self.sources) > 4096 or self.source_bytes > 4_000_000:
-            _key, fragment = self.sources.popitem(last=False)
+            key, fragment = self.sources.popitem(last=False)
+            self.race_sources.discard(key)
             self.source_bytes -= len(fragment.encode('utf-8'))
 
     def _forget(self, key):
+        self.race_sources.discard(key)
         fragment = self.sources.pop(key, None)
         if fragment is not None:
             self.source_bytes -= len(fragment.encode('utf-8'))
@@ -304,10 +319,20 @@ class Presentation:
             if key[0] == login:
                 self._forget(key)
 
-    async def refresh(self, player):
+    async def refresh(self, player, *, pages=None):
         from pyxaseco.core.widget_delivery import deliver_ui
-        fragments = [xml for (login, _page), xml in self.sources.items() if login == player.login]
-        for xml in fragments:
+        # Style changes rebuild record widgets from data. HUD edits replay the
+        # current race source so a hide/show never has to query for records.
+        keys = [key for key in self.sources if key[0] == player.login
+                and (key[1] not in REBUILT_RECORD_IDS if pages is None else
+                     key[1] in pages and key in self.race_sources)]
+        generation = getattr(self.service.aseco, '_map_generation', None)
+        for key in keys:
             if not self.service.connected(player):
                 break
-            await deliver_ui(self.service.aseco, 'SendDisplayManialinkPageToLogin', player.login, xml, 0, False)
+            if pages is not None and (is_score_phase(self.service.aseco) or
+                    getattr(self.service.aseco, '_map_generation', None) != generation):
+                break
+            xml = self.sources.get(key)
+            if xml is not None and (pages is None or key in self.race_sources):
+                await deliver_ui(self.service.aseco, 'SendDisplayManialinkPageToLogin', player.login, xml, 0, False)

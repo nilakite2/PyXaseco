@@ -13,7 +13,7 @@ def text(value):
     return escape(value[:120], {'"': '&quot;'})
 
 
-def render(values, names, match_score, map_score, stale=False):
+def render(values, names, match_score, map_score, stale=False, match_state=''):
     width = values['display/width']
     scale = width / 85
     def x(value):
@@ -22,7 +22,8 @@ def render(values, names, match_score, map_score, stale=False):
         return (f'<label posn="{x(px)} {py} .06" sizen="{x(size)} 2" textsize="1" '
                 f'scale="{font_scale * min(1, scale):.4f}" halign="{align}" textcolor="{color}" text="{text(caption)}"/>')
     scores = ['--' if map_score is None else str(map_score[index]) for index in (0, 1)]
-    title = 'Match Overlay' + (' - scores unavailable' if stale else '')
+    title = 'Match Overlay' + (' - ' + match_state if match_state else '')
+    title += ' - scores unavailable' if stale else ''
     parts = [f'<manialink id="{ML_ID}"><frame posn="{values["display/pos_x"]} {values["display/pos_y"]} 0">',
              f'<quad posn="0 0 .001" sizen="{width:.4f} 11.3" style="BgsPlayerCard" substyle="BgCardSystem"/>',
              f'<quad posn=".4 -.36 .002" sizen="{width - .8:.4f} 2" style="BgsPlayerCard" substyle="BgCardSystem"/>',

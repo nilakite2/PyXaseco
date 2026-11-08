@@ -68,10 +68,12 @@ def team_scores(rows):
     if not isinstance(rows, list) or len(rows) != 2:
         raise ValueError('Expected exactly two team ranking entries.')
     result = {}
-    for index, row in enumerate(rows):
+    for row in rows:
         if not isinstance(row, dict):
             raise ValueError('Invalid team ranking entry.')
-        team, score = row.get('TeamId', index), row.get('Score')
+        team, score = row.get('TeamId'), row.get('Score')
+        if team is None and str(row.get('Login', '')) in ('0', '1'):
+            team = int(row['Login'])
         if type(team) is not int or team not in (0, 1) or team in result or type(score) is not int or score < 0:
             raise ValueError('Invalid or duplicate team identifier/score.')
         result[team] = score
@@ -122,6 +124,7 @@ class MatchOverlayApp(App):
             ('onEndRaceRanking', self.final_scores), ('onPlayerConnect', self.connect),
             ('onPlayerInfoChanged', self.info), ('onPlayerDisconnect', self.disconnect),
             ('onWidgetVisibilityChanged', self.visibility), ('onUiStyleChanged', self.style),
+            ('onTeamMatchChanged', self.match_changed),
         ):
             aseco.register_event(event, callback)
 
@@ -165,11 +168,20 @@ class MatchOverlayApp(App):
         await self.refresh(context.aseco)
         self.hidden.clear()
 
-    def xml(self):
-        return views.render(self.values, self.names, self.match_score, self.scores, self.stale)
+    def competition(self, aseco):
+        service = aseco.get_service('competition/team')
+        return service if service is not None and service.snapshot() is not None else None
+
+    def xml(self, aseco):
+        service = self.competition(aseco)
+        match = service.snapshot() if service is not None else None
+        state = (match['state'] + (' - needs attention' if match.get('error') else '')) if match else ''
+        return views.render(self.values, match['names'] if match else self.names,
+                            match['totals'] if match else self.match_score,
+                            self.scores, self.stale, state)
 
     async def draw(self, aseco, player):
-        xml = self.xml() if self.showing(aseco) and self.eligible(player) else f'<manialink id="{views.ML_ID}"></manialink>'
+        xml = self.xml(aseco) if self.showing(aseco) and self.eligible(player) else f'<manialink id="{views.ML_ID}"></manialink>'
         await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', player.login, xml, 0, False)
 
     async def refresh(self, aseco):
@@ -177,7 +189,7 @@ class MatchOverlayApp(App):
         shown, hidden = [], []
         for player in aseco.server.players.all():
             (shown if showing and self.eligible(player) else hidden).append(player.login)
-        for recipients, xml in ((shown, self.xml() if showing else ''),
+        for recipients, xml in ((shown, self.xml(aseco) if showing else ''),
                                 (hidden, f'<manialink id="{views.ML_ID}"></manialink>')):
             for start in range(0, len(recipients), 100):
                 await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', ','.join(recipients[start:start + 100]), xml, 0, False)
@@ -269,6 +281,9 @@ class MatchOverlayApp(App):
         if player is not None:
             await self.draw(aseco, player)
 
+    async def match_changed(self, aseco, _data=None):
+        await self.refresh(aseco)
+
     async def reply(self, aseco, player, text):
         await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', aseco.format_colors('{#server}> ' + text), player.login)
 
@@ -283,14 +298,18 @@ class MatchOverlayApp(App):
             if action in ('help', 'about'):
                 await self.reply(aseco, player, '/moverlay enable|disable|status; team <1|2|blue|red> <name>; '
                                  'team auto <1|2>; mscore <blue> <red>; to <all|players|spectators>. '
-                                 'Port of Chris92/TheM matchOverlay. Overall match score is manual.')
+                                 'Overall score follows FAST Team Match when present; otherwise manual.')
                 return
             if not self.enabled:
                 raise ValueError('Match Overlay is disabled in app settings.')
             if action == 'status' and len(parts) == 1:
+                service = self.competition(aseco)
+                match = service.snapshot() if service is not None else None
+                names = match['names'] if match else self.names
+                scores = match['totals'] if match else self.match_score
                 await self.reply(aseco, player, f'Match Overlay: {"active" if self.active else "inactive"}; '
-                    f'audience={self.audience}; match {self.names[0]} {self.match_score[0]} - '
-                    f'{self.match_score[1]} {self.names[1]}; Team mode only.')
+                    f'audience={self.audience}; match {names[0]} {scores[0]} - '
+                    f'{scores[1]} {names[1]}; ' + (f'FAST {match["state"]}.' if match else 'Manual totals.'))
                 return
             if action in ('enable', 'activate') and len(parts) == 1:
                 if self.mode(aseco) != 2:
@@ -305,7 +324,11 @@ class MatchOverlayApp(App):
                 scores = [int(value) for value in parts[1:]]
                 if any(not 0 <= value <= 999999 for value in scores):
                     raise ValueError('Match scores must be whole numbers from 0 to 999999.')
-                self.match_score = scores
+                service = self.competition(aseco)
+                if service is not None:
+                    await service.set_score(aseco, player, scores)
+                else:
+                    self.match_score = scores
             elif action == 'team' and len(parts) >= 3:
                 if parts[1].lower() == 'auto' and len(parts) == 3:
                     index = team_index(parts[2])
@@ -314,7 +337,11 @@ class MatchOverlayApp(App):
                     index, name = team_index(parts[1]), ' '.join(parts[2:])
                 if not name.strip() or len(name) > 80:
                     raise ValueError('Team names must contain 1-80 characters.')
-                self.names[index] = name
+                service = self.competition(aseco)
+                if service is not None:
+                    await service.set_name(aseco, player, index, name)
+                else:
+                    self.names[index] = name
             else:
                 raise ValueError('Unknown command or invalid arguments. Use /moverlay help.')
             await self.refresh(aseco)

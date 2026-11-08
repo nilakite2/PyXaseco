@@ -14,13 +14,21 @@ positions and row counts follow the existing external-record widget settings.
 ## Configuration
 
 1. Enable `app/records_wrmania` in `apps.toml`, or through `//apps`, then restart.
-2. Configure `apps/records_wrmania/app_defaults.toml`: actual dedicated-server
-   login, password and three-letter nation. These are NOT XML-RPC credentials.
-   Blank login uses the connected server's login; mismatched logins are rejected.
-3. Prefer `WRMANIA_SERVER_PASSWORD` in the controller's `.env` for the password.
-   It overrides `server_password` in the app defaults. The plain password is not
-   sent: authentication sends the supplied plugin's password-derived HMAC proof
-   over verified HTTPS, and subsequent requests use an in-memory session token.
+2. If Dedimania credentials are already configured, leave `server_login`,
+   `server_password` and `nation` blank in this app's `app_defaults.toml`.
+   They reuse `DEDI_LOGIN`, `DEDI_PASSWORD` and `DEDI_NATION` from the existing
+   controller configuration (`.env`, or its `config.toml` equivalents).
+   Dedimania itself does not need to be loaded, enabled or reachable.
+3. For separate configuration, set the app's actual dedicated-server login,
+   password and three-letter nation. Explicit app settings override the shared
+   values; `WRMANIA_SERVER_PASSWORD` in `.env` takes priority over either password.
+   Without a configured login, the connected server's login is used. Mismatched
+   logins are rejected, and a different explicit login does not inherit another
+   account's password. These are NOT XML-RPC SuperAdmin credentials.
+
+The plain password is not sent: authentication sends the supplied plugin's
+password-derived HMAC proof over verified HTTPS, and subsequent requests use an
+in-memory session token. Shared credentials are not copied into the app file.
 
 `//apps config records_wrmania` edits supported defaults.
 `//apps reload records_wrmania` reloads configuration; use `//pyres` after source edits.

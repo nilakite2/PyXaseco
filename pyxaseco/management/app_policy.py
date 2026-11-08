@@ -1,6 +1,7 @@
 """App-management capabilities shared with the optional in-game manager."""
 
 MANAGEABLE_STANDALONE_APPS = {
+    'ui_fast': 'FAST UI',
     'sponsor_banner': 'Sponsor Banner',
     'server_admin_bridge': 'Server Admin Bridge',
     'match_overlay': 'Match Overlay',
@@ -29,6 +30,7 @@ PROTECTED_STANDALONE_APPS = {
 }
 
 RELOADABLE_APPS = {
+    'ui_fast',
     'sponsor_banner',
     'match_overlay',
     'pyxa_stats',

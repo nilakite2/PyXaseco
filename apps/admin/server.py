@@ -38,6 +38,7 @@ COMMAND_SPECS = [
     ('uptodate', 'Checks whether XAseco is up to date'),
     ('rpoints', 'Sets custom Rounds points (see: /admin rpoints help)'),
     ('match', '{begin/end} to start/stop match tracking'),
+    ('tmatch', 'Admin/MA: FAST multi-map Team match {start/status/pause/resume/stop/score/undo/reset}'),
     ('coppers', "Shows server's coppers amount"),
     ('pay', 'Pays server coppers to login'),
     ('wall', 'Displays popup message to all players'),
@@ -1581,6 +1582,14 @@ async def handle_subcommand(
             await admin_chat._reply(aseco, login, '{#server}> {#error}UI style management is unavailable.')
         else:
             await service.admin_command(admin, args)
+        return True
+
+    if sub == 'tmatch':
+        service = aseco.get_service('competition/team')
+        if service is None:
+            await admin_chat._reply(aseco, login, '{#server}> {#error}FAST Team matches require app/ui_fast.')
+        else:
+            await service.command(aseco, admin, args)
         return True
 
     if sub == 'apps':

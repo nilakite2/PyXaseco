@@ -2,7 +2,9 @@
 
 ## Purpose
 
-Shows live Team-mode map points alongside a manually managed match/series score.
+Shows live Team-mode map points alongside an overall match/series score.
+Uses automatic multi-map totals from FAST Team Match when available; otherwise
+the overall score is manually managed.
 Uses native ManiaLink graphics and Classic/Modern styling.
 
 ## Commands
@@ -28,12 +30,18 @@ Defaults: manual activation, Team mode, spectators only, hidden on the score scr
 
 ## Changes And Limits
 
-- Map points update from the dedicated server; the overall match score is manual.
+- Map points update from the dedicated server. Without a saved FAST match, the
+  overall match score is manual.
   No team assignments, game scores or map rotation are changed.
-- Names/match score survive map changes within the controller session. Restarting
-  the controller resets the match score; `mscore 0 0` resets it manually.
+- Manual names/match score survive map changes within the controller session.
+  Restarting the controller resets the manual score; `mscore 0 0` resets it manually.
+  Saved FAST match results instead survive controller restarts.
 - Runtime commands do not save permanent defaults. Configuration reload reapplies
   defaults while preserving the manual match score.
+- Optional `ui_fast` provides `//tmatch` automatic multi-map scoring, saved history
+  and explicit restart recovery. When it owns a match, the overlay uses its team
+  names/totals/state; `mscore` and team-name commands update that same service.
+  Resetting the FAST match restores the overlay's separate manual names/totals.
 - Leaving Team mode disables display until re-enabled. F7 and per-player styles apply.
 - Automatic naming needs at least two team players; manual names remain available.
 

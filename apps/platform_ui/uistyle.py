@@ -11,6 +11,7 @@ from pyxaseco.helpers import _send_multipage
 from pyxaseco.toml_tools import update_toml_table_scalar
 from .uistyle_catalog import Catalog, load_catalog, valid_id
 from .presentation import Presentation
+from .player_hud import PlayerHud
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,8 @@ class UiStyles:
         self.default = 0
         self.lock = asyncio.Lock()
         self.presentation = Presentation(self)
+        self.hud = PlayerHud(self)
+        self.renderers = {}
 
     def delivery_groups(self, method, *args):
         return self.presentation.groups(method, *args)
@@ -42,6 +45,12 @@ class UiStyles:
 
     async def startup(self, _aseco, _param):
         self.catalog = await file_io(load_catalog, self.root)
+        for name, (preset, _renderer) in list(self.renderers.items()):
+            if preset.id in self.catalog.presets:
+                logger.warning('[UIStyle] Renderer %s conflicts with preset %s; keeping the file-defined preset', name, preset.id)
+                del self.renderers[name]
+            else:
+                self.catalog.presets[preset.id] = preset
         for warning in self.catalog.warnings:
             logger.warning('[UIStyle] %s', warning)
         try:
@@ -62,6 +71,28 @@ class UiStyles:
 
     def resolve(self, player):
         return self.catalog.resolve(getattr(player, 'ui_style', None), self.default)
+
+    def register_renderer(self, name, preset, renderer):
+        """Optional apps own their presets; no optional package is imported here."""
+        if not name or preset.renderer != name or not valid_id(preset.id) or preset.id < 2:
+            raise ValueError('An app renderer needs its own name and a preset ID of at least 2.')
+        previous = self.renderers.get(name)
+        existing = self.catalog.presets.get(preset.id)
+        if existing is not None and (previous is None or existing is not previous[0]):
+            raise ValueError(f'UI preset ID {preset.id} is already in use; choose another ID.')
+        if previous is not None:
+            self.catalog.presets.pop(previous[0].id, None)
+        self.renderers[name] = (preset, renderer)
+        self.catalog.presets[preset.id] = preset
+
+    def unregister_renderer(self, name):
+        previous = self.renderers.pop(name, None)
+        if previous is not None:
+            self.catalog.presets.pop(previous[0].id, None)
+
+    def transform_xml(self, player, xml):
+        registered = self.renderers.get(self.resolve(player).renderer)
+        return registered[1].transform_xml(player, xml) if registered else xml
 
     def window_style(self, player, legacy):
         window = self.resolve(player).window
@@ -239,3 +270,4 @@ def register(aseco):
                            app='platform_ui', owner='ui/uistyle', category='chat-ui',
                            usage='/uistyle [list|default|id]')
     aseco.register_event('onChat_uistyle', service.command)
+    service.hud.register()

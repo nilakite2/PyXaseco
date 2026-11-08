@@ -17,7 +17,7 @@ from .maintenance import _bytes, _replace
 from pyxaseco.core.file_io import file_io
 from .release_manifest import (
     ASSET_HOSTS, GITHUB_HOSTS, GITHUB_DOWNLOAD_HOSTS, WEBSITE_HOSTS, METADATA_LIMIT, PACKAGE_LIMIT,
-    compatibility, https_url, read_json, validate_archive, verify_catalogue,
+    compatibility, https_url, parse_checksum, read_json, validate_archive, verify_catalogue,
 )
 
 
@@ -46,14 +46,17 @@ class UpdateClient:
 
     def _configuration(self):
         if self.settings.get('enabled') is not True:
-            raise ManagementError('Release downloads are disabled until publishing URLs and the trusted public key are configured')
+            raise ManagementError('Release downloads are disabled in Apps Manager settings')
         github = https_url(self.settings.get('github_manifest', ''), GITHUB_HOSTS)
         website = https_url(self.settings.get('validation_manifest', ''), WEBSITE_HOSTS)
         channel = self.settings.get('channel', 'stable')
         key = self.settings.get('public_key', '')
-        if channel not in {'stable', 'development'} or not isinstance(key, str) or not key:
-            raise ManagementError('Configure the release channel and locally trusted signing public key')
-        return github, website, channel, key
+        verification = self.settings.get('verification', 'signed')
+        if channel not in {'stable', 'development'} or verification not in ('signed', 'sha256'):
+            raise ManagementError('Configure a supported release channel and verification mode')
+        if verification == 'signed' and (not isinstance(key, str) or not key):
+            raise ManagementError('Configure the locally trusted signing public key')
+        return github, website, channel, key, verification
 
     async def _fetch(self, session, url, allowed, limit):
         for _ in range(6):
@@ -106,16 +109,35 @@ class UpdateClient:
                 _replace(path, data, revision(before) if before else None)
 
     async def _check(self, session):
-        github, website, channel, key = self._configuration()
+        github, website, channel, key, verification = self._configuration()
         # Independent origins are required, including every redirect hop.
         first = await self._fetch(session, github, GITHUB_DOWNLOAD_HOSTS, METADATA_LIMIT)
         second = await self._fetch(session, website, WEBSITE_HOSTS, METADATA_LIMIT)
-        catalogue, digest = await asyncio.to_thread(verify_catalogue, first, key, channel)
-        _approved, approved_digest = await asyncio.to_thread(verify_catalogue, second, key, channel)
+        catalogue, digest = await asyncio.to_thread(verify_catalogue, first, key, channel, verification=verification)
+        _approved, approved_digest = await asyncio.to_thread(verify_catalogue, second, key, channel, verification=verification)
         if digest != approved_digest:
             raise ManagementError('GitHub and tmtrialgy.com do not approve the same catalogue; update postponed')
+        if verification == 'sha256':
+            origin = urlsplit(github)
+            repo = origin.path.split('/')[1:3]
+            if (origin.hostname != 'github.com' or len(repo) != 2 or not all(repo)
+                    or origin.path.split('/')[3:4] != ['releases']
+                    or any(urlsplit(p['urls'][0]).path.split('/')[1:3] != repo
+                           for p in catalogue['packages'])):
+                raise ManagementError('Release assets must belong to the configured GitHub repository')
+            if any(urlsplit(p['urls'][1]).hostname != urlsplit(website).hostname for p in catalogue['packages']):
+                raise ManagementError('Release assets must use the configured website publisher')
         await asyncio.to_thread(self._remember, catalogue, digest)
         return catalogue, digest
+
+    async def _verify_checksums(self, session, catalogue, package):
+        if catalogue['schema'] != 2:
+            return
+        filename = package['id'] + '-' + package['version'] + '.zip'
+        for url, allowed in zip(package['urls'], (GITHUB_DOWNLOAD_HOSTS, WEBSITE_HOSTS)):
+            checksum = await self._fetch(session, url + '.sha256', allowed, 1024)
+            if parse_checksum(checksum, filename) != package['sha256']:
+                raise ManagementError('Publisher SHA-256 does not match the approved package; nothing installed')
 
     @staticmethod
     def _session():
@@ -210,6 +232,7 @@ class UpdateClient:
                 catalogue, _digest = await self._check(session)
                 package = self._package(catalogue, identity)
                 self._compatible(package, dependencies=True)
+                await self._verify_checksums(session, catalogue, package)
                 blob = await asyncio.to_thread(self._staged_blob, package)
                 # Join disk writes even if shutdown cancels the request. No background writer is abandoned.
                 return await file_io(FileUpdates(self.root).apply, package, blob,
@@ -244,19 +267,25 @@ class UpdateClient:
                 reasons = compatibility(package, self.controller_version, '.'.join(map(str, sys.version_info[:3])))
                 if reasons:
                     raise ManagementError('; '.join(reasons))
+                await self._verify_checksums(session, catalogue, package)
                 blob = None
-                for url in package['urls']:
+                checksum_mode = catalogue['schema'] == 2
+                urls = package['urls'][:1] if checksum_mode else package['urls']
+                allowed = GITHUB_DOWNLOAD_HOSTS if checksum_mode else ASSET_HOSTS
+                for url in urls:
                     try:
-                        blob = await self._fetch(session, url, ASSET_HOSTS, package['size'])
+                        blob = await self._fetch(session, url, allowed, package['size'])
                         break
                     except (aiohttp.ClientError, asyncio.TimeoutError, PublisherUnavailable):
                         continue
                 if blob is None:
                     raise ManagementError('Package mirrors are unavailable; nothing installed')
                 # Recheck expiration after a potentially slow package transfer.
-                from datetime import datetime, timezone
-                if datetime.strptime(catalogue['expires'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
-                    raise ManagementError('Release approval expired during download; nothing staged')
+                if 'expires' in catalogue:
+                    from datetime import datetime, timezone
+                    expires = datetime.strptime(catalogue['expires'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+                    if expires <= datetime.now(timezone.utc):
+                        raise ManagementError('Release approval expired during download; nothing staged')
                 return await asyncio.to_thread(self._store, blob, package, catalogue, digest)
         except (aiohttp.ClientError, asyncio.TimeoutError):
             raise ManagementError('A release publisher is unavailable; no update was performed') from None

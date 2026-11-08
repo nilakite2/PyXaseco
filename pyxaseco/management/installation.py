@@ -44,6 +44,8 @@ def safe_path(path):
 
 def payload_path(name):
     parts = PurePosixPath(name).parts
+    if tuple(part.casefold() for part in parts[:3]) == ('apps', 'ui', 'player_huds'):
+        raise ManagementError('Player HUD profiles are server data, not release files')
     if (not parts or name != '/'.join(parts) or '\\' in name
             or any(part in {'.', '..'} or any(char in ':*?"<>|' or ord(char) < 32 for char in part) or part.endswith(('.', ' '))
                    or part.startswith('.') for part in parts)

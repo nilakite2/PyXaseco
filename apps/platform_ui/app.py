@@ -20,6 +20,8 @@ APP_METADATA = {
         "apps/platform_ui/uistyle_catalog.py",
         "apps/platform_ui/modern.py",
         "apps/platform_ui/presentation.py",
+        "apps/platform_ui/hud_layout.py",
+        "apps/platform_ui/player_hud.py",
         "apps/platform_ui/panels.py",
         "apps/platform_ui/settings.py",
         "apps/platform_ui/lastwin.py",

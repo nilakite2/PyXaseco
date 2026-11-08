@@ -9,13 +9,13 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 from pyxaseco.helpers import format_text
+from pyxaseco.core.aseco import PYXASECO_VERSION
 from pyxaseco.core.service_health import observed_response
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
     from pyxaseco.models import Player
 
-PYXASECO_VERSION = '0.1.0'
 # Set to '' to disable version checks
 VERSION_URL = ''   # e.g. 'https://your-site.com/version.txt'
 

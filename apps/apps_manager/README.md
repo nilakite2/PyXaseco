@@ -15,7 +15,7 @@ Commands are routed through Admin and restricted to MasterAdmins.
 | `//apps reload <app>` | Reload supported configuration, not Python source. |
 | `//apps enable <app>`, `//apps disable <app>` | Change the loadout for the next restart. |
 | `//apps add <app>`, `//apps remove <app>` | Restore/remove eligible apps using local managed storage. |
-| `//apps updates` | Check matching signed GitHub and website catalogues. |
+| `//apps updates` | Check that GitHub and the website approve the same release catalogue. |
 | `//apps download <package>` | Download and verify a controller or optional-app ZIP. |
 | `//apps review <package>`, `//apps update <package>` | Review proposed file changes. |
 | `//apps update <package> confirm` | Back up and copy, preserving modified code. |

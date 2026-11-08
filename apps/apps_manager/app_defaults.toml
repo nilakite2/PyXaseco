@@ -2,10 +2,9 @@
 # Checks are opt-in. Copying files requires confirmation; restarting is manual.
 enabled = false
 channel = "stable"
-# Exact same signed catalogue published on independent GitHub and website URLs.
-github_manifest = "https://github.com/nilakite2/PyXaseco/releases/download/Stable/catalogue.json"
+# Same catalogue, ZIP and SHA-256 file published independently on both hosts.
+verification = "sha256"
+github_manifest = "https://github.com/nilakite2/PyXaseco/releases/latest/download/catalogue.json"
 validation_manifest = "https://tmtrialgy.com/api/pyxaseco/updates/stable.json"
-# Base64 of the 32-byte Ed25519 public key, provided locally by the publisher.
-public_key = "RhFrpVtHh0VICQisqx+JqvYZFAC9ce7qqokJhIR5Ir4="
 check_interval_seconds = 3600
 notice_interval_seconds = 1800

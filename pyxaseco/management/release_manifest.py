@@ -1,4 +1,4 @@
-"""Signed release catalogue and ZIP validation. Never imports downloaded code."""
+"""Release catalogue and ZIP validation. Never imports downloaded code."""
 
 from __future__ import annotations
 
@@ -12,9 +12,6 @@ import stat
 from urllib.parse import urlsplit
 import zipfile
 import zlib
-
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .app_policy import MANAGEABLE_STANDALONE_APPS
 from .config_store import ManagementError, revision
@@ -176,7 +173,8 @@ def validate_package(package):
     if total > EXPANDED_LIMIT:
         raise ManagementError('Package exceeds expanded size limit')
     if package['kind'] == 'app':
-        required_files = {f'apps/{identity}/app.py', f'apps/{identity}/__init__.py'}
+        # Apps may be namespace packages; their executable entrypoint is app.py.
+        required_files = {f'apps/{identity}/app.py'}
     else:
         required_files = {'main.py', 'pyxaseco/core/aseco.py', 'pyxaseco/management/config_store.py'}
     if not required_files <= files.keys():
@@ -196,41 +194,75 @@ def validate_package(package):
                 raise ManagementError('Invalid original-release file checksum')
 
 
-def verify_catalogue(blob, public_key, channel, *, now=None):
+def parse_checksum(blob, filename):
+    try:
+        line = blob.decode('ascii').strip()
+    except UnicodeError:
+        raise ManagementError('Invalid SHA-256 checksum file') from None
+    match = re.fullmatch(r'([0-9a-fA-F]{64})(?:[ \t]+\*?' + re.escape(filename) + r')?', line)
+    if not match:
+        raise ManagementError('Invalid SHA-256 checksum or filename')
+    return match[1].lower()
+
+
+def verify_catalogue(blob, public_key, channel, *, now=None, verification='signed'):
     if len(blob) > METADATA_LIMIT:
         raise ManagementError('Release metadata exceeds the download limit')
-    envelope = read_json(blob)
-    if not isinstance(envelope, dict) or set(envelope) != {'signed', 'signature'}:
-        raise ManagementError('Unsupported signed release envelope')
-    signed = _decode(envelope['signed'])
-    key = _decode(public_key, 32)
-    try:
-        Ed25519PublicKey.from_public_bytes(key).verify(
-            _decode(envelope['signature'], 64), SIGNING_CONTEXT + signed)
-    except InvalidSignature:
-        raise ManagementError('Release signature does not match the locally trusted public key') from None
-    catalogue = read_json(signed)
-    if (not isinstance(catalogue, dict) or set(catalogue) != {'schema', 'sequence', 'channel', 'expires', 'packages'}
-            or type(catalogue['schema']) is not int or catalogue['schema'] != 1
+    fields = {'schema', 'sequence', 'channel', 'packages'}
+    if verification == 'signed':
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        envelope = read_json(blob)
+        if not isinstance(envelope, dict) or set(envelope) != {'signed', 'signature'}:
+            raise ManagementError('Unsupported signed release envelope')
+        payload = _decode(envelope['signed'])
+        key = _decode(public_key, 32)
+        try:
+            Ed25519PublicKey.from_public_bytes(key).verify(
+                _decode(envelope['signature'], 64), SIGNING_CONTEXT + payload)
+        except InvalidSignature:
+            raise ManagementError('Release signature does not match the locally trusted public key') from None
+        schema = 1
+        fields.add('expires')
+    elif verification == 'sha256':
+        payload, schema = blob, 2
+    else:
+        raise ManagementError('Unsupported release verification mode')
+    catalogue = read_json(payload)
+    if (not isinstance(catalogue, dict) or set(catalogue) != fields
+            or type(catalogue['schema']) is not int or catalogue['schema'] != schema
             or not _integer(catalogue['sequence'], 1, 2**53 - 1)
             or catalogue['channel'] != channel or channel not in {'stable', 'development'}):
         raise ManagementError('Unsupported release catalogue or channel')
-    try:
-        expires = datetime.strptime(catalogue['expires'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
-    except (TypeError, ValueError):
-        raise ManagementError('Invalid release expiry') from None
-    if expires <= (now or datetime.now(timezone.utc)):
-        raise ManagementError('Release approval expired; publishing metadata must be refreshed')
+    if schema == 1:
+        try:
+            expires = datetime.strptime(catalogue['expires'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            raise ManagementError('Invalid release expiry') from None
+        if expires <= (now or datetime.now(timezone.utc)):
+            raise ManagementError('Release approval expired; publishing metadata must be refreshed')
     packages = catalogue['packages']
     if not isinstance(packages, list) or not 1 <= len(packages) <= 64:
         raise ManagementError('Invalid catalogue package list')
     seen = set()
     for package in packages:
         validate_package(package)
+        if schema == 2:
+            filename = package['id'] + '-' + package['version'] + '.zip'
+            urls = package['urls']
+            if len(urls) != 2:
+                raise ManagementError('SHA-256 releases require both publishing locations')
+            github = urlsplit(https_url(urls[0], {'github.com'}))
+            website = urlsplit(https_url(urls[1], WEBSITE_HOSTS))
+            if (github.query or website.query
+                    or not re.fullmatch(r'/[^/]+/[^/]+/releases/download/[^/]+/' + re.escape(filename), github.path)
+                    or website.path != f"/api/pyxaseco/updates/files/{channel}/{package['version']}/{filename}"):
+                raise ManagementError('Invalid versioned release asset URLs')
         if package['id'] in seen:
             raise ManagementError('Duplicate package identity')
         seen.add(package['id'])
-    return catalogue, revision(signed)
+    return catalogue, revision(payload)
 
 
 def compatibility(package, controller_version, python_version):
@@ -242,26 +274,45 @@ def compatibility(package, controller_version, python_version):
     return reasons
 
 
+def archive_inventory(blob, package):
+    if not 1 <= len(blob) <= PACKAGE_LIMIT:
+        raise ManagementError('Release ZIP exceeds the download limit')
+    try:
+        with zipfile.ZipFile(io.BytesIO(blob)) as archive:
+            entries = archive.infolist()
+            files = [item for item in entries if not item.is_dir()]
+            names = {item.filename for item in files}
+            if (len(entries) > 8192 or len(names) != len(files) or len(names) > 4096
+                    or any(len(item.filename) > 512 or item.orig_filename != item.filename for item in entries)
+                    or len({item.filename.casefold() for item in entries}) != len(entries)):
+                raise ManagementError('ZIP contains duplicate paths or too many entries')
+            parents = {name.rsplit('/', depth)[0] + '/' for name in names
+                       for depth in range(1, name.count('/') + 1)}
+            if sum(item.file_size for item in files) > EXPANDED_LIMIT:
+                raise ManagementError('Package exceeds expanded size limit')
+            result = {}
+            for item in entries:
+                mode = stat.S_IFMT(item.external_attr >> 16)
+                if item.is_dir():
+                    if (item.filename not in parents or mode not in (0, stat.S_IFDIR)
+                            or item.file_size or item.flag_bits & 1):
+                        raise ManagementError('ZIP contains an unexpected directory')
+                    continue
+                package_path(item.filename, package)
+                if (mode not in (0, stat.S_IFREG) or item.flag_bits & 1 or item.file_size > FILE_LIMIT
+                        or item.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)):
+                    raise ManagementError('ZIP contains a non-regular, encrypted or oversized file')
+                result[item.filename] = {'sha256': revision(archive.read(item)), 'size': item.file_size}
+            return result
+    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, ValueError, zlib.error) as exc:
+        if isinstance(exc, ManagementError):
+            raise
+        raise ManagementError('Invalid release ZIP') from exc
+
+
 def validate_archive(blob, package):
     validate_package(package)
     if len(blob) != package['size'] or revision(blob) != package['sha256']:
         raise ManagementError('Package download size/checksum differs from the approved release')
-    try:
-        with zipfile.ZipFile(io.BytesIO(blob)) as archive:
-            entries = archive.infolist()
-            names = [item.filename for item in entries]
-            if (len(names) != len(package['files']) or set(names) != set(package['files'])
-                    or len(set(names)) != len(names)):
-                raise ManagementError('ZIP inventory differs from the signed package inventory')
-            for item in entries:
-                package_path(item.filename, package)
-                mode = stat.S_IFMT(item.external_attr >> 16)
-                expected = package['files'][item.filename]
-                if (item.is_dir() or mode not in (0, stat.S_IFREG) or item.flag_bits & 1
-                        or item.file_size != expected['size']
-                        or item.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)):
-                    raise ManagementError('ZIP contains a non-regular, encrypted or incorrectly sized file')
-                if revision(archive.read(item)) != expected['sha256']:
-                    raise ManagementError('ZIP file checksum differs from the signed inventory')
-    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, ValueError, zlib.error) as exc:
-        raise ManagementError('Invalid release ZIP') from exc
+    if archive_inventory(blob, package) != package['files']:
+        raise ManagementError('ZIP inventory or file checksum differs from the approved package inventory')

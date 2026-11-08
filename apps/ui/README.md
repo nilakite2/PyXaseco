@@ -28,6 +28,32 @@ icons, text/background styles, menu entries, ManiaKarma behavior and API/images.
 Use `//apps config ui` for supported fields; free-form layouts/text may need file
 editing followed by a supported reload.
 
+### ManiaKarma Fallback
+
+ManiaKarma remains the primary voting service. If authentication or requests fail,
+the UI can use the compatible WRMania Karma service instead. Existing UI config
+files also receive these fallback defaults without needing new entries:
+
+```toml
+[ui.karma.urls]
+website = "www.mania-karma.com"
+api_auth = "http://worldwide.mania-karma.com/api/tmforever-trackmania-v4.php"
+fallback_website = "karma.wrmania.net"
+fallback_api_auth = "http://karma.wrmania.net/api/tmforever-trackmania-v4.php"
+```
+
+Set `fallback_api_auth = ""` to disable fallback. Each provider is authenticated
+separately; voting and website links follow the active provider. Map-lookup status
+607 alone does not switch providers or block vote submissions. Once connected to
+the fallback, it remains in use until it fails or the controller restarts.
+This uses the supplied legacy XML compatibility endpoint, not WRKarma's separate
+JSON API under `/api/v1/karma/`.
+
+Global tallies are not merged between providers. Local votes and pending delivery
+are preserved; previously confirmed votes are not automatically replayed to the
+other provider, and uncertain submissions are not automatically resent. The
+WRMania records app is not required for this Karma fallback.
+
 ## Changes And Limits
 
 - Classic remains available; Modern and accent presets apply per player through

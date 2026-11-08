@@ -19,12 +19,17 @@ from .api import ApiError, Client, MODES, base_url, map_data, valid_checks
 logger = logging.getLogger(__name__)
 POLICY = JobPolicy(capacity=1, deadline_seconds=200)
 HEARTBEAT_POLICY = JobPolicy(capacity=1, deadline_seconds=160)
+# Routine polling timeouts and their cooldowns retry without filling the log.
+QUIET_POLL_FAILURES = frozenset({
+    'ConnectionTimeoutError', 'SocketTimeoutError', 'ServerTimeoutError',
+    'TimeoutError', 'ServiceCooldown',
+})
 SCHEMA = AppSettingsSchema(app_id='records_wrmania', settings=(
     AppSetting('enabled', True, as_bool, 'Enable Mania Records.'),
     AppSetting('api_base', 'https://api.wrmania.net', as_str, 'WRMania HTTPS API origin.'),
-    AppSetting('server_login', '', as_str, 'Dedicated-server login; blank uses the connected server.'),
-    AppSetting('server_password', '', as_str, 'Dedicated password; prefer WRMANIA_SERVER_PASSWORD in .env.'),
-    AppSetting('nation', '', as_str, 'Three-letter dedicated-server nation.'),
+    AppSetting('server_login', '', as_str, 'Blank reuses DEDI_LOGIN, then the connected dedicated-server login.'),
+    AppSetting('server_password', '', as_str, 'Blank reuses DEDI_PASSWORD; WRMANIA_SERVER_PASSWORD overrides this field.'),
+    AppSetting('nation', '', as_str, 'Three-letter dedicated-server nation; blank reuses DEDI_NATION.'),
     AppSetting('request_timeout', 30, as_int, 'Request deadline, 1-60 seconds.'),
     AppSetting('refresh_interval', 45, as_int, 'Refresh interval, 15-3600 seconds.'),
     AppSetting('heartbeat_interval', 240, as_int, 'Server heartbeat interval, 30-240 seconds; independent of records.'),
@@ -98,8 +103,13 @@ class Runtime:
         if (not 15 <= values['refresh_interval'] <= 3600 or not 1 <= values['request_timeout'] <= 60
                 or not 30 <= values['heartbeat_interval'] <= 240):
             raise ValueError('Invalid Mania Records refresh/heartbeat interval or timeout.')
+        dedi_login = os.getenv('DEDI_LOGIN', '')
+        values['server_login'] = values['server_login'] or dedi_login
         values['server_password'] = os.getenv('WRMANIA_SERVER_PASSWORD') or values['server_password']
-        values['nation'] = values['nation'].upper()
+        # Do not borrow another server account's password when login is overridden.
+        if not values['server_password'] and (not dedi_login or values['server_login'] == dedi_login):
+            values['server_password'] = os.getenv('DEDI_PASSWORD', '')
+        values['nation'] = (values['nation'] or os.getenv('DEDI_NATION', '')).strip().upper()
         self.values, self.enabled = values, values['enabled']
         self.client = None
         self.available = False
@@ -181,7 +191,7 @@ class Runtime:
                 return
             if login != actual or not self.values['server_password'] or not re.fullmatch('[A-Z]{3}', self.values['nation']):
                 if monotonic() >= self.next_due:
-                    logger.warning('[Mania Records] Configure the actual dedicated login, password and three-letter nation.')
+                    logger.warning('[Mania Records] Configure DEDI_LOGIN/DEDI_PASSWORD/DEDI_NATION or Mania Records overrides; the login must match the connected dedicated server.')
                     self.next_due = monotonic() + 300
                 return
             self.client = Client(aseco, {**self.values, 'server_login': login})
@@ -225,7 +235,8 @@ class Runtime:
                     self.map_announced = True
             else:
                 self.available = False
-                logger.warning('[Mania Records] Lookup unavailable (%s); submissions remain retained.', result.failure_label)
+                if result.error_type not in QUIET_POLL_FAILURES:
+                    logger.warning('[Mania Records] Lookup unavailable (%s); submissions remain retained.', result.failure_label)
             await self.notify(aseco)
 
         jobs.submit(JobEnvelope.capture(aseco.capture_job_context(), {'uid': self.uid}), operation, apply)
@@ -255,7 +266,8 @@ class Runtime:
                 return
             if result.status != 'completed':
                 self.next_heartbeat = monotonic() + min(60, self.values['heartbeat_interval'])
-                logger.warning('[Mania Records] Heartbeat unavailable (%s); retry scheduled.', result.failure_label)
+                if result.error_type not in QUIET_POLL_FAILURES:
+                    logger.warning('[Mania Records] Heartbeat unavailable (%s); retry scheduled.', result.failure_label)
 
         # A map change or a failed records lookup must not cancel presence updates.
         admission = jobs.submit(JobEnvelope.capture(aseco.capture_job_context(), {}), operation, apply,

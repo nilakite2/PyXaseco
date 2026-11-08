@@ -26,6 +26,7 @@ enabled = [
 "app/ui"
 ]
 disabled = [
+"app/ui_fast",
 "app/sponsor_banner",
 "app/server_admin_bridge",
 "app/match_overlay",

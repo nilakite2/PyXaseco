@@ -26,6 +26,7 @@ class Preset:
     base: int = 0
     window: dict | None = field(default=None, compare=False)
     palette: dict | None = field(default=None, compare=False)
+    renderer: str = ''
 
 
 CLASSIC = Preset(0, 'Classic', 'Existing PyXaseco HUD and personal window style.')
