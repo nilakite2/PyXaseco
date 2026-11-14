@@ -48,7 +48,7 @@ from pyxaseco.models import (
 
 logger = logging.getLogger(__name__)
 
-PYXASECO_VERSION = '1.6'
+PYXASECO_VERSION = '1.6.1'
 TMF_BUILD = '2011-02-21'   # minimum required TMF dedicated server build
 
 # Dedicated server callbacks we handle
@@ -940,7 +940,11 @@ class Aseco:
             player.teamname       = info.get('TeamName', player.teamname)
             # Store the packed SpectatorStatus so plugins can decode target/auto info
             # without an extra GetPlayerInfo round-trip.
-            player.spectatorstatus = int(info.get('SpectatorStatus', 0) or 0)
+            if 'PlayerId' in info:
+                player.pid = int(info['PlayerId'])
+            if 'SpectatorStatus' in info:
+                player.spectatorstatus = int(info['SpectatorStatus'] or 0)
+                player.isspectator = player.spectatorstatus % 10 != 0
             await self.release_event('onPlayerInfoChanged', player)
 
     async def _cb_player_server_msg_answer(self, params: list):
@@ -1041,6 +1045,20 @@ class Aseco:
                     'IsInOfficialMode': False, 'LadderStats': {'TeamName': '', 'PlayerRankings': [{}]},
                     'Path': 'World|Unknown', 'ClientVersion': '',
                     'OnlineRights': 0, 'Language': '', 'Avatar': {}, 'TeamId': 0}
+
+        # Detailed info omits the packed spectator target used by checkpoint HUDs.
+        try:
+            live_info = await self.client.query('GetPlayerInfo', login, 1) or {}
+        except GbxError as e:
+            if e.code == -1000 and 'login unknown' in e.message.lower():
+                return
+            logger.debug('GetPlayerInfo unavailable on connect for %s: %s', login, e)
+        else:
+            for key in ('PlayerId', 'TeamId', 'SpectatorStatus'):
+                if key in live_info:
+                    info[key] = live_info[key]
+            if 'SpectatorStatus' in live_info:
+                info['IsSpectator'] = int(live_info['SpectatorStatus'] or 0) % 10 != 0
 
         player = Player(info)
 

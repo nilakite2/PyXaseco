@@ -162,6 +162,9 @@ class Player:
         self.ip = re.sub(r':\d+$', '', self.ipport)
         self.prevstatus = False
         self.isspectator = info.get('IsSpectator', False)
+        if 'SpectatorStatus' in info:
+            self.spectatorstatus = int(info['SpectatorStatus'] or 0)
+            self.isspectator = self.spectatorstatus % 10 != 0
         self.retired = False
         self.finished_waiting = False
         self.isofficial = info.get('IsInOfficialMode', False)

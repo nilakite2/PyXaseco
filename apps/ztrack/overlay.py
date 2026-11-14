@@ -320,6 +320,12 @@ async def zt_checkpoint(aseco: 'Aseco', params: list):
     if laps and lap > 0 and lap * count == index + 1:
         _runs[cp_login]['base'] = absolute
     for login, info in list(_zt.items()):
+        viewer = aseco.server.players.get_player(login)
+        if viewer is None or not info.get('Mode'):
+            continue
+        # A watched player may have joined after this viewer's status callback.
+        info['Target'] = (_resolve_view_target(aseco, viewer)
+                          if _is_viewer_spec_like(viewer) else login)
         if info.get('Target') != cp_login or not info.get('Mode'):
             continue
         reference = _reference(aseco, info['Mode'], int(info.get('Rec', 0)))
@@ -449,16 +455,18 @@ def _is_viewer_spec_like(player: 'Player') -> bool:
     if bool(getattr(player, 'finished_waiting', False)):
         return True
 
+    if bool(getattr(player, 'isspectator', False)):
+        return True
+
     try:
         spec_status = int(getattr(player, 'spectatorstatus', 0) or 0)
     except Exception:
         spec_status = 0
 
     if spec_status > 0 and (spec_status % 10) != 0:
-        spec_mode = (spec_status // 10) % 100
         target_pid = spec_status // 10000
         own_pid = int(getattr(player, 'pid', 0) or 0)
-        return spec_mode > 0 and target_pid != own_pid
+        return target_pid > 0 and target_pid != own_pid
 
     return False
 

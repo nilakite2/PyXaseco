@@ -18,6 +18,11 @@ manual adjustments and optional saved per-map limits.
 
 ## Configuration
 
+When PYXA Stats is enabled, its publisher can read the timer through the
+`service/flexitime` runtime service. This does not change the timer or add a web
+dependency to FlexiTime. Timer corrections are published at round start, quarter
+points and state/manual changes; website countdowns run locally between them.
+
 Optional `app/flexitime`. `app_defaults.toml` controls access level/whitelist,
 default minutes, author-time multiplier, minimum limit, custom limits and HUD
 colors/warning thresholds. Per-map custom times require the local database.

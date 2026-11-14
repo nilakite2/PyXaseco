@@ -24,6 +24,16 @@ empty new API base disables publishing.
 
 - Sends server/map metadata, version, player/spectator counts and recent local
   record events, including player logins/nicknames.
+- Publishes previous/current/next map metadata. Previous means the last different
+  map observed during this controller session; it is unknown immediately after
+  startup. Next prefers the active Jukebox queue, then the dedicated server.
+- If FlexiTime is active in TimeAttack, publishes its timer at initialization,
+  then at 75%, 50%, 25% and zero remaining. Pause/resume, manual time changes and
+  score-phase changes also correct the timer. Normal presence heartbeats reuse
+  the last sample and its age rather than resampling each second.
+- Websites can count down locally between timer corrections. Map/queue changes
+  trigger an updated heartbeat. No UI or FlexiTime dependency is required.
+- This publishes informational rotation/timing, not full remote event standings.
 - Does not send IP addresses, complete rosters or server/database passwords.
 - API routes remain `/api/public-stats/heartbeat` and
   `/api/public-stats/recent-record`.

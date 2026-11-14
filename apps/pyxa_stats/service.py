@@ -28,6 +28,7 @@ from pyxaseco.core.background_jobs import JobPolicy
 from pyxaseco.helpers import strip_colors
 from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_int,
                                 bind_app_settings)
+from .map_status import MapStatus
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -36,7 +37,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.1.0"
 
 # ---------------------------------------------------------------------------
 # Public Stats API configuration
@@ -85,6 +86,7 @@ _enabled: bool = False
 _recent_local_records: list[dict] = []
 _last_heartbeat_sent: float = 0.0
 _pending_heartbeat = None
+_map_status = MapStatus()
 
 
 def _api_base() -> str:
@@ -211,6 +213,7 @@ def _heartbeat_payload(aseco: "Aseco", *, is_online: bool = True) -> dict:
         "plugin_version": PLUGIN_VERSION,
         "uptime_seconds": int(max(time.time() - float(getattr(srv, "starttime", time.time()) or time.time()), 0)),
         "current_map": dict(current_map),
+        "map_status": _map_status.payload(aseco, PUBLIC_STATS_HEARTBEAT_SECONDS),
         "players": dict(counts),
         "recent_local_records": list(_recent_local_records[:PUBLIC_STATS_RECENT_KEEP]),
         "current_map_uid": _clean_text(current_map.get("uid", "")),
@@ -254,15 +257,18 @@ async def _post_heartbeat(aseco: "Aseco", *, force=False, is_online=True):
     global _last_heartbeat_sent, _pending_heartbeat
     if not _is_enabled():
         return
+    _map_status.observe(aseco)
+    _map_status.sample_timer(aseco)
     now = time.monotonic()
-    if force or now - _last_heartbeat_sent >= float(PUBLIC_STATS_HEARTBEAT_SECONDS):
-        _pending_heartbeat = _heartbeat_payload(aseco, is_online=is_online)
-    if not _pending_heartbeat or not _pending_heartbeat.get('server_login'):
-        return
     from pyxaseco.core.background_jobs import JobEnvelope, Admission
     from pyxaseco.core.external_io import request_legacy_json
     service = aseco.jobs.service('public_stats_heartbeat', HEARTBEAT_POLICY)
     if service.outstanding:
+        return
+    if force or _map_status.dirty or now - _last_heartbeat_sent >= float(PUBLIC_STATS_HEARTBEAT_SECONDS):
+        await _map_status.refresh(aseco)
+        _pending_heartbeat = _heartbeat_payload(aseco, is_online=is_online)
+    if not _pending_heartbeat or not _pending_heartbeat.get('server_login'):
         return
     payload = _pending_heartbeat
     url, headers = f"{_api_base()}{PUBLIC_STATS_HEARTBEAT_PATH}", _build_headers()
@@ -277,6 +283,7 @@ async def _post_heartbeat(aseco: "Aseco", *, force=False, is_online=True):
     if service.submit(job, operation, apply, current_map=False) == Admission.ACCEPTED:
         _pending_heartbeat = None
         _last_heartbeat_sent = now
+        _map_status.dirty = False
 
 
 async def _post_recent_record(aseco: "Aseco", rec):
@@ -307,14 +314,17 @@ def _stats_delivery(aseco):
 
 
 def register(aseco: "Aseco"):
-    global _enabled, _pending_heartbeat, _last_heartbeat_sent
+    global _enabled, _pending_heartbeat, _last_heartbeat_sent, _map_status
     _enabled = False
     _pending_heartbeat = None
     _last_heartbeat_sent = 0
+    _map_status = MapStatus()
     _recent_local_records.clear()
     aseco.register_event("onSync", public_stats_sync)
     aseco.register_event("onEverySecond", public_stats_tick)
     aseco.register_event("onNewChallenge", public_stats_new_challenge)
+    aseco.register_event("onJukeboxChanged", public_stats_rotation_changed)
+    aseco.register_event("onTracklistChanged", public_stats_rotation_changed)
     aseco.register_event("onPlayerConnect", public_stats_player_connect)
     aseco.register_event("onPlayerDisconnect", public_stats_player_disconnect)
     aseco.register_event("onPlayerInfoChanged", public_stats_player_info_changed)
@@ -347,7 +357,13 @@ async def public_stats_tick(aseco: "Aseco", _param=None):
 
 
 async def public_stats_new_challenge(aseco: "Aseco", _param=None):
+    _map_status.observe(aseco)
     await _post_heartbeat(aseco, force=True, is_online=True)
+
+
+async def public_stats_rotation_changed(aseco: "Aseco", _param=None):
+    _map_status.dirty = True
+    await _post_heartbeat(aseco, force=False, is_online=True)
 
 
 async def public_stats_player_connect(aseco: "Aseco", _player):
@@ -364,7 +380,7 @@ async def public_stats_player_info_changed(aseco: "Aseco", _info):
 
 async def public_stats_local_record(aseco: "Aseco", rec):
     await _post_recent_record(aseco, rec)
-    await _post_heartbeat(aseco, force=True, is_online=True)
+    await _post_heartbeat(aseco, force=False, is_online=True)
 
 
 async def public_stats_shutdown(aseco: "Aseco", _param=None):

@@ -83,8 +83,24 @@ class FlexiTime:
         self.paused = False
         self._mode_disabled = False
         self._panel_visible = False
+        self._timer_uid = ''
+        self._initial_seconds = self.time_left
+        self._map_duration_seconds = 0
+        self._timer_revision = 0
 
         self._load_config()
+        self.aseco.register_service('service/flexitime', self, owner='flexitime')
+
+    def public_status(self):
+        if not self._is_ta_mode() or not self._timer_uid or self._mode_disabled:
+            return None
+        score = is_score_phase(self.aseco)
+        return {'source': 'flexitime', 'map_uid': self._timer_uid,
+                'initial_seconds': self._initial_seconds, 'revision': self._timer_revision,
+                'map_duration_seconds': self._map_duration_seconds,
+                'remaining_seconds': max(0, int(self.time_left)),
+                'paused': bool(self.paused or score),
+                'phase': 'score' if score else 'paused' if self.paused else 'running'}
 
     def _load_config(self) -> None:
         try:
@@ -134,8 +150,10 @@ class FlexiTime:
             await self._disable_outside_ta()
             return
 
-        self._mode_disabled = False
         challenge = self.aseco.server.challenge
+        if not getattr(challenge, 'uid', ''):
+            return
+        self._mode_disabled = False
         self.author_time = round(challenge.authortime / 1000)
         self.paused = False
 
@@ -170,6 +188,10 @@ class FlexiTime:
             else:
                 self.time_left = self.default_time * 60
 
+        self._timer_uid = challenge.uid
+        self._initial_seconds = max(0, int(self.time_left))
+        self._map_duration_seconds = self._initial_seconds
+        self._timer_revision += 1
         await self._show_panel()
 
     async def tick(self):
@@ -281,6 +303,8 @@ class FlexiTime:
 
         if emergency:
             self.time_left = 300
+            self._initial_seconds = self.time_left
+            self._timer_revision += 1
             await self._show_panel()
             await _chat(f'{login} changed time left: {self._time_str(self.time_left)}')
             return
@@ -307,6 +331,8 @@ class FlexiTime:
             return
 
         self.time_left = next_value
+        self._initial_seconds = self.time_left
+        self._timer_revision += 1
         await self._show_panel()
         await _chat(f'{login} changed time left: {self._time_str(self.time_left)}')
         if self.time_left == 0:
@@ -380,7 +406,8 @@ def register(aseco: 'Aseco'):
     setattr(aseco.server, 'feature_flexitime', True)
 
     aseco.register_event('onStartup', flexitime_startup)
-    aseco.register_event('onSync', flexitime_sync)
+    # onSync runs before the current challenge is loaded, including on //pyres.
+    aseco.register_event('onBeginRace', flexitime_sync)
     aseco.register_event('onBeginRound', flexitime_begin_round)
     aseco.register_event('onRestartChallenge', flexitime_begin_round)
     aseco.register_event('onEndRound', flexitime_end_round)

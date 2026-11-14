@@ -118,18 +118,13 @@ async def _draw_cpdelta_player(aseco: 'Aseco', login: str):
         await _hide(aseco, login, ML_CPDELTA)
         return
 
-    # Spectators don't drive - hide the Local/Dedi time delta overlay.
-    _player = aseco.server.players.get_player(login)
-    if _is_player_currently_spectating(_player):
-        await _hide(aseco, login, ML_CPDELTA)
-        return
-
-    text = str(_state.player_cp_delta.get(login, '') or '')
+    display_login = _resolve_display_login(aseco, login)
+    text = str(_state.player_cp_delta.get(display_login, '') or '')
     if not text:
         await _hide(aseco, login, ML_CPDELTA)
         return
 
-    label = _state.player_cp_target_name.get(login, '') or 'CP Delta'
+    label = _state.player_cp_target_name.get(display_login, '') or 'CP Delta'
     cp_cfg = _state.cp
 
     # Center under the 16-wide CP widget, with spectator offset

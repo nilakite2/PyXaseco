@@ -13,7 +13,8 @@ chat logging, donations and low-level gameplay services used by other apps.
 | `/playtime`, `/time` | Show playing-time/current-time information. |
 | `/nextmap` | Show the next map. |
 | `/chatlog` | Show recent chat history. |
-| `/cptms`, `/sectms` | Show record checkpoint/sector times. |
+| `/cptms [rank\|me]`, `/sectms [rank\|me]` | Browse saved local checkpoint/sector times. Use a rank or `me` for one record's elapsed and sector times. |
+| `/cptms cp <number>`, `/sectms cp <number>` | Jump to the page group containing that checkpoint. |
 | `/donate <amount>` | Donate server coppers where supported. |
 | `/song`, `/mod` | Show the map's song/mod information. |
 
@@ -36,6 +37,7 @@ must match the configured MariaDB/MySQL installation.
 - Donations depend on TMF account/server capabilities; displaying a command does
   not bypass game restrictions or create coppers.
 - `/mod` reports map information; ForceMods is the separate optional mod manager.
+- Checkpoint tables page through the server's local leaderboard and all saved splits. Missing splits are shown as `-`.
 
 ## Credits
 

@@ -9,7 +9,7 @@ from .service import SCHEMA, validate_config
 APP_METADATA = {
     'id': 'pyxa_stats', 'display_name': 'PYXA Stats',
     'description': 'Optional API publishing of server snapshots and recent local records.',
-    'modules': ['apps/pyxa_stats/app.py', 'apps/pyxa_stats/service.py'],
+    'modules': ['apps/pyxa_stats/app.py', 'apps/pyxa_stats/service.py', 'apps/pyxa_stats/map_status.py'],
     'entries': ['app/pyxa_stats'],
     'provides': ['bridge/pyxa_stats', 'bridge/public_stats'],
     'depends_on': ['platform_core', 'records_local'],

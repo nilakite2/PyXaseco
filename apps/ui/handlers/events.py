@@ -195,6 +195,7 @@ async def _on_player_info_changed(aseco: 'Aseco', player: 'Player'):
 
 async def _on_player_retire(aseco: 'Aseco', player: 'Player'):
     from ..widgets.common import _hide
+    from ..hud_views import _resolve_display_login
 
     if not player:
         return
@@ -207,6 +208,9 @@ async def _on_player_retire(aseco: 'Aseco', player: 'Player'):
     _state.player_cp_delta[login] = ''
     await _hide(aseco, login, ML_CPDELTA)
     await _draw_cp_player(aseco, login)
+    for viewer in aseco.server.players.all():
+        if viewer.login != login and _resolve_display_login(aseco, viewer.login) == login:
+            await _draw_cpdelta_player(aseco, viewer.login)
 
 
 async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
@@ -244,6 +248,9 @@ async def _on_player_finish(aseco: 'Aseco', finish: 'Record'):
         await _hide(aseco, login, ML_CPDELTA)
         await _draw_cp_player(aseco, login)
     is_stunts = (mode == Gameinfo.STNT)
+    for viewer in aseco.server.players.all():
+        if viewer.login != login and _resolve_display_login(aseco, viewer.login) == login:
+            await _draw_cpdelta_player(aseco, viewer.login)
     prev = _state.player_best.get(login, -1)
     is_better = (
         prev == -1 or
@@ -760,6 +767,7 @@ async def _on_checkpoint(aseco: 'Aseco', params: list):
     for _sp in aseco.server.players.all():
         if _resolve_display_login(aseco, _sp.login) == login and _sp.login != login:
             await _draw_cp_player(aseco, _sp.login)
+            await _draw_cpdelta_player(aseco, _sp.login)
 
     # XAseco refreshes Live Rankings progress during LAPS as checkpoints are hit.
     # Without this, Eyepiece waits for the periodic 1-second refresh loop and
