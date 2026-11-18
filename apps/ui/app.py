@@ -1,14 +1,41 @@
 from __future__ import annotations
 
+from math import isfinite
 from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
 from . import allbutton, banner, callbacks, commands, karma, menu, models, views
-from .config import _state, _load_config
+from .config import MIN_DONATION_WIDTH, MIN_PAYOUT_WIDTH, MIN_RECORD_WIDTH, _state, _load_config
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
+
+
+def validate_config(document, _root):
+    from .runtime_reload import BAR_TARGETS
+
+    section = document.get('ui', {})
+    width_limits = dict.fromkeys(('local_records', 'dedimania_records', 'live_rankings',
+                                 'scoretable_lists', 'round_score'), MIN_RECORD_WIDTH)
+    width_limits.update(donation_widget=MIN_DONATION_WIDTH, winning_payout=MIN_PAYOUT_WIDTH)
+
+    def check(table, minimum_width, path, *, minimum_height=0):
+        for key, value in table.items():
+            if isinstance(value, dict):
+                check(value, minimum_width, f'{path}.{key}', minimum_height=minimum_height)
+            elif key in ('width', 'height', 'row_height'):
+                minimum = {'width': minimum_width, 'height': minimum_height, 'row_height': 1}[key]
+                number = float(value)
+                if not isfinite(number) or number < minimum:
+                    raise ValueError(f'{path}.{key} must be at least {minimum:g}.')
+
+    for name, minimum in width_limits.items():
+        if isinstance(table := section.get(name), dict):
+            check(table, minimum, name)
+    for name in (*BAR_TARGETS, 'checkpointcount_widget', 'challenge_widget'):
+        if isinstance(table := section.get(name), dict):
+            check(table, 4 if name == 'challenge_widget' else 1, name, minimum_height=1)
 
 
 APP_METADATA = {
@@ -23,6 +50,8 @@ APP_METADATA = {
         "apps/ui/hud.py",
         "apps/ui/helpwin.py",
         "apps/ui/toplists.py",
+        "apps/ui/score_preview.py",
+        "apps/ui/race_preview.py",
         "apps/ui/tracklist.py",
         "apps/ui/hud_views.py",
         "apps/ui/record_views.py",
@@ -37,6 +66,8 @@ APP_METADATA = {
         "apps/ui/callbacks.py",
         "apps/ui/commands.py",
         "apps/ui/menu.py",
+        "apps/ui/menu_layout.py",
+        "apps/ui/record_widgets.py",
         "apps/ui/karma.py",
         "apps/ui/allbutton.py",
     ],
@@ -124,7 +155,9 @@ class UiApp(App):
 
     def register_runtime(self, aseco: 'Aseco') -> None:
         from .handlers.events import _apply_custom_ui
+        from . import score_preview
         aseco.register_service('ui/custom_ui', _apply_custom_ui, owner='ui')
+        score_preview.register(aseco)
         for component in self.components:
             component.register(aseco)
 

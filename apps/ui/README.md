@@ -10,6 +10,7 @@ ManiaKarma voting and the FuFi menu. Uses Platform UI's per-player presets.
 | Command | Purpose | Access |
 | --- | --- | --- |
 | `/eyepiece` | Show Records-Eyepiece help. | Everyone |
+| `/menu` | Open the server menu. | Everyone |
 | `/togglewidgets` | Toggle widget visibility; F7 also controls visibility. | Everyone |
 | `/elist` | Browse maps through the UI list. | Everyone |
 | `/estat <view>` | Open a supported extended ranking/statistics view. | Everyone |
@@ -27,6 +28,15 @@ respective apps. `/uistyle` belongs to Platform UI, not this command surface.
 icons, text/background styles, menu entries, ManiaKarma behavior and API/images.
 Use `//apps config ui` for supported fields; free-form layouts/text may need file
 editing followed by a supported reload.
+
+### Menu
+
+The default menu groups the original entries under **Maps**, **Records**,
+**Checkpoints**, **Server**, and **My UI** and adds shortcuts only where needed.
+Maps includes the interactive Eyepiece map list (`/elist`). **Command list**
+and **Command help** are available directly from the main Menu.
+Custom entries stay with their groups, and custom root entries stay at the root.
+Set `quick_navigation = false` in `[ui.menu]` to use the original FuFi layout.
 
 ### ManiaKarma Fallback
 

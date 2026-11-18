@@ -41,4 +41,6 @@ async def chat_lastwin(aseco: 'Aseco', command: dict):
         )
         return
 
+    from .record_browser import reopen
+    reopen(aseco, player)
     display_manialink_multi(aseco, player)

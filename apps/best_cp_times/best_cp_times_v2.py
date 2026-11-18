@@ -11,8 +11,10 @@ import importlib
 import re
 from dataclasses import dataclass, field
 from html import escape
+from math import isfinite
 from typing import TYPE_CHECKING
 
+from apps.platform_ui.hud_layout import text_geometry
 from pyxaseco.app_config import (AppSetting, AppSettingsSchema, as_bool, as_float,
                                  as_int, bind_app_settings)
 from pyxaseco.core.config import display_path
@@ -67,14 +69,19 @@ class BctState:
 
 _state = BctState()
 
+
+def _as_dimension(value, default):
+    dimension = as_float(value, default) if not isinstance(value, bool) else default
+    return dimension if isfinite(dimension) and dimension >= 0 else default
+
 BEST_CP_TIMES_SETTINGS_SCHEMA = AppSettingsSchema(
     app_id="best_cp_times",
     section_name="best_cp_times_v2",
     settings=(
         AppSetting("config/position/x", 49.7, cast=as_float, description="Widget X position.", category="layout"),
         AppSetting("config/position/y", -20.0, cast=as_float, description="Widget Y position.", category="layout"),
-        AppSetting("config/width", 15.0, cast=as_float, description="Widget width.", category="layout"),
-        AppSetting("config/height", 18.2, cast=as_float, description="Widget height.", category="layout"),
+        AppSetting("config/width", 15.0, cast=_as_dimension, description="Widget width (0 uses the default).", category="layout"),
+        AppSetting("config/height", 18.2, cast=_as_dimension, description="Widget height (0 fits the rows automatically).", category="layout"),
         AppSetting("config/rows", PAGE_SIZE, cast=as_int, description="Checkpoint rows per page (minimum 1).", category="display"),
         AppSetting("config/textsize", 1.0, cast=as_float, description="Base text size.", category="display"),
         AppSetting("config/textscale", 0.9, cast=as_float, description="Text scale.", category="display"),
@@ -113,8 +120,8 @@ def _load_cfg(aseco: "Aseco"):
     _state.show_max_checkpoints = max(1, bound.values["config/number"])
     _state.widget.custom_ui = bound.values["config/custom_ui"]
     _state.widget.show_spectators = bound.values["config/show_spectators"]
-    _state.widget.width = max(14.0, bound.values["config/width"])
-    _state.widget.height = max(14.0, bound.values["config/height"])
+    _state.widget.width = bound.values["config/width"]
+    _state.widget.height = bound.values["config/height"]
     _state.widget.rows = max(1, bound.values["config/rows"])
     logger.info("[BestCpTimesV2] Config loaded from %s", display_path(path))
 
@@ -281,15 +288,6 @@ async def bct_onPlayerConnect(aseco: "Aseco", player: "Player"):
     await bct_buildWidget(aseco, player.login)
     if player.login not in _state.hidden_logins:
         await bct_buildCheckpointsTimeInlay(aseco, login=player.login)
-    await aseco.client.query_ignore_result(
-        "ChatSendServerMessageToLogin",
-        aseco.format_colors(
-            "{#server}>> {#message}This server is running Best CP Times, "
-            "type {#highlite}/bcps all {#message}or {#highlite}/bcps my "
-            "{#message}to switch the view."
-        ),
-        player.login,
-    )
 
 
 async def bct_onPlayerDisconnect(aseco: "Aseco", player: "Player"):
@@ -469,6 +467,12 @@ async def bct_onEndRace1(aseco: "Aseco", _race):
     await deliver_ui(aseco, "SendDisplayManialinkPage", xml, 0, False)
 
 
+def _widget_dimensions():
+    widget = _state.widget
+    natural_height = ROW_HEIGHT * widget.rows + 3.0
+    return widget.width or 15.0, widget.height or natural_height
+
+
 async def bct_buildWidget(aseco: "Aseco", login: str | None = None):
     from pyxaseco.core.widget_delivery import is_score_phase
     if is_score_phase(aseco):
@@ -478,8 +482,7 @@ async def bct_buildWidget(aseco: "Aseco", login: str | None = None):
         else:
             await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
         return
-    width = _state.widget.width
-    height = max(_state.widget.height, ROW_HEIGHT * _state.widget.rows + 3.0)
+    width, height = _widget_dimensions()
 
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
@@ -656,12 +659,15 @@ def _build_inlay_xml(aseco: "Aseco", login: str, checkpoint_id: int, highlight: 
     rows = _state.widget.rows
     start = page * rows
     page_ids = ids[start:start + rows]
-    width = _state.widget.width
+    width, height = _widget_dimensions()
+    sx = min(1.0, width / 14.0)
+    sy = min(1.0, height / (ROW_HEIGHT * rows + 3.0))
+    textsize, textscale = text_geometry(_state.widget.textsize, _state.widget.textscale * min(sx, sy))
 
-    rank_x = 1.65
-    time_x = 5.2
-    name_x = 5.75
-    name_w = max(7.5, width - name_x - 0.9)
+    rank_x = 1.65 * sx
+    time_x = 5.2 * sx
+    name_x = 5.75 * sx
+    name_w = max(7.5 * sx, width - name_x - 0.9 * sx)
 
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -670,7 +676,7 @@ def _build_inlay_xml(aseco: "Aseco", login: str, checkpoint_id: int, highlight: 
         f'<frame posn="{_state.widget.position_x} {_state.widget.position_y} 3">',
     ]
 
-    row_offset = ROW_HEIGHT
+    row_offset = ROW_HEIGHT * sy
     for idx, cp in enumerate(page_ids, start=1):
         posy = -(row_offset * idx)
         if highlight and cp == checkpoint_id:
@@ -689,38 +695,38 @@ def _build_inlay_xml(aseco: "Aseco", login: str, checkpoint_id: int, highlight: 
         score_txt = str(score_val) if mode == 4 else bct_formatTime(score_val)
 
         parts.append(
-            f'<label posn="{rank_x:.2f} {posy:.2f} 0.14" sizen="1.8 0" halign="right" '
-            f'textsize="{_state.widget.textsize}" scale="{_state.widget.textscale}" text="$FFF{cp + 1}."/>'
+            f'<label posn="{rank_x:.2f} {posy:.2f} 0.14" sizen="{1.8 * sx:.2f} 0" halign="right" '
+            f'textsize="{textsize}" scale="{textscale:.4f}" text="$FFF{cp + 1}."/>'
         )
         parts.append(
-            f'<label posn="{time_x:.2f} {posy:.2f} 0.14" sizen="3.8 0" halign="right" '
-            f'textsize="{_state.widget.textsize}" scale="{_state.widget.textscale}" text="$FFF{escape(score_txt)}"/>'
+            f'<label posn="{time_x:.2f} {posy:.2f} 0.14" sizen="{3.8 * sx:.2f} 0" halign="right" '
+            f'textsize="{textsize}" scale="{textscale:.4f}" text="$FFF{escape(score_txt)}"/>'
         )
         parts.append(
             f'<label posn="{name_x:.2f} {posy:.2f} 0.14" sizen="{name_w:.2f} 0" '
-            f'textsize="{_state.widget.textsize}" scale="{_state.widget.textscale}" text="$FFF{nick}"/>'
+            f'textsize="{textsize}" scale="{textscale:.4f}" text="$FFF{nick}"/>'
         )
 
     page = _effective_page_for_login(aseco, login)
     total_pages = max(1, (len(ids) + rows - 1) // rows)
     if total_pages > 1:
-        footer_y = -(row_offset * (rows + 0.55)) - 0.45
-        prev_x = 0.55
-        page_x = 3.6
-        next_x = 5.15
+        footer_y = -(row_offset * (rows + 0.55)) - 0.45 * sy
+        prev_x, page_x, next_x = 0.55 * sx, 3.6 * sx, 5.15 * sx
+        button_size = f"{2 * sx:.2f} {2 * sy:.2f}"
         parts.append('<format style="TextStaticMedium"/>')
         if page > 0:
             prev_action = -(ACTION_PAGE_BASE + (page - 1))
             parts.append(
-                f'<quad posn="{prev_x:.2f} {footer_y:.2f} 0.12" sizen="2.0 2.0" action="{prev_action}" style="Icons64x64_1" substyle="ArrowPrev"/>'
+                f'<quad posn="{prev_x:.2f} {footer_y:.2f} 0.12" sizen="{button_size}" action="{prev_action}" style="Icons64x64_1" substyle="ArrowPrev"/>'
             )
         parts.append(
-            f'<label posn="{page_x:.2f} {footer_y - 0.10:.2f} 0.14" sizen="3.8 0" halign="center" textsize="1.2" scale="0.85" text="$FFF{page + 1}/{total_pages}"/>'
+            f'<label posn="{page_x:.2f} {footer_y - 0.10 * sy:.2f} 0.14" sizen="{3.8 * sx:.2f} 0" '
+            f'halign="center" textsize="1.2" scale="{.85 * min(sx, sy):.4f}" text="$FFF{page + 1}/{total_pages}"/>'
         )
         if page < (total_pages - 1):
             next_action = ACTION_PAGE_BASE + (page + 1)
             parts.append(
-                f'<quad posn="{next_x:.2f} {footer_y:.2f} 0.12" sizen="2.0 2.0" action="{next_action}" style="Icons64x64_1" substyle="ArrowNext"/>'
+                f'<quad posn="{next_x:.2f} {footer_y:.2f} 0.12" sizen="{button_size}" action="{next_action}" style="Icons64x64_1" substyle="ArrowNext"/>'
             )
 
     parts.extend(["</frame>", "</manialink>", "</manialinks>"])

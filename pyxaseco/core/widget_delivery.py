@@ -37,13 +37,13 @@ class WidgetDelivery:
     def invalidate_page(self, login, page):
         self._sent.pop((login, str(page)), None)
 
-    async def send(self, method, *args):
+    async def send(self, method, *args, remember=True):
         service = _presentation_service(self.aseco)
         groups = service.delivery_groups(method, *args) if service else None
         result = None
         for group_method, group_args in groups or [(method, args)]:
             result = await self._send(group_method, *group_args)
-        if service:
+        if service and remember:
             service.remember_ui(method, *args)
         return result
 
@@ -109,7 +109,7 @@ class WidgetDelivery:
         self.aseco.performance.increment('ui.delivery_groups')
 
 
-async def deliver_ui(aseco, method, *args):
+async def deliver_ui(aseco, method, *args, remember=True):
     delivery = getattr(aseco, 'ui_delivery', None)
     if delivery is None:
         service = _presentation_service(aseco)
@@ -117,10 +117,10 @@ async def deliver_ui(aseco, method, *args):
         result = None
         for group_method, group_args in groups or [(method, args)]:
             result = await aseco.client.query_ignore_result(group_method, *group_args)
-        if service:
+        if service and remember:
             service.remember_ui(method, *args)
         return result
-    return await delivery.send(method, *args)
+    return await delivery.send(method, *args, remember=remember)
 
 
 def _presentation_service(aseco):

@@ -14,6 +14,7 @@ Commands:
 from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
+from apps.platform_ui import record_browser
 
 from pyxaseco.helpers import (display_manialink, display_manialink_multi,
                                format_text, format_time, strip_colors)
@@ -338,38 +339,16 @@ async def chat_dedirecs(aseco: 'Aseco', command: dict):
         await chat_dedirange(aseco, command)
         return
 
-    if not recs:
-        await _send(aseco, login, '{#server}> {#error}No Dedimania records found!')
+    if not _get_dedi_db(aseco).get('RecsValid'):
+        await _send(aseco, login, '{#server}> {#error}Dedimania is unavailable or has not loaded records for this map.')
         return
-
-    maxrank     = max(_server_maxrank(aseco), int(getattr(player, 'dedirank', 0) or 0))
-    show_logins = _show_rec_logins(aseco)
-    extra       = 0.2 if aseco.settings.lists_colornicks else 0
-
-    rows = []
-    for i, rec in enumerate(recs):
-        nick  = rec.get('NickName', rec.get('Login', '?'))
-        if not aseco.settings.lists_colornicks:
-            nick = strip_colors(nick)
-        score = _score_str(aseco, int(rec.get('Best', 0) or 0))
-        color = '{#black}' if rec.get('NewBest') else ''
-
-        if show_logins:
-            rows.append([f'{i+1:02d}.', '{#black}' + nick,
-                         '{#login}' + rec.get('Login', ''), color + score])
-        else:
-            rows.append([f'{i+1:02d}.', '{#black}' + nick, color + score])
-
-    if show_logins:
-        widths = [1.2+extra, 0.1, 0.45+extra, 0.4, 0.25]
-    else:
-        widths = [0.8+extra, 0.1, 0.45+extra, 0.25]
-
-    pages = [rows[i:i+15] for i in range(0, len(rows), 15)]
-    player.msgs = [[1, f'Current TOP {maxrank} Dedimania Records:',
-                    widths, ['BgRaceScore2', 'Podium']]]
-    player.msgs.extend(pages)
-    display_manialink_multi(aseco, player)
+    runs = [record_browser.Run(str(rec.get('Login') or ''), str(rec.get('NickName') or rec.get('Login') or '?'),
+                               int(rec.get('Best') or 0), index, record_browser.split_values(rec.get('Checks')))
+            for index, rec in enumerate(recs, 1)]
+    maxrank = max(_server_maxrank(aseco), int(getattr(player, 'dedirank', 0) or 0))
+    await record_browser.show(aseco, player, f'Current TOP {maxrank} Dedimania Records', runs,
+                              show_logins=_show_rec_logins(aseco),
+                              valid=lambda runtime, _viewer: bool(_get_dedi_db(runtime).get('RecsValid')))
 
 
 async def _dedirecs_help(aseco: 'Aseco', login: str):

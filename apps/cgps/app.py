@@ -58,6 +58,14 @@ def chat_link(link):
     return 'http://' + link.split('://', 1)[1]
 
 
+def validate_config(document, _root):
+    if not isinstance(section := document.get('cgps', {}), dict):
+        raise ValueError('cgps must be a table.')
+    for setting in SCHEMA.settings:
+        if setting.key in ('widget/width', 'widget/height') and not 1 <= setting.read(section) <= 20:
+            raise ValueError(f'Curated GPS {setting.key} must be between 1 and 20.')
+
+
 class CuratedGpsApp(App):
     def __init__(self):
         super().__init__(app_id='cgps', display_name='Curated GPS',

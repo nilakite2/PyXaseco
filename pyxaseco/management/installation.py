@@ -18,7 +18,7 @@ from uuid import uuid4
 import xml.etree.ElementTree as ET
 import zipfile
 
-from .config_store import ManagementError, file_lock, revision, update_file
+from .config_store import DATA_DIR, ManagementError, file_lock, revision, update_file
 from .editing import edit_dotenv
 from .instances import InstanceRegistry, configured_endpoint, read_dotenv
 from .operations import ManagementOperations
@@ -44,6 +44,8 @@ def safe_path(path):
 
 def payload_path(name):
     parts = PurePosixPath(name).parts
+    if parts and parts[0].casefold() == DATA_DIR:
+        raise ManagementError('Instance data must not be included in a controller release')
     if tuple(part.casefold() for part in parts[:3]) == ('apps', 'ui', 'player_huds'):
         raise ManagementError('Player HUD profiles are server data, not release files')
     if (not parts or name != '/'.join(parts) or '\\' in name
@@ -560,7 +562,8 @@ def apply(request: InstallRequest, registry: InstanceRegistry, *, reviewed: str)
                 'payload_files': {name: revision(data) for name, data in payload.items()},
                 'owned_files': {name: revision((controller / name).read_bytes()) for name in payload
                                 if not configuration_file(name)}}
-            update_file(controller / 'installation.json', lambda _text: json.dumps(receipt, indent=2) + '\n', backup=False)
+            update_file(controller / 'installation.json', lambda _text: json.dumps(receipt, indent=2) + '\n',
+                        backup=False, root=controller)
             return receipt
         except Exception as exc:
             if published:

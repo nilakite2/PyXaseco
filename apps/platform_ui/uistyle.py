@@ -12,6 +12,7 @@ from pyxaseco.toml_tools import update_toml_table_scalar
 from .uistyle_catalog import Catalog, load_catalog, valid_id
 from .presentation import Presentation
 from .player_hud import PlayerHud
+from .hud_layout import COMPACT_DEFAULT, CompactLayout, panel_offsets_from_config
 
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,26 @@ class UiStyles:
     def config_path(self):
         return self.root / 'apps/platform_ui/app_defaults.toml'
 
+    def _read_settings(self):
+        try:
+            return tomllib.loads(self.config_path.read_text(encoding='utf-8-sig')).get('platform_ui', {})
+        except FileNotFoundError:
+            return {}
+
+    async def reload_panel_positions(self):
+        settings = await file_io(self._read_settings)
+        offsets = panel_offsets_from_config(settings.get('panels', {}))
+        previous = self.hud.server_offsets
+        changed = {key for key in previous.keys() | offsets.keys() if previous.get(key) != offsets.get(key)}
+        self.hud.server_offsets = offsets
+        if not changed:
+            return
+        for player in self.aseco.server.players.all():
+            await self.hud.refresh(player, changed)
+            session = self.hud.session(player)
+            if session and session.preset is not None and session.selected in changed:
+                await self.hud.draw(player, session)
+
     async def startup(self, _aseco, _param):
         self.catalog = await file_io(load_catalog, self.root)
         for name, (preset, _renderer) in list(self.renderers.items()):
@@ -54,12 +75,12 @@ class UiStyles:
         for warning in self.catalog.warnings:
             logger.warning('[UIStyle] %s', warning)
         try:
-            def read_default():
-                if not self.config_path.exists():
-                    return 0
-                data = tomllib.loads(self.config_path.read_text(encoding='utf-8-sig'))
-                return data.get('platform_ui', {}).get('uistyle', {}).get('default', 0)
-            value = await file_io(read_default)
+            settings = await file_io(self._read_settings)
+        except (OSError, ValueError):
+            settings = {}
+            logger.warning('[UIStyle] Could not read platform UI settings; using defaults', exc_info=True)
+        try:
+            value = settings.get('uistyle', {}).get('default', 0)
             if not valid_id(value):
                 raise ValueError('default must be an integer UI preset ID')
             self.default = value
@@ -68,6 +89,16 @@ class UiStyles:
         except (OSError, ValueError, TypeError, AttributeError):
             self.default = 0
             logger.warning('[UIStyle] Server default could not be read; using Classic', exc_info=True)
+        try:
+            self.hud.compact = CompactLayout.from_config(settings.get('hud', {}).get('compact', {}))
+        except (ValueError, AttributeError) as error:
+            self.hud.compact = COMPACT_DEFAULT
+            logger.warning('[HUD] Invalid Compact settings; using defaults: %s', error)
+        try:
+            self.hud.server_offsets = panel_offsets_from_config(settings.get('panels', {}))
+        except (ValueError, AttributeError) as error:
+            self.hud.server_offsets = {}
+            logger.warning('[HUD] Invalid legacy panel positions; using defaults: %s', error)
 
     def resolve(self, player):
         return self.catalog.resolve(getattr(player, 'ui_style', None), self.default)

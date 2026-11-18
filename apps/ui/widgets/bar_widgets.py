@@ -39,6 +39,7 @@ from pyxaseco.models import Gameinfo
 from pyxaseco.app_services import localdb_get_pool
 
 from ..config import _state, _effective_mode
+from .common import _bg_attrs, _score_bg_attrs
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -174,12 +175,6 @@ def _empty(ml_id: int) -> str:
     return f'<manialink id="{ml_id}"></manialink>'
 
 
-def _bg_attrs(style: str, substyle: str, color: str = '') -> str:
-    if color:
-        return f'bgcolor="{escape(color)}"'
-    return f'style="{escape(style)}" substyle="{escape(substyle)}"'
-
-
 async def _rehide_hidden_logins(aseco: 'Aseco', *ml_ids: int) -> None:
     hidden = [
         p.login for p in aseco.server.players.all()
@@ -227,6 +222,12 @@ async def _draw_trackcount_all(aseco: 'Aseco') -> None:
     except Exception:
         count = getattr(aseco.server, '_re_trackcount', 0)
 
+    xml = _build_trackcount_xml(cfg, count)
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_TRACKCOUNT)
+
+
+def _build_trackcount_xml(cfg, count):
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
@@ -248,8 +249,7 @@ async def _draw_trackcount_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_TRACKCOUNT)
+    return xml
 
 
 async def _hide_trackcount(aseco: 'Aseco') -> None:
@@ -268,7 +268,6 @@ async def _draw_gamemode_all(aseco: 'Aseco') -> None:
         return
 
     mode = _effective_mode(aseco)
-    name, icon_sub = _GAMEMODE_META.get(mode, ('?', 'RT_TimeAttack'))
 
     # Build limits string from current game info
     limits = ''
@@ -296,6 +295,13 @@ async def _draw_gamemode_all(aseco: 'Aseco') -> None:
     except Exception:
         pass
 
+    xml = _build_gamemode_xml(cfg, mode, limits)
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_GAMEMODE)
+
+
+def _build_gamemode_xml(cfg, mode, limits=''):
+    name, icon_sub = _GAMEMODE_META.get(mode, ('?', 'RT_TimeAttack'))
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
@@ -317,8 +323,7 @@ async def _draw_gamemode_all(aseco: 'Aseco') -> None:
             f' textsize="1" text="{escape(limits)}"/>'
         )
     xml += f'</frame></manialink>'
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_GAMEMODE)
+    return xml
 
 
 async def _hide_gamemode(aseco: 'Aseco') -> None:
@@ -337,6 +342,13 @@ async def _draw_visitors_all(aseco: 'Aseco') -> None:
         return
 
     count = _state.visitor_count
+
+    xml = _build_visitors_xml(cfg, count)
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_VISITORS)
+
+
+def _build_visitors_xml(cfg, count):
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
@@ -358,8 +370,7 @@ async def _draw_visitors_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_VISITORS)
+    return xml
 
 
 async def _hide_visitors(aseco: 'Aseco') -> None:
@@ -408,6 +419,12 @@ async def _draw_playerspectator_all(aseco: 'Aseco') -> None:
     max_play = _state.server_max_players
     max_spec = _state.server_max_spectators
 
+    xml = _build_playerspectator_xml(cfg, n_play, n_spec, max_play, max_spec)
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_PLAYERSPECTATOR)
+
+
+def _build_playerspectator_xml(cfg, n_play, n_spec, max_play, max_spec):
     col_play = 'F00' if (max_play > 0 and n_play >= max_play) else 'FFF'
     col_spec = 'F00' if (max_spec > 0 and n_spec >= max_spec) else 'FFF'
     w = _bar_width(cfg)
@@ -431,8 +448,7 @@ async def _draw_playerspectator_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_PLAYERSPECTATOR)
+    return xml
 
 
 async def _refresh_server_limits(aseco: 'Aseco') -> None:
@@ -464,6 +480,12 @@ async def _draw_ladderlimit_all(aseco: 'Aseco') -> None:
     lmin = getattr(aseco.server, 'laddermin', 0) or 0
     lmax = getattr(aseco.server, 'laddermax', 0) or 0
 
+    xml = _build_ladderlimit_xml(cfg, lmin, lmax)
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_LADDERLIMIT)
+
+
+def _build_ladderlimit_xml(cfg, lmin, lmax):
     lo = str(int(lmin) // 1000)[:3]
     hi = str(int(lmax) // 1000)[:3]
     w = _bar_width(cfg)
@@ -485,8 +507,7 @@ async def _draw_ladderlimit_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_LADDERLIMIT)
+    return xml
 
 
 async def _hide_ladderlimit(aseco: 'Aseco') -> None:
@@ -550,6 +571,12 @@ async def _draw_currentranking_player(
         except Exception:
             ranks = '0/0'
         info = 'RANKING'
+
+    xml = _build_currentranking_xml(cfg, ranks, info)
+    await _send_to(aseco, login, xml)
+
+
+def _build_currentranking_xml(cfg, ranks, info):
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
@@ -571,7 +598,7 @@ async def _draw_currentranking_player(
         f'</frame>'
         f'</manialink>'
     )
-    await _send_to(aseco, login, xml)
+    return xml
 
 
 async def _hide_currentranking(aseco: 'Aseco') -> None:
@@ -607,6 +634,13 @@ async def _draw_tmexchange_all(aseco: 'Aseco') -> None:
         score = ''
 
     has_tmx = bool(tmx_id and tmx_prefix)
+
+    xml = _build_tmexchange_xml(cfg, has_tmx, score)
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_TMEXCHANGE)
+
+
+def _build_tmexchange_xml(cfg, has_tmx, score):
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
@@ -649,9 +683,7 @@ async def _draw_tmexchange_all(aseco: 'Aseco') -> None:
             f'</frame>'
             f'</manialink>'
         )
-
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_TMEXCHANGE)
+    return xml
 
 
 async def _hide_tmexchange(aseco: 'Aseco') -> None:
@@ -669,6 +701,12 @@ async def _draw_toplist_all(aseco: 'Aseco') -> None:
     if _state.challenge_show_next:
         return
 
+    xml = _build_toplist_xml(cfg)
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_TOPLIST)
+
+
+def _build_toplist_xml(cfg):
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
@@ -690,9 +728,7 @@ async def _draw_toplist_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
     )
-
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_TOPLIST)
+    return xml
 
 
 async def _hide_toplist(aseco: 'Aseco') -> None:
@@ -708,18 +744,6 @@ async def _draw_favorite_all(aseco: 'Aseco', score: bool = False) -> None:
     if not cfg.enabled:
         return
 
-    if score:
-        px, py = cfg.score_pos_x, cfg.score_pos_y
-        bg_sty, bg_sub = cfg.score_bg_style, cfg.score_bg_substyle
-        bg_col = cfg.score_bg_color
-    else:
-        px, py = cfg.race_pos_x, cfg.race_pos_y
-        bg_sty, bg_sub = cfg.race_bg_style, cfg.race_bg_substyle
-        bg_col = cfg.race_bg_color
-    w = _bar_width(cfg)
-    h = _bar_height(cfg)
-    cx = w / 2.0
-
     slogin = getattr(aseco.server, 'serverlogin', '') or ''
     sname  = escape(getattr(aseco.server, 'name', '') or '')
     szone  = escape(getattr(aseco.server, 'zone', '') or '')
@@ -732,13 +756,28 @@ async def _draw_favorite_all(aseco: 'Aseco', score: bool = False) -> None:
         f'&amp;zone={urllib.parse.quote(szone)}'
     )
 
-    xml = (
+    await _broadcast(aseco, _build_favorite_xml(cfg, score, fav_ml))
+    await _rehide_hidden_logins(aseco, ML_FAVORITE)
+
+
+def _build_favorite_xml(cfg, score, fav_ml=''):
+    if score:
+        px, py = cfg.score_pos_x, cfg.score_pos_y
+        background = _score_bg_attrs(cfg.score_bg_style, cfg.score_bg_substyle, cfg.score_bg_color)
+    else:
+        px, py = cfg.race_pos_x, cfg.race_pos_y
+        background = _bg_attrs(cfg.race_bg_style, cfg.race_bg_substyle, cfg.race_bg_color)
+    w = _bar_width(cfg)
+    h = _bar_height(cfg)
+    cx = w / 2.0
+
+    return (
         f'<manialink id="{ML_FAVORITE}">'
         f'<frame posn="{px} {py} 0">'
         f'<format textsize="1"/>'
         f'<quad posn="0 0 0.001" sizen="{w:.4f} {h:.4f}"'
         f' manialink="{fav_ml}" addplayerid="1"'
-        f' {_bg_attrs(bg_sty, bg_sub, bg_col)}/>'
+        f' {background}/>'
         f'<quad posn="{_bar_x(cfg, -0.18):.4f} {_bar_y(cfg, -4.6):.4f} 0.002" sizen="{_bar_w(cfg, 2.1):.4f} {_bar_h(cfg, 2.1):.4f}" image="{_OPEN_SMALL}"/>'
         f'<quad posn="{_bar_x(cfg, 0.7):.4f} {_bar_y(cfg, -0.2):.4f} 0.002" sizen="{_bar_w(cfg, 3.2):.4f} {_bar_h(cfg, 3.2):.4f}"'
         f' style="Icons128x128_Blink" substyle="ServersFavorites"/>'
@@ -749,8 +788,6 @@ async def _draw_favorite_all(aseco: 'Aseco', score: bool = False) -> None:
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_FAVORITE)
 
 
 async def _hide_favorite(aseco: 'Aseco') -> None:
@@ -839,13 +876,11 @@ def _build_clock_xml(cfg, timezone: str, at_score: bool) -> str:
 
     if at_score:
         px, py = cfg.score_pos_x, cfg.score_pos_y
-        bg_sty, bg_sub = cfg.score_bg_style, cfg.score_bg_substyle
-        bg_col = cfg.score_bg_color
+        background = _score_bg_attrs(cfg.score_bg_style, cfg.score_bg_substyle, cfg.score_bg_color)
         action_attr = ''
     else:
         px, py = cfg.race_pos_x, cfg.race_pos_y
-        bg_sty, bg_sub = cfg.race_bg_style, cfg.race_bg_substyle
-        bg_col = cfg.race_bg_color
+        background = _bg_attrs(cfg.race_bg_style, cfg.race_bg_substyle, cfg.race_bg_color)
         action_attr = f' action="{ACT_CLOCK_DETAILS}"'
     w = _bar_width(cfg)
     h = _bar_height(cfg)
@@ -856,7 +891,7 @@ def _build_clock_xml(cfg, timezone: str, at_score: bool) -> str:
         f'<frame posn="{px} {py} 0">'
         f'<format textsize="1"/>'
         f'<quad posn="0 0 0.001" sizen="{w:.4f} {h:.4f}"{action_attr}'
-        f' {_bg_attrs(bg_sty, bg_sub, bg_col)}/>'
+        f' {background}/>'
         f'<label posn="{cx:.4f} {_bar_y(cfg, -0.6):.4f} 0.1" sizen="{_bar_w(cfg, 3.65):.4f} {_bar_h(cfg, 2):.4f}" halign="center"'
         f' text="{escape(time_str)}"/>'
         f'<label posn="{cx:.4f} {_bar_y(cfg, -2.1):.4f} 0.1" sizen="{_bar_w(cfg, 6.35):.4f} {_bar_h(cfg, 2):.4f}" halign="center"'
@@ -891,7 +926,11 @@ async def _draw_next_env_all(aseco: 'Aseco') -> None:
 
     nxt = _state.next_challenge
     env = str(nxt.get('env', '') or '')
+    await _broadcast(aseco, _build_next_env_xml(cfg, env))
+    await _rehide_hidden_logins(aseco, ML_NEXT_ENV)
 
+
+def _build_next_env_xml(cfg, env):
     icon_quad = ''
     if env in _ENV_ICONS:
         posn, sizen = _ENV_ICONS[env]
@@ -907,12 +946,12 @@ async def _draw_next_env_all(aseco: 'Aseco') -> None:
     h = _bar_height(cfg)
     cx = w / 2.0
 
-    xml = (
+    return (
         f'<manialink id="{ML_NEXT_ENV}">'
         f'<frame posn="{cfg.pos_x} {cfg.pos_y} 0">'
         f'<format textsize="1"/>'
         f'<quad posn="0 0 0.001" sizen="{w:.4f} {h:.4f}"'
-        f' {_bg_attrs(cfg.bg_style, cfg.bg_substyle, getattr(cfg, "bg_color", ""))}/>'
+        f' {_score_bg_attrs(cfg.bg_style, cfg.bg_substyle, cfg.bg_color)}/>'
         f'{icon_quad}'
         f'<label posn="{cx:.4f} {_bar_y(cfg, -4.2):.4f} 0.002" sizen="{_bar_w(cfg, 6.35):.4f} {_bar_h(cfg, 2):.4f}" halign="center"'
         f' textcolor="{cfg.text_color}" scale="{_bar_text_scale(cfg, 0.6)}" text="UPCOMING"/>'
@@ -921,8 +960,6 @@ async def _draw_next_env_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_NEXT_ENV)
 
 
 async def _hide_next_env(aseco: 'Aseco') -> None:
@@ -943,18 +980,22 @@ async def _draw_next_gamemode_all(aseco: 'Aseco') -> None:
         next_mode = int((nextgame or {}).get('GameMode', 0) or 0)
     except Exception:
         next_mode = 0
+    await _broadcast(aseco, _build_next_gamemode_xml(cfg, next_mode))
+    await _rehide_hidden_logins(aseco, ML_NEXT_GAMEMODE)
 
+
+def _build_next_gamemode_xml(cfg, next_mode):
     _, icon_sub = _GAMEMODE_META.get(next_mode, ('?', 'RT_TimeAttack'))
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
 
-    xml = (
+    return (
         f'<manialink id="{ML_NEXT_GAMEMODE}">'
         f'<frame posn="{cfg.pos_x} {cfg.pos_y} 0">'
         f'<format textsize="1"/>'
         f'<quad posn="0 0 0.001" sizen="{w:.4f} {h:.4f}"'
-        f' {_bg_attrs(cfg.bg_style, cfg.bg_substyle, getattr(cfg, "bg_color", ""))}/>'
+        f' {_score_bg_attrs(cfg.bg_style, cfg.bg_substyle, cfg.bg_color)}/>'
         f'<quad posn="{_bar_x(cfg, 0.7):.4f} {_bar_y(cfg, -0.3):.4f} 0.002" sizen="{_bar_w(cfg, 2.9):.4f} {_bar_h(cfg, 2.9):.4f}"'
         f' style="Icons128x32_1" substyle="{icon_sub}"/>'
         f'<label posn="{cx:.4f} {_bar_y(cfg, -4.2):.4f} 0.002" sizen="{_bar_w(cfg, 6.35):.4f} {_bar_h(cfg, 2):.4f}" halign="center"'
@@ -964,8 +1005,6 @@ async def _draw_next_gamemode_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_NEXT_GAMEMODE)
 
 
 async def _hide_next_gamemode(aseco: 'Aseco') -> None:
@@ -980,25 +1019,31 @@ async def _draw_eyepiece_score_all(aseco: 'Aseco') -> None:
     cfg = _state.eyepiece_widget
     if not cfg.score_enabled:
         return
+    await _broadcast(aseco, _build_eyepiece_score_xml(cfg))
+    await _rehide_hidden_logins(aseco, ML_EYEPIECE_SCORE)
+
+
+def _build_eyepiece_score_xml(cfg):
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
 
-    xml = (
+    return (
         f'<manialink id="{ML_EYEPIECE_SCORE}">'
         f'<frame posn="{cfg.score_pos_x} {cfg.score_pos_y} 0">'
         f'<format textsize="1"/>'
         f'<quad posn="0 0 0.001" sizen="{w:.4f} {h:.4f}"'
-        f' {_bg_attrs(cfg.score_bg_style, cfg.score_bg_substyle, getattr(cfg, "score_bg_color", ""))}/>'
-        f'<label posn="{cx:.4f} {_bar_y(cfg, -0.6):.4f} 0.1" sizen="{_bar_w(cfg, 3.65):.4f} {_bar_h(cfg, 2):.4f}" halign="center"'
-        f' textcolor="{cfg.text_color}" scale="{_bar_text_scale(cfg, 0.7)}" text="Records"/>'
-        f'<label posn="{cx:.4f} {_bar_y(cfg, -2.0):.4f} 0.1" sizen="{_bar_w(cfg, 3.65):.4f} {_bar_h(cfg, 2):.4f}" halign="center"'
-        f' textcolor="{cfg.text_color}" scale="{_bar_text_scale(cfg, 0.5)}" text="Eyepiece"/>'
+        f' {_score_bg_attrs(cfg.score_bg_style, cfg.score_bg_substyle, cfg.score_bg_color)}/>'
+        f'<quad posn="{cx:.4f} {_bar_y(cfg, -0.3):.4f} .002" halign="center"'
+        f' sizen="{_bar_w(cfg, 3.6):.4f} {_bar_h(cfg, 3.7):.4f}"'
+        f' style="Icons128x128_1" substyle="Rankings"/>'
+        f'<label posn="{cx:.4f} {_bar_y(cfg, -4.2):.4f} .1" sizen="{_bar_w(cfg, 6.35):.4f} {_bar_h(cfg, 2):.4f}" halign="center"'
+        f' textcolor="{cfg.text_color}" scale="{_bar_text_scale(cfg, 0.6)}" text="RECORDS"/>'
+        f'<label posn="{cx:.4f} {_bar_y(cfg, -5.2):.4f} .1" sizen="{_bar_w(cfg, 6.35):.4f} {_bar_h(cfg, 2):.4f}" halign="center"'
+        f' textcolor="{cfg.text_color}" scale="{_bar_text_scale(cfg, 0.6)}" text="EYEPIECE"/>'
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_EYEPIECE_SCORE)
 
 
 async def _hide_eyepiece_score(aseco: 'Aseco') -> None:
@@ -1017,6 +1062,13 @@ async def _draw_discord_widget_all(aseco: 'Aseco') -> None:
         return
 
     discord_url = (_state.links.get('discord') or 'discord.gg/CwFNmzKX8G').replace('&', '&amp;')
+
+    xml = _build_discord_xml(cfg, discord_url)
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_DISCORD)
+
+
+def _build_discord_xml(cfg, discord_url=''):
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
@@ -1038,8 +1090,7 @@ async def _draw_discord_widget_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_DISCORD)
+    return xml
 
 
 async def _draw_force_play_widget_all(aseco: 'Aseco') -> None:
@@ -1049,6 +1100,12 @@ async def _draw_force_play_widget_all(aseco: 'Aseco') -> None:
     if not cfg.enabled:
         return
 
+    xml = _build_force_play_xml(cfg)
+    await _broadcast(aseco, xml)
+    await _rehide_hidden_logins(aseco, ML_FORCE_PLAY)
+
+
+def _build_force_play_xml(cfg):
     w = _bar_width(cfg)
     h = _bar_height(cfg)
     cx = w / 2.0
@@ -1067,8 +1124,7 @@ async def _draw_force_play_widget_all(aseco: 'Aseco') -> None:
         f'</frame>'
         f'</manialink>'
     )
-    await _broadcast(aseco, xml)
-    await _rehide_hidden_logins(aseco, ML_FORCE_PLAY)
+    return xml
 
 
 async def _hide_discord_widget(aseco: 'Aseco') -> None:

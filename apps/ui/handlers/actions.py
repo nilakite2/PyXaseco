@@ -63,6 +63,10 @@ async def _on_manialink_answer(aseco: 'Aseco', answer: list):
         await _open_ultimania_window(aseco, login)
         return
 
+    record_command = {91804: 'dedirecs', 91805: 'recs', 91829: 'trialrecs', 91830: 'rpgrecs'}.get(action)
+    if record_command and await aseco.dispatch_chat_command(login, '/' + record_command):
+        return
+
     # Delayed imports to avoid circular dependencies between split modules.
     from .command_handlers import chat_togglewidgets
     from ..tracklist import (

@@ -157,11 +157,6 @@ async def _draw_cp_player(aseco: 'Aseco', login: str):
         await _hide(aseco, login, ML_CP)
         return
 
-    st = _state.style
-    cp_cfg = _state.cp
-    width = max(1.0, float(getattr(cp_cfg, 'width', 16.0) or 16.0))
-    height = max(1.0, float(getattr(cp_cfg, 'height', 4.0) or 4.0))
-    center_x = width / 2.0
     ch = aseco.server.challenge
     mode = _effective_mode(aseco)
 
@@ -191,6 +186,20 @@ async def _draw_cp_player(aseco: 'Aseco', login: str):
     _display_login = _resolve_display_login(aseco, login)
 
     checkpoint = int(_state.player_cp_idx.get(_display_login, 0) or 0)
+    # Spectators have the speed/time box removed so the CP widget must
+    # move up 5 units to avoid the empty gap at the bottom of the screen.
+    player = aseco.server.players.get_player(login)
+    _spec_offset = 5.0 if _is_player_currently_spectating(player) else 0.0
+
+    await _send(aseco, login, _build_cp_count_xml(checkpoint, totalcps, _spec_offset))
+
+
+def _build_cp_count_xml(checkpoint, totalcps, spectator_offset=0):
+    st = _state.style
+    cp_cfg = _state.cp
+    width = max(1.0, float(getattr(cp_cfg, 'width', 16.0) or 16.0))
+    height = max(1.0, float(getattr(cp_cfg, 'height', 4.0) or 4.0))
+    center_x = width / 2.0
     cp_display = checkpoint
     text_color = st.cp_text_color
 
@@ -224,11 +233,7 @@ async def _draw_cp_player(aseco: 'Aseco', login: str):
         else f'style="{st.bg_style}" substyle="{st.bg_substyle}"'
     )
 
-    # Spectators have the speed/time box removed so the CP widget must
-    # move up 5 units to avoid the empty gap at the bottom of the screen.
-    player = aseco.server.players.get_player(login)
-    _spec_offset = 5.0 if _is_player_currently_spectating(player) else 0.0
-    _cp_pos_y = cp_cfg.pos_y + _spec_offset
+    _cp_pos_y = cp_cfg.pos_y + spectator_offset
 
     xml = (
         f'<manialink id="{ML_CP}">'
@@ -247,8 +252,7 @@ async def _draw_cp_player(aseco: 'Aseco', login: str):
             f' text="{bot_text}"/>'
         )
     xml += f'</frame></manialink>'
-
-    await _send(aseco, login, xml)
+    return xml
 
 
 # ---------------------------------------------------------------------------

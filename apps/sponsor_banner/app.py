@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 from time import monotonic
 from urllib.parse import quote, unquote, urlsplit
 
+from apps.platform_ui.hud_layout import LIMITS
 from pyxaseco.app_config import (
     AppSetting, AppSettingsSchema, as_bool, as_float, as_int, as_str,
     bind_app_settings, clear_app_defaults_cache,
@@ -110,8 +111,10 @@ def configuration(section, root):
             raise ValueError('Banner position and size must be finite numbers.')
     if not 0 < values['width'] <= 128 or not 0 < values['height'] <= 96:
         raise ValueError('Banner width must be 0-128 and height 0-96, both greater than zero.')
-    if not -64.7 <= values['pos_x'] <= 64.7 or not -48 <= values['pos_y'] <= 48:
-        raise ValueError('Banner position must be within X -64.7 to 64.7 and Y -48 to 48.')
+    for axis in ('x', 'y'):
+        low, high = LIMITS[f'd{axis}']
+        if not low <= values[f'pos_{axis}'] <= high:
+            raise ValueError(f'Banner {axis.upper()} position must be between {low:g} and {high:g}.')
     _integer(values['interval_seconds'], 1, 86400, 'interval_seconds')
     if values['asset_base_url']:
         web_url(values['asset_base_url'])
@@ -159,6 +162,7 @@ class SponsorBannerApp(App):
         self.hidden = set()
 
     def register_runtime(self, aseco):
+        aseco.register_service('ui/score_preview/sponsor_banner', self.score_preview, owner='sponsor_banner')
         for event, callback in (
             ('onEverySecond', self.tick), ('onSync', self.refresh),
             ('onPlayerConnect2', self.connect), ('onPlayerDisconnect', self.disconnect),
@@ -206,6 +210,20 @@ class SponsorBannerApp(App):
                 f'<quad posn="0 0 0" sizen="{self.values["width"]:.4f} {self.values["height"]:.4f}"'
                 f' image="{escape(banner.image_url, quote=True)}"'
                 f' url="{escape(banner.link_url, quote=True)}"/></frame></manialink>')
+
+    def score_preview(self, _aseco, _player, _track, _names, *, mode, phase):
+        if not self.values:
+            return
+        if self.banners:
+            markup = self.xml()
+        else:
+            x, y, width, height = (self.values[key] for key in ('pos_x', 'pos_y', 'width', 'height'))
+            markup = (f'<manialink id="{ML_ID}"><frame posn="{x} {y} 1">'
+                      f'<quad sizen="{width} {height}" bgcolor="223D"/>'
+                      f'<label posn=".5 -.5 .1" sizen="{max(1, width - 1)} 2" textsize="1"'
+                      ' text="Sponsor Banner"/></frame></manialink>')
+        key = 'show_on_score' if phase == 'score' else 'show_in_race'
+        yield markup, bool(self.enabled and self.banners and self.values[key])
 
     async def draw(self, aseco, player):
         xml = self.xml() if self.showing(aseco) and self.eligible(player) else f'<manialink id="{ML_ID}"></manialink>'

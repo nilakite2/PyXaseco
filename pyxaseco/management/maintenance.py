@@ -12,7 +12,9 @@ import tempfile
 import time
 from uuid import uuid4
 
-from .config_store import ManagementError, file_lock, revision
+from .config_store import (
+    LEGACY_MAINTENANCE, RUNTIME_LOCK, ManagementError, file_lock, instance_lock, maintenance_area, revision,
+)
 from .credentials import protect_token
 from .installation import PLATFORM, _write, payload_path, read_payload, safe_path
 from .instances import Instance
@@ -21,7 +23,7 @@ from .services import ServiceAdapter, ServicePlan
 
 
 RECEIPT = 'installation.json'
-AREA = '.management-maintenance'
+AREA = LEGACY_MAINTENANCE
 GUARD = 'pyxaseco/management/config_store.py'
 LIMIT = 16 * 1024 * 1024
 
@@ -47,11 +49,17 @@ def _hash(data):
     return revision(data) if data is not None else None
 
 
-def _replace(path, data, expected, *, lock_path=None):
+def _replace(path, data, expected, *, lock_path=None, root=None):
     """Atomic binary program-file replacement; config edits use ConfigStore instead."""
     path = safe_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with file_lock(safe_path(lock_path) if lock_path is not None else path.with_name('.' + path.name + '.lock')):
+    if lock_path is not None:
+        lock = file_lock(safe_path(lock_path))
+    elif root is not None:
+        lock = instance_lock(root, path)
+    else:
+        lock = file_lock(path.with_name('.' + path.name + '.lock'))
+    with lock:
         before = _bytes(path)
         if _hash(before) != expected:
             raise ManagementError('A maintenance target changed; nothing was overwritten at that path')
@@ -79,8 +87,7 @@ class Maintenance:
         self.root = safe_path(instance.controller)
         if not self.root.is_dir():
             raise ManagementError('Controller/data folder no longer exists')
-        self.area = self.root / AREA
-        safe_path(self.area)
+        self.area = maintenance_area(self.root)
         self.service_probe = service_probe or self._service_status
 
     def _service_status(self):
@@ -127,8 +134,9 @@ class Maintenance:
     @contextmanager
     def _locked(self, *, recovery=None):
         # Bypass the runtime pending-marker guard only here, while retaining the OS lock.
-        with file_lock(self.root / '.pyxaseco-runtime.lock'):
+        with file_lock(self.root / RUNTIME_LOCK):
             self._check_service()
+            self.area = maintenance_area(self.root)
             active = _bytes(self.area / 'active.json')
             if active is not None and (recovery is None or json.loads(active).get('id') != recovery):
                 raise ManagementError('A pending maintenance transaction must be rolled back first')
@@ -204,7 +212,7 @@ class Maintenance:
             return self._plan(action, incoming, sha256)[0]
 
     def _save(self, path, value):
-        _replace(path, _json(value), _hash(_bytes(path)))
+        _replace(path, _json(value), _hash(_bytes(path)), root=self.root)
         protect_token(path)
 
     def _journal(self, identity):
@@ -257,7 +265,7 @@ class Maintenance:
     def _commit(self, action, changes, snapshots, *, defaults=None, release='upgrade'):
         identity = uuid4().hex
         safe_path(self.area)
-        self.area.mkdir(mode=0o700, exist_ok=True)
+        self.area.mkdir(parents=True, mode=0o700, exist_ok=True)
         folder = self.area / identity
         folder.mkdir(mode=0o700)
         # Guard code first for an upgrade; remove main.py first for an uninstall.
@@ -283,7 +291,7 @@ class Maintenance:
         self._save(self.area / 'active.json', {'id': identity})
         try:
             for entry in record['changes']:
-                _replace(self._path(entry['file']), changes[entry['file']], entry['before'])
+                _replace(self._path(entry['file']), changes[entry['file']], entry['before'], root=self.root)
             record['state'] = 'committed'
             self._save(folder / 'transaction.json', record)
             (self.area / 'active.json').unlink()
@@ -380,7 +388,7 @@ class Maintenance:
                     if current == entry['before']:
                         continue
                     saved = _bytes(folder / 'before' / entry['file']) if entry['before'] is not None else None
-                    _replace(self._path(entry['file']), saved, entry['after'])
+                    _replace(self._path(entry['file']), saved, entry['after'], root=self.root)
                 record['state'] = 'rolled-back'
                 self._save(folder / 'transaction.json', record)
                 (self.area / 'active.json').unlink()

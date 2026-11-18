@@ -86,6 +86,8 @@ class ServerNeighborhoodApp(App):
         self.io_lock = asyncio.Lock()
 
     def register_runtime(self, aseco):
+        aseco.register_service('ui/score_preview/server_neighborhood', self.score_preview,
+                               owner='server_neighborhood')
         aseco.add_chat_command('servers', 'Browse neighboring servers', app='server_neighborhood',
                                owner='feature/server_neighborhood', usage='/servers [help]', category='chat-server')
         for event, callback in (
@@ -219,6 +221,17 @@ class ServerNeighborhoodApp(App):
         xml = (views.widget(self.rows, self.values, aseco.server.serverlogin, max(0, self.rotation)) if shown
                else f'<manialink id="{views.ML_WIDGET}"></manialink>')
         await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', player.login, xml, 0, False)
+
+    def score_preview(self, _aseco, _player, _track, _names, *, mode, phase):
+        if not self.values:
+            return
+        rows = [{'name': f'Sample Server {index + 1}', 'login': f'preview{index}',
+                 'players': 6 + index, 'maxplayers': 40, 'spectators': 2,
+                 'updated': time(), 'online': True}
+                for index in range(self.values['widget/entries'])]
+        yield (views.widget(rows, self.values, '', 0),
+               self.enabled and self.values['widget/enabled']
+               and (phase == 'race' or self.values['widget/show_on_score']))
 
     async def refresh(self, aseco):
         for player in aseco.server.players.all():

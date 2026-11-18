@@ -7,8 +7,9 @@ records_chat.py - Port of plugins/chat.records.php
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from pyxaseco.helpers import (format_text, format_time, strip_colors,
-                               display_manialink, display_manialink_multi)
+from apps.platform_ui import record_browser
+from pyxaseco.app_services import localdb_get_pool
+from pyxaseco.helpers import format_text, display_manialink
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -86,40 +87,36 @@ async def chat_recs(aseco: 'Aseco', command: dict):
             login)
         return
 
-    total = aseco.server.records.count()
-    if not total:
-        await aseco.client.query_ignore_result(
-            'ChatSendServerMessageToLogin',
-            aseco.format_colors('{#server}> {#error}No records found!'), login)
-        return
+    records = aseco.server.records
+    runs = [record_browser.Run(rec.player.login, rec.player.nickname, rec.score, i + 1,
+                               record_browser.split_values(rec.checks))
+            for i in range(records.count()) if (rec := records.get_record(i)) is not None]
+    challenge_id = aseco.server.challenge.id
+    stunts = getattr(aseco.server.gameinfo, 'mode', 0) == 4
 
-    is_stnt    = (aseco.server.gameinfo and aseco.server.gameinfo.mode == 4)
-    show_logins = aseco.settings.show_rec_logins
-    extra       = 0.2 if aseco.settings.lists_colornicks else 0
-    head        = f'Current TOP {aseco.server.records.max} Local Records:'
+    async def personal(login, player_id, nickname):
+        if not player_id or not challenge_id:
+            return None
+        pool = await localdb_get_pool(aseco)
+        if pool is None:
+            raise RuntimeError('Local records database unavailable')
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                values = (player_id, challenge_id)
+                await cur.execute('SELECT Score, Checkpoints FROM records WHERE PlayerId=%s AND ChallengeId=%s', values)
+                row = await cur.fetchone()
+                order = 'DESC' if stunts else 'ASC'
+                await cur.execute(f'SELECT score FROM rs_times WHERE playerID=%s AND challengeID=%s '
+                                  f'ORDER BY score {order} LIMIT 1', values)
+                legacy = await cur.fetchone()
+        if legacy and legacy[0] > 0 and (not row or (legacy[0] > row[0] if stunts else legacy[0] < row[0])):
+            row = (legacy[0], '')
+        if row and row[0] > 0:
+            return record_browser.Run(login, nickname, row[0], splits=record_browser.split_values(row[1]))
+        return None
 
-    rows = []
-    for i in range(total):
-        rec        = aseco.server.records.get_record(i)
-        nick       = rec.player.nickname if aseco.settings.lists_colornicks \
-                     else strip_colors(rec.player.nickname)
-        score_str  = str(rec.score) if is_stnt else format_time(rec.score)
-        color      = '{#black}' if rec.new else ''
-        if show_logins:
-            rows.append([f'{i+1:02d}.', '{#black}' + nick,
-                         '{#login}' + rec.player.login, color + score_str])
-        else:
-            rows.append([f'{i+1:02d}.', '{#black}' + nick, color + score_str])
-
-    if show_logins:
-        widths = [1.2+extra, 0.1, 0.45+extra, 0.4, 0.25]
-    else:
-        widths = [0.8+extra, 0.1, 0.45+extra, 0.25]
-
-    pages = [rows[i:i+15] for i in range(0, max(len(rows), 1), 15)]
-    player.msgs = [[1, head, widths, ['BgRaceScore2', 'Podium']]]
-    player.msgs.extend(pages)
-    display_manialink_multi(aseco, player)
+    await record_browser.show(aseco, player, f'Current TOP {records.max} Local Records', runs,
+                              pb=personal, show_logins=aseco.settings.show_rec_logins)
 
 
 async def _show_help(aseco: 'Aseco', login: str):

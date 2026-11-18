@@ -14,10 +14,12 @@ Covers:
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pyxaseco.core.config import load_toml_file
+from pyxaseco.core.widget_delivery import is_score_phase
 from pyxaseco.helpers import display_manialink, display_manialink_multi, format_text, format_time
 from pyxaseco.app_services import (
     get_dedi_db,
@@ -26,6 +28,8 @@ from pyxaseco.app_services import (
     localdb_get_player_id,
     localdb_get_pool,
 )
+
+from .hud_layout import LEGACY_PANEL_TYPES as HUD_PANEL_TYPES
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -38,6 +42,8 @@ PANEL_ID_RECORDS = 4
 PANEL_ID_VOTE = 5
 PANEL_ID_DONATE = 6
 PANEL_ID_STATS = 9
+
+_HUD_TEMPLATE_PREFIXES = {"admin": "Admin", "records": "Records", "donate": "Donate", "vote": "Vote"}
 
 ACTION_ADMIN_BASE = 7400     # 7401.. etc
 ACTION_RECPANEL_BASE = 7300  # 7301.. etc
@@ -95,6 +101,7 @@ def _panel_catalog_label(panel_name: str) -> str:
     return f"apps/platform_ui/panels.toml::{panel_name}"
 
 def register(aseco: "Aseco"):
+    aseco.register_service('ui/score_preview/platform_ui', _score_preview, owner='platform_ui')
     aseco.register_event("onStartup", panels_default)
     aseco.register_event("onSync", init_statspanel)
     aseco.register_event("onEndRace", update_allstatspanels)
@@ -130,7 +137,17 @@ def _panels_file(aseco: "Aseco") -> Path:
 
 
 def _load_panel_templates(aseco: "Aseco") -> dict[str, str]:
-    data = load_toml_file(_panels_file(aseco))
+    path = _panels_file(aseco)
+    try:
+        stamp = path.stat()
+    except OSError:
+        return {}
+    return _cached_templates(path, stamp.st_mtime_ns, stamp.st_size)
+
+
+@lru_cache(maxsize=4)
+def _cached_templates(path: Path, _mtime: int, _size: int) -> dict[str, str]:
+    data = load_toml_file(path)
     templates = data.get("templates", {})
     if not isinstance(templates, dict):
         return {}
@@ -158,6 +175,11 @@ async def _send_login(aseco: "Aseco", login: str, msg: str):
 
 async def _send_panel_xml(aseco: "Aseco", login: str, xml: str, timeout: int = 0, autoclose: bool = False):
     from pyxaseco.core.widget_delivery import deliver_ui
+    if not autoclose and is_score_phase(aseco):
+        ui = aseco.get_service("ui/uistyle")
+        player = aseco.server.players.get_player(login)
+        if ui is not None and player is not None:
+            xml = ui.hud.saved_panel_xml(player, xml)
     await deliver_ui(aseco,
         "SendDisplayManialinkPageToLogin",
         login,
@@ -240,7 +262,7 @@ async def _get_player_panel_names_from_db(aseco: "Aseco", login: str) -> dict[st
         }
 
 
-async def _persist_all_panel_choices(aseco: "Aseco", login: str, panel_names: dict[str, str]):
+async def _persist_all_panel_choices(aseco: "Aseco", login: str, panel_names: dict[str, str]) -> bool:
     """
     Persists the whole slash-separated panel string into players_extra.panels:
       admin/donate/records/vote
@@ -262,11 +284,11 @@ async def _persist_all_panel_choices(aseco: "Aseco", login: str, panel_names: di
     try:
         pool = await localdb_get_pool(aseco)
         if not pool:
-            return
+            return False
 
         pid = await localdb_get_player_id(aseco, login)
         if not pid:
-            return
+            return False
 
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -278,8 +300,10 @@ async def _persist_all_panel_choices(aseco: "Aseco", login: str, panel_names: di
                     """,
                     (pid, joined)
                 )
+        return True
     except Exception as e:
         logger.debug("[Panels] Could not persist merged panels for %s: %s", login, e)
+        return False
 
 
 def _list_templates(aseco: "Aseco", prefix: str, max_count: int) -> list[str]:
@@ -289,6 +313,116 @@ def _list_templates(aseco: "Aseco", prefix: str, max_count: int) -> list[str]:
         if name.lower().startswith(prefix.lower()):
             result.append(name[plen:])
     return result[:max_count]
+
+
+def _vote_backend(aseco: "Aseco"):
+    if aseco.get_command("helpvote") is not None:
+        from apps.voting import backend
+        return backend
+    return None
+
+
+def hud_panels(aseco: "Aseco", player: "Player") -> set[str]:
+    if not _server_is_tmf(aseco) or aseco.get_command("recpanel") is None:
+        return set()
+    available = {"records_panel"}
+    if aseco.is_any_admin(player) and aseco.allow_ability(player, "panel"):
+        available.add("admin_panel")
+    if aseco.server.rights and player.rights:
+        available.add("donate_panel")
+    voting = _vote_backend(aseco)
+    if voting is not None and voting.feature_votes:
+        available.add("vote_panel")
+    if aseco.settings.sb_stats_panels and _stats_panel_xml:
+        available.add("stats_panel")
+    return available
+
+
+def hud_choices(aseco: "Aseco", panel: str) -> dict[str, str]:
+    kind = HUD_PANEL_TYPES[panel]
+    prefix = _HUD_TEMPLATE_PREFIXES.get(kind)
+    if prefix is None:
+        return {}
+    catalog = _load_panel_templates(aseco)
+    choices = {"default": "Server default"} if getattr(aseco.settings, panel, "") in catalog else {}
+    for name in sorted(catalog):
+        if name.startswith(prefix) and catalog[name]:
+            choices[name] = name[len(prefix):] or name
+    return choices
+
+
+def hud_selected_template(player: "Player", panel: str) -> str:
+    return getattr(player, "panel_names", {}).get(HUD_PANEL_TYPES[panel], "")
+
+
+def hud_panel_enabled(player: "Player", panel: str) -> bool:
+    return panel == "stats_panel" or bool(_player_panel(player, HUD_PANEL_TYPES[panel]))
+
+
+def _resolve_hud_choice(aseco: "Aseco", panel: str, choice: str) -> str:
+    return getattr(aseco.settings, panel, "") if choice == "default" else choice
+
+
+def hud_template_xml(aseco: "Aseco", player: "Player", panel: str, choice: str | None) -> str:
+    kind = HUD_PANEL_TYPES[panel]
+    if kind == "stats":
+        return _stats_panel_xml
+    if choice is None:
+        return _player_panel(player, kind)
+    return _read_panel_file(aseco, _resolve_hud_choice(aseco, panel, choice))
+
+
+def hud_preview(aseco: "Aseco", player: "Player", panel: str, choice: str | None) -> str:
+    kind = HUD_PANEL_TYPES[panel]
+    xml = hud_template_xml(aseco, player, panel, choice)
+    if kind == "stats":
+        for key in ("RANK", "AVG", "RECS", "WINS", "PLAY", "DONS"):
+            xml = xml.replace(f"%{key}%", "--")
+        return xml
+    if kind == "vote":
+        voting = _vote_backend(aseco)
+        if voting is not None and (voting.chatvote or voting.tmxadd):
+            return ""
+    if kind == "records":
+        return _records_panel_xml(xml, _get_player_local_pb(aseco, player.login))
+    if kind == "donate":
+        return _donate_panel_xml(xml, _get_donation_values())
+    if kind == "vote":
+        return xml.replace("%YES%", "Yes (preview)").replace("%NO%", "No (preview)")
+    return xml
+
+
+async def save_hud_choices(aseco: "Aseco", player: "Player", updates: dict[str, str]) -> bool:
+    if not updates:
+        return True
+    if not updates.keys() <= hud_panels(aseco, player):
+        return False
+    selected = {}
+    for panel, choice in updates.items():
+        if choice not in hud_choices(aseco, panel):
+            return False
+        name = _resolve_hud_choice(aseco, panel, choice)
+        xml = _read_panel_file(aseco, name)
+        if not xml:
+            return False
+        selected[HUD_PANEL_TYPES[panel]] = (name, xml)
+    try:
+        names = _parse_panels_db_value(await localdb_get_panels(aseco, player.login))
+    except Exception:
+        return False
+    names.update({kind: name for kind, (name, _xml) in selected.items()})
+    if not await _persist_all_panel_choices(aseco, player.login, names):
+        return False
+    player.panel_names = names
+    for kind, (_name, xml) in selected.items():
+        _set_player_panel(player, kind, xml)
+    return True
+
+
+async def redraw_hud_choices(aseco: "Aseco", player: "Player", updates):
+    for panel in set(updates) & hud_panels(aseco, player):
+        if panel != "vote_panel":
+            await _refresh_panel_by_type(aseco, player, HUD_PANEL_TYPES[panel])
 
 
 async def _redisplay_all_admin_panels(aseco: "Aseco", _data=None):
@@ -347,11 +481,29 @@ async def init_statspanel(aseco: "Aseco", _param=None):
         logger.warning("[Panels] Could not load stats panel %s: %s", panel_name, e)
         _stats_panel_xml = ""
 
+def _score_preview(aseco, player, _track, _names, *, mode, phase):
+    if not _server_is_tmf(aseco):
+        return
+    ui = aseco.get_service("ui/uistyle")
+    panel_name = "StatsUnited" if getattr(aseco.server, "rights", False) else "StatsNations"
+    xml = _stats_panel_xml or _read_panel_file(aseco, panel_name)
+    for key, value in (("RANK", "12"), ("AVG", "34.2"), ("RECS", "9"),
+                       ("WINS", "5"), ("PLAY", "01:24:00"), ("DONS", "20")):
+        xml = xml.replace(f"%{key}%", value)
+    if phase == 'score':
+        yield (ui.hud.saved_panel_xml(player, xml) if ui else xml), bool(aseco.settings.sb_stats_panels)
+    donate = getattr(player, "panels", {}).get("donate", "")
+    if donate and getattr(player, "rights", False):
+        xml = _donate_panel_xml(donate, _get_donation_values())
+        yield (ui.hud.saved_panel_xml(player, xml) if ui else xml), True
+
+
 def _panel_name_from_db_value(value: str) -> str:
     return (value or "").strip()
 
 async def init_playerpanels(aseco: "Aseco", player: "Player"):
     panel_names = await _get_player_panel_names_from_db(aseco, player.login)
+    player.panel_names = panel_names
 
     logger.debug("[Panels] DB panel names for %s: %r", player.login, panel_names)
 
@@ -511,9 +663,13 @@ async def display_donpanel(aseco: "Aseco", player: "Player", coppers: list[int])
     xml = _player_panel(player, "donate")
     if not xml:
         return
-    for i in range(1, 8):
-        xml = xml.replace(f"%COP{i}%", str(coppers[i - 1]))
-    await _send_panel_xml(aseco, player.login, xml, 0, False)
+    await _send_panel_xml(aseco, player.login, _donate_panel_xml(xml, coppers), 0, False)
+
+
+def _donate_panel_xml(xml, coppers):
+    for i, value in enumerate(coppers[:7], 1):
+        xml = xml.replace(f"%COP{i}%", str(value))
+    return xml
 
 async def donpanel_off(aseco: "Aseco", login: str):
     await _send_panel_xml(aseco, login, _empty_panel_xml(PANEL_ID_DONATE), 0, False)
@@ -530,23 +686,33 @@ async def display_recpanel(aseco: "Aseco", player: "Player", pb: str):
         _records_cache["dedi"],
         _records_cache["tmx"],
     )
-    xml = (
+    await _send_panel_xml(aseco, player.login, _records_panel_xml(xml, pb), 0, False)
+
+
+def _records_panel_xml(xml, pb):
+    return (
         xml
         .replace("%PB%", pb)
         .replace("%TMX%", _records_cache["tmx"])
         .replace("%LCL%", _records_cache["local"])
         .replace("%DED%", _records_cache["dedi"])
     )
-    await _send_panel_xml(aseco, player.login, xml, 0, False)
 
 async def recpanel_off(aseco: "Aseco", login: str):
     await _send_panel_xml(aseco, login, _empty_panel_xml(PANEL_ID_RECORDS), 0, False)
 
 async def display_votepanel(aseco: "Aseco", player: "Player", yesstr: str, nostr: str, timeout: int):
+    ui = aseco.get_service("ui/uistyle")
+    if ui is not None:
+        await ui.hud.clear_vote_preview(player)
     xml = _player_panel(player, "vote")
     if not xml:
         return
     xml = xml.replace("%YES%", yesstr).replace("%NO%", nostr)
+    if ui is not None:
+        xml = ui.hud.saved_panel_xml(player, xml)
+        if xml.strip() == _empty_panel_xml(PANEL_ID_VOTE):
+            return
     await _send_panel_xml(aseco, player.login, xml, timeout, True)
 
 async def votepanel_off(aseco: "Aseco", login: str):
@@ -866,7 +1032,11 @@ async def _handle_panel_command(
 
     full_name = panel if panel.lower().startswith(prefix.lower()) else f"{prefix}{panel}"
     try:
-        xml = _read_panel_file(aseco, full_name)
+        catalog = _load_panel_templates(aseco)
+        full_name = next(name for name in catalog if name.casefold() == full_name.casefold())
+        xml = catalog[full_name]
+        if not xml:
+            raise ValueError("Empty panel template")
     except Exception:
         await _send_login(
             aseco,
@@ -911,6 +1081,9 @@ def _strip_prefix(name: str, prefix: str) -> str:
 
 async def _persist_panel_choice(aseco: "Aseco", login: str, panel_type: str, value: str):
     try:
+        player = aseco.server.players.get_player(login)
+        if player is not None:
+            player.panel_names = dict(getattr(player, "panel_names", {}), **{panel_type: value})
         current = await _get_player_panel_names_from_db(aseco, login)
         current[panel_type] = (value or "").strip()
         await _persist_all_panel_choices(aseco, login, current)

@@ -187,7 +187,7 @@ def team_match(values, match, round_=None, login=''):
 
 
 def menu(values, title, entries, index, count):
-    width = max(25, values['menu/width'])
+    width = values['menu/width'] + 2
     body = card(0, 0, width, 5.5 + 2.0 * len(entries))
     body += label(2.2, -.3, width - 4.6, '$ff0$o' + title)
     body += icon(.2, -.1, 'ArrowPrev', BACK)

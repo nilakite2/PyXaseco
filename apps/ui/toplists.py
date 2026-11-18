@@ -22,6 +22,8 @@ The popup windows (opened by clicking bar widgets) are also here.
 
 from __future__ import annotations
 
+from apps.platform_ui.presentation import FIXED_HEIGHT
+
 import logging
 from contextvars import ContextVar
 from pathlib import Path
@@ -158,13 +160,16 @@ async def _query_ranked_record_counts(aseco: 'Aseco', limit: int) -> list[tuple]
 
 def _stl_header(ml_id: int, cfg: dict, n_entries: int) -> str:
     st  = _state.style
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     px  = cfg.get('pos_x', 0.0)
     py  = cfg.get('pos_y', 0.0)
     ist = escape(cfg.get('icon_style', 'Icons128x128_1'))
     iss = escape(cfg.get('icon_substyle', 'Rankings'))
     ttl = escape(cfg.get('title', ''))
-    wh  = lh * n_entries + 3.3
+    width = cfg.get('width', 15.5)
+    height = cfg.get('height', 0)
+    wh = height or (lh * n_entries + 3.3)
+    marker = f'<!--{FIXED_HEIGHT}-->' if height else ''
 
     bg_sty  = escape(getattr(st, 'score_bg_style',    'BgsPlayerCard'))
     bg_sub  = escape(getattr(st, 'score_bg_substyle', 'BgRacePlayerName'))
@@ -173,12 +178,12 @@ def _stl_header(ml_id: int, cfg: dict, n_entries: int) -> str:
     col_def = escape(getattr(st, 'score_col_default',  'FFFF'))
 
     return (
-        f'<manialink id="{ml_id}">'
+        f'<manialink id="{ml_id}">{marker}'
         f'<frame posn="{px:.2f} {py:.2f} 0">'
-        f'<quad posn="0 0 0.001" sizen="15.5 {wh:.2f}" style="{bg_sty}" substyle="{bg_sub}"/>'
-        f'<quad posn="0.4 -0.36 0.002" sizen="14.7 2" style="{ti_sty}" substyle="{ti_sub}"/>'
+        f'<quad posn="0 0 0.001" sizen="{width:.2f} {wh:.2f}" style="{bg_sty}" substyle="{bg_sub}"/>'
+        f'<quad posn="0.4 -0.36 0.002" sizen="{width - .8:.2f} 2" style="{ti_sty}" substyle="{ti_sub}"/>'
         f'<quad posn="0.6 -0.15 0.004" sizen="2.5 2.5" style="{ist}" substyle="{iss}"/>'
-        f'<label posn="3.2 -0.55 0.004" sizen="10.2 0" textsize="1" text="{ttl}"/>'
+        f'<label posn="3.2 -0.55 0.004" sizen="{width - 5.3:.2f} 0" textsize="1" text="{ttl}"/>'
         f'<format textsize="1" textcolor="{col_def}"/>'
     )
 
@@ -192,14 +197,14 @@ def _stl_empty(ml_id: int) -> str:
 
 
 def _stl_row_score_nick(line: int, score: str, nick: str, lh: float,
-                         fmt: str, sc: str) -> str:
+                         fmt: str, sc: str, width: float = 15.5) -> str:
     """Standard row: score right-aligned at x=4, nickname at x=4.65."""
     y = lh * line + 3.0
     return (
         f'<label posn="4 -{y:.2f} 0.002" sizen="3.4 1.7"'
         f' halign="right" scale="0.9" textcolor="{escape(sc)}"'
         f' text="{_safe_ml_text(fmt + score)}"/>'
-        f'<label posn="4.65 -{y:.2f} 0.002" sizen="11.1 1.7"'
+        f'<label posn="4.65 -{y:.2f} 0.002" sizen="{width - 4.4:.2f} 1.7"'
         f' scale="0.9" text="{_safe_ml_text(fmt + nick)}"/>'
     )
 
@@ -239,12 +244,12 @@ async def build_top_rankings_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_RANKINGS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         nick  = str(row[1] or row[0] or '?')
         score = f'{float(row[2] or 0) / 10000:.1f}'
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -264,12 +269,12 @@ async def build_top_winners_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_WINNERS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         nick  = str(row[1] or row[0] or '?')
         score = str(int(row[2] or 0))
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -287,12 +292,12 @@ async def build_most_records_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_MOST_RECORDS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         nick  = str(row[1] or row[0] or '?')
         score = str(int(row[2] or 0))
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -313,12 +318,12 @@ async def build_most_finished_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_MOST_FINISHED, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         nick  = str(row[1] or row[0] or '?')
         score = str(int(row[2] or 0))
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -338,12 +343,12 @@ async def build_top_playtime_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_PLAYTIME, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         nick  = str(row[1] or row[0] or '?')
         score = f'{round(int(row[2] or 0) / 3600)} h'
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -364,12 +369,12 @@ async def build_top_donators_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_DONATORS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         nick  = str(row[1] or row[0] or '?')
         score = str(int(row[2] or 0))
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -392,7 +397,7 @@ async def build_top_nations_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_NATIONS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         count = int(row[0] or 0)
@@ -406,7 +411,7 @@ async def build_top_nations_widget(aseco: 'Aseco') -> str:
             f' text="{_safe_ml_text(f"{fmt}{count}")}"/>'
             f'<quad posn="4.5 {flag_y:.2f} 0.003" sizen="2 2"'
             f' image="{escape(_flag_path(code))}"/>'
-            f'<label posn="7.0 -{y:.2f} 0.002" sizen="8.5 1.7"'
+            f'<label posn="7.0 -{y:.2f} 0.002" sizen="{max(.1, cfg.get("width", 15.5) - 7):.2f} 1.7"'
             f' scale="0.9" text="{_safe_ml_text(fmt + name)}"/>'
         )
     p.append(_stl_footer())
@@ -443,12 +448,12 @@ async def build_top_tracks_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_TRACKS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         name  = str(row[0] or '?')
         karma = str(int(row[1] or 0))
-        p.append(_stl_row_score_nick(i, karma, name, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, karma, name, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -470,12 +475,12 @@ async def build_top_voters_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_VOTERS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         score = str(int(row[0] or 0))
         nick  = str(row[2] or row[1] or '?')
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -496,12 +501,12 @@ async def build_top_visitors_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_VISITORS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         score = str(int(row[0] or 0))
         nick  = str(row[2] or row[1] or '?')
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -522,12 +527,12 @@ async def build_top_roundscore_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_ROUNDSCORE, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         score = str(int(row[0] or 0))
         nick  = str(row[2] or row[1] or '?')
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -549,12 +554,12 @@ async def build_top_winning_payouts_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_WINNING_PAYOUTS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         score = f'{int(row[0] or 0)} C'
         nick  = str(row[2] or row[1] or '?')
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -576,13 +581,13 @@ async def build_top_active_players_widget(aseco: 'Aseco') -> str:
 
     fmt = getattr(_state.style, 'score_fmt_codes', '')
     sc  = getattr(_state.style, 'score_col_scores', 'DDDF')
-    lh  = _state.line_height
+    lh  = cfg.get('row_height', _state.line_height)
     p   = [_stl_header(ML_TOP_ACTIVE_PLAYERS, cfg, min(len(rows), entries))]
     for i, row in enumerate(rows[:entries]):
         nick = str(row[1] or row[0] or '?')
         days = int(row[2] or 0)
         score = 'Today' if days == 0 else f'-{days} d'
-        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc))
+        p.append(_stl_row_score_nick(i, score, nick, lh, fmt, sc, cfg.get('width', 15.5)))
     p.append(_stl_footer())
     return ''.join(p)
 
@@ -619,7 +624,8 @@ async def draw_all_score_columns(aseco: 'Aseco') -> None:
         if context['loading']:
             cfg = getattr(_state, attribute)
             xml = (_stl_header(page_id, cfg, 1) +
-                   _stl_row_score_nick(0, '', 'Loading...', _state.line_height, '', 'DDDF') +
+                   _stl_row_score_nick(0, '', 'Loading...', cfg.get('row_height', _state.line_height),
+                                       '', 'DDDF', cfg.get('width', 15.5)) +
                    _stl_footer())
         encoded_size = len(xml.encode('utf-8'))
         if pages and size + encoded_size > 60000:

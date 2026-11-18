@@ -113,6 +113,7 @@ class MatchOverlayApp(App):
         self.next_at = self.warn_at = 0
 
     def register_runtime(self, aseco):
+        aseco.register_service('ui/score_preview/match_overlay', self.score_preview, owner='match_overlay')
         aseco.add_chat_command('moverlay', 'Admin/MA controls for the Team match overlay', is_admin=True,
                                app='match_overlay', owner='feature/match_overlay',
                                usage='/moverlay [help|status|enable|disable|team|mscore|to]', category='chat-admin')
@@ -171,6 +172,12 @@ class MatchOverlayApp(App):
     def competition(self, aseco):
         service = aseco.get_service('competition/team')
         return service if service is not None and service.snapshot() is not None else None
+
+    def score_preview(self, _aseco, _player, _track, _names, *, mode, phase):
+        if self.values and mode == 2:
+            yield (views.render(self.values, ('Blue', 'Red'), (7, 5), (4, 2)),
+                   self.enabled and (self.active or self.values['autoenable'])
+                   and (phase == 'race' or self.values['show_on_score']))
 
     def xml(self, aseco):
         service = self.competition(aseco)

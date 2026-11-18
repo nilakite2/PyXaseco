@@ -36,6 +36,7 @@ COMMAND_SPECS = [
     ('add', 'Permanently adds track from TMX: /admin add <id> [tmnf|tmu|tmo|tms|tmn]'),
     ('addthis', 'Adds current /add-ed track permanently'),
     ('addlocal', 'Adds a local track (<filename>)'),
+    ('replacemap', 'Safely replace the current rotation slot from TMX after confirmation'),
     ('remove', 'Removes a track from rotation'),
     ('erase', 'Removes a track from rotation and deletes file'),
     ('removethis', 'Removes this track from rotation'),
@@ -69,6 +70,11 @@ async def handle_subcommand(
     chattitle: str,
 ) -> bool:
     from . import command_router as admin_chat
+
+    if sub == 'replacemap':
+        from .replace_map import command as replace_map
+        await replace_map(aseco, admin, args)
+        return True
 
     if sub in ('nextmap', 'next', 'skipmap', 'skip'):
         message = admin_chat._fmt_admin(aseco, admin, chattitle, 'skips to next track!')

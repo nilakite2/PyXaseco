@@ -7,16 +7,8 @@ from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 from pyxaseco.app_services import get_dedi_db
 
-from apps.ui.config import _state, _effective_mode
-from apps.ui.hud import (
-    append_window_start,
-    append_window_end,
-    append_four_player_columns,
-)
-from apps.ui.internal.utils import _handle_special_chars
-from apps.ui.widgets.records_common import (
-    ML_DEDI, ML_WINDOW, ML_SUBWIN, _digest_entries, _same_login, _dedi_close_to_you,
-)
+from apps.ui import record_widgets as ui
+from apps.ui.record_widgets import ML_DEDI, ML_SUBWIN, ML_WINDOW
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -43,7 +35,7 @@ def _normalise_dedi_record(rec: dict, rank: int) -> dict | None:
         or login
         or '?'
     )
-    nickname = _handle_special_chars(nickname)
+    nickname = ui.clean_nickname(nickname)
 
     return {
         # Normalized Eyepiece shape
@@ -64,7 +56,7 @@ def _normalise_dedi_record(rec: dict, rank: int) -> dict | None:
 
 def _get_dedi_records(aseco: 'Aseco' | None = None) -> list:
     try:
-        runtime = aseco or getattr(_state, 'aseco', None)
+        runtime = aseco or ui.runtime()
         dedi_db = get_dedi_db(runtime)
         if not isinstance(dedi_db, dict):
             return []
@@ -86,35 +78,33 @@ def _get_dedi_records(aseco: 'Aseco' | None = None) -> list:
 
 
 async def _draw_dedi_player(aseco: 'Aseco', login: str):
-    from apps.ui.widgets.common import _hide, _send
-    from apps.ui.widgets.records_common import _build_record_widget
 
-    if not _state.player_visible.get(login, True):
-        await _hide(aseco, login, ML_DEDI)
+    if not ui.visible(login):
+        await ui.hide(aseco, login, ML_DEDI)
         return
 
-    if _state.challenge_show_next:
-        await _hide(aseco, login, ML_DEDI)
+    if ui.shows_next_map():
+        await ui.hide(aseco, login, ML_DEDI)
         return
 
-    mode = _effective_mode(aseco)
-    cfg = _state.dedi.get(mode)
+    mode = ui.game_mode(aseco)
+    cfg = ui.panel(mode)
     if mode == Gameinfo.STNT or not cfg or not cfg.enabled:
-        await _hide(aseco, login, ML_DEDI)
+        await ui.hide(aseco, login, ML_DEDI)
         return
 
     raw_recs = _get_dedi_records(aseco)
     if not raw_recs:
-        _state.player_dedi_digest.pop(login, None)
+        ui.clear_digest(login)
 
-    online = {p.login for p in aseco.server.players.all()} if _state.mark_online else set()
+    online = ui.online_logins(aseco)
     player = aseco.server.players.get_player(login)
     player_nick = player.nickname if player and getattr(player, 'nickname', '') else login
 
     lookup = getattr(aseco, 'get_service', None)
     ui_style = lookup('ui/uistyle') if callable(lookup) else None
     modern = ui_style is not None and ui_style.resolve(player).base == 1
-    entries = _dedi_close_to_you(raw_recs, login, cfg.entries, cfg.topcount, player_nick, include_no_record=not modern)
+    entries = ui.close_to_you(raw_recs, login, cfg.entries, cfg.topcount, player_nick, include_no_record=not modern)
     # Hard fallback: never allow an empty Dedi widget body.
     if not entries and not modern:
         entries = [{
@@ -126,7 +116,7 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
             'highlitefull': False,
         }]
 
-    xml = _build_record_widget(
+    xml = ui.build_record_widget(
         aseco=aseco,
         ml_id=ML_DEDI,
         cfg=cfg,
@@ -137,31 +127,30 @@ async def _draw_dedi_player(aseco: 'Aseco', login: str):
         click_action=91804,
     )
     digest = str(hash(xml))
-    if _state.player_dedi_digest.get(login) == digest:
+    if ui.current_digest(login) == digest:
         return
-    await _send(aseco, login, xml)
-    _state.player_dedi_digest[login] = digest
+    await ui.send(aseco, login, xml)
+    ui.set_digest(login, digest)
 
 
 def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | None = None) -> str:
-    from apps.ui.internal.utils import _safe_ml_text
 
     raw_records = records if records is not None else _get_dedi_records(aseco)
     if not raw_records:
         return ''
 
-    mode = _effective_mode(aseco)
+    mode = ui.game_mode(aseco)
     is_stnt = (mode == Gameinfo.STNT)
 
-    title = _state.dedi.get(mode, _state.challenge).title
+    title = ui.panel(mode, fallback=True).title
     total = len(raw_records)
 
     p: list[str] = []
-    append_window_start(
+    ui.append_window_start(
         p,
         ml_window=ML_WINDOW,
         ml_subwin=ML_SUBWIN,
-        title=f'{_safe_ml_text(title)}  |  Page 1/1  |  {total} Records',
+        title=f'{ui.label_text(title)}  |  Page 1/1  |  {total} Records',
         icon_style='Icons128x128_1',
         icon_substyle='Rankings',
         content_frame_pos='2.5 -6.5 1',
@@ -173,14 +162,14 @@ def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | No
     p.append('<frame posn="63.15 0 0.04">')
     p.append(
         f'<quad posn="0 -47.8 -0.5" sizen="14.5 1" '
-        f'url="http://dedimania.net/tmstats/?do=stat{dedimode}&amp;RecOrder3=RANK-ASC&amp;Uid={_safe_ml_text(uid)}&amp;Show=RECORDS" bgcolor="0000"/>'
+        f'url="http://dedimania.net/tmstats/?do=stat{dedimode}&amp;RecOrder3=RANK-ASC&amp;Uid={ui.label_text(uid)}&amp;Show=RECORDS" bgcolor="0000"/>'
     )
 
     p.append('<label posn="0 -47.8 -0.5" sizen="30 1" textsize="1" scale="0.7" textcolor="000F" text="MORE INFO ON DEDIMANIA.NET  "/>')
     p.append('</frame>')
 
-    p.append(f'<format textsize="1" textcolor="{_state.style.col_default}"/>')
-    append_four_player_columns(p)
+    p.append(f'<format textsize="1" textcolor="{ui.style().col_default}"/>')
+    ui.append_four_player_columns(p)
 
     online = {pl.login for pl in aseco.server.players.all()}
 
@@ -212,19 +201,19 @@ def _build_dedi_records_window(aseco: 'Aseco', page: int = 0, records: list | No
             y_bg = max(0.2, 1.83 * line - 0.2)
             p.append(
                 f'<quad posn="{offset + 0.4:.2f} -{y_bg:.2f} 0.03" sizen="16.95 1.83" '
-                f'style="{_state.style.hi_other_style}" substyle="{_state.style.hi_other_sub}"/>'
+                f'style="{ui.style().hi_other_style}" substyle="{ui.style().hi_other_sub}"/>'
             )
 
         y = 1.83 * line
         p.append(f'<label posn="{2.6 + offset:.2f} -{y:.2f} 0.04" sizen="2 1.7" halign="right" scale="0.9" text="{rank}."/>')
-        p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.04" sizen="4 1.7" halign="right" scale="0.9" textcolor="{_state.style.col_scores}" text="{_safe_ml_text(score)}"/>')
-        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.04" sizen="11.2 1.7" scale="0.9" text="{_safe_ml_text(nick)}"/>')
+        p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.04" sizen="4 1.7" halign="right" scale="0.9" textcolor="{ui.style().col_scores}" text="{ui.label_text(score)}"/>')
+        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.04" sizen="11.2 1.7" scale="0.9" text="{ui.label_text(nick)}"/>')
 
         line += 1
         if line >= 25:
             offset += 19.05
             line = 0
 
-    append_window_end(p)
+    ui.append_window_end(p)
     return ''.join(p)
 

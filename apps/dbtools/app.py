@@ -22,7 +22,7 @@ POLICY = JobPolicy(capacity=1, deadline_seconds=300)
 USAGE = '/dbtools backup | listbackups | deletebackup <id> [confirm <code>] | status | help'
 SCHEMA = AppSettingsSchema(app_id='dbtools', settings=(
     AppSetting('enabled', True, as_bool, 'Enable optional MA-only SQL backup tools.'),
-    AppSetting('directory', 'backups/dbtools', as_str, 'Private backup subfolder inside the controller folder.'),
+    AppSetting('directory', backup.DEFAULT_DIRECTORY, as_str, 'Private backup subfolder inside the controller folder.'),
     AppSetting('compress', True, as_bool, 'Compress SQL backups with gzip.'),
     AppSetting('max_size_mb', 1024, as_int, 'Maximum uncompressed SQL size, 1-16384 MiB.'),
     AppSetting('retention_days', 14, as_int, 'Prune completed backups older than this; 0 disables pruning.'),

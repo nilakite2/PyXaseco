@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 
-from pyxaseco.helpers import _send_multipage, format_time
+from apps.platform_ui import record_browser
 
 
 ACTION = 8590100
@@ -27,31 +27,29 @@ async def _open_wrmania_window(aseco, login):
 
 
 async def _draw_wrmania_player(aseco, login):
-    from apps.ui.config import _state, _effective_mode
-    from apps.ui.widgets.common import _hide, _send
-    from apps.ui.widgets.records_common import ML_DEDI, _dedi_close_to_you, _build_record_widget
+    from apps.ui import record_widgets as ui
 
     service = provider(aseco)
-    mode = _effective_mode(aseco)
-    cfg = _state.dedi.get(mode)
-    if (service is None or not cfg or not cfg.enabled or _state.challenge_show_next
-            or not _state.player_visible.get(login, True) or not await service.visible(aseco)):
-        _state.player_dedi_digest.pop(login, None)
-        await _hide(aseco, login, ML_DEDI)
+    mode = ui.game_mode(aseco)
+    cfg = ui.panel(mode)
+    if (service is None or not cfg or not cfg.enabled or ui.shows_next_map()
+            or not ui.visible(login) or not await service.visible(aseco)):
+        ui.clear_digest(login)
+        await ui.hide(aseco, login, ui.ML_DEDI)
         return
     player = aseco.server.players.get_player(login)
     style = aseco.services.get('ui/uistyle')
     modern = style is not None and style.resolve(player).base == 1
     rows = [row for row in service.rows if row['rank'] <= service.client.limit]
-    entries = _dedi_close_to_you(rows, login, cfg.entries, cfg.topcount,
+    entries = ui.close_to_you(rows, login, cfg.entries, cfg.topcount,
                                 getattr(player, 'nickname', login), include_no_record=not modern)
-    online = {p.login for p in aseco.server.players.all()} if _state.mark_online else set()
-    xml = _build_record_widget(aseco=aseco, ml_id=ML_DEDI, cfg=replace(cfg, title='Mania Records'),
+    online = ui.online_logins(aseco)
+    xml = ui.build_record_widget(aseco=aseco, ml_id=ui.ML_DEDI, cfg=replace(cfg, title='Mania Records'),
         login=login, entries=entries, online=online, mode=mode, click_action=ACTION)
     digest = str(hash(xml))
-    if _state.player_dedi_digest.get(login) != digest:
-        await _send(aseco, login, xml)
-        _state.player_dedi_digest[login] = digest
+    if ui.current_digest(login) != digest:
+        await ui.send(aseco, login, xml)
+        ui.set_digest(login, digest)
 
 
 async def show_window(aseco, player, rows):
@@ -64,12 +62,7 @@ async def show_window(aseco, player, rows):
         return (current is service and current.active(runtime) and current.uid == uid and current.epoch == epoch
                 and current.client is client and client.limit == limit)
 
-    table = [[str(row['rank']), format_time(row['score']), row['nickname'], row['login']]
-             for row in rows if row['rank'] <= service.client.limit]
-    if not table:
-        table = [['-', '-', 'No Mania Records yet.', '']]
-    player.msgs = [[1, 'Mania Records', [1.35, .12, .25, .65, .33],
-                    ['Icons128x128_1', 'Rankings'], valid]]
-    player.msgs.extend([[['Rank', 'Time', 'Player', 'Login']] + table[i:i + 20]
-                       for i in range(0, len(table), 20)])
-    await _send_multipage(aseco, player)
+    runs = [record_browser.Run(row['login'], row['nickname'], row['score'], row['rank'],
+                               record_browser.split_values(row.get('checkpointsMs')))
+            for row in rows if row['rank'] <= limit]
+    await record_browser.show(aseco, player, 'Mania Records', runs, valid=valid, show_logins=True)

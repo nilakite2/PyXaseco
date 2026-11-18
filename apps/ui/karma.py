@@ -30,6 +30,7 @@ from apps.tmx.service import (
     normalise_tmx_web_url as _normalise_tmx_web_url,
     tmx_public_host_for_section as _tmx_public_host_for_section,
 )
+from .widgets.common import _bg_attrs, _score_bg_attrs
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -1278,10 +1279,15 @@ def _track_page_url_dummy() -> str:
     return f"http://{_active_website()}/goto?uid={uid}&amp;env={env}&amp;game=TmForever"
 
 
-def _build_widget_cups(mode: int) -> str:
+def _build_widget_cups(mode: int, *, sample=False) -> str:
     gm = _cfg.gm_cfg(mode)
-    global_votes = _karma["global"]["votes"]
-    local_votes = _karma["local"]["votes"]
+    if sample:
+        global_votes = {"karma": 76, "total": 42, "fantastic": {"count": 20},
+                        "beautiful": {"count": 8}, "good": {"count": 4}}
+        local_votes = {"karma": 60, "total": 5}
+    else:
+        global_votes = _karma["global"]["votes"]
+        local_votes = _karma["local"]["votes"]
 
     total_cups = 10
     cup_offset = [0.8, 0.85, 0.85, 0.875, 0.90, 0.925, 0.95, 0.975, 1.0, 1.025]
@@ -1315,7 +1321,7 @@ def _build_widget_cups(mode: int) -> str:
     parts.append('<frame posn="2.1 -5.35 0">')
     parts.append('<quad posn="0 -0.1 1" sizen="0.1 2.85" bgcolor="FFF5"/>')
     parts.append('<label posn="0.3 -0.1 1" sizen="4 1.1" textsize="1" scale="0.65" textcolor="FFFF" text="GLOBAL"/>')
-    loaded = _karma.get('global_loaded', False)
+    loaded = sample or _karma.get('global_loaded', False)
     global_score = str(global_votes['karma']) if loaded else '--'
     global_label = ((_number(global_votes['total']) + ' ' +
                      (_cfg.msg_vote_singular if global_votes['total'] == 1 else _cfg.msg_vote_plural))
@@ -1711,8 +1717,18 @@ async def _show_reminder_window(aseco: Aseco, players: str | list[str]) -> None:
         player_logins = list(players)
     if not player_logins:
         return
-    state = 'score' if _cfg.current_state == 7 else 'race'
-    rcfg = _cfg.reminder_score if state == 'score' else _cfg.reminder_race
+    payload = _build_reminder_xml(aseco, at_score=_cfg.current_state == 7)
+    await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', ','.join(player_logins), payload, 0, False)
+    for login in player_logins:
+        p = _get_player(aseco, login)
+        if p is not None:
+            _ensure_player_state(p)
+            p.data['ManiaKarma']['ReminderWindow'] = True
+
+
+def _build_reminder_xml(aseco: Aseco, *, at_score: bool) -> str:
+    rcfg = _cfg.reminder_score if at_score else _cfg.reminder_race
+    background = _score_bg_attrs() if at_score else _bg_attrs('BgsPlayerCard', 'BgRacePlayerName')
     labels = {
         "fantastic": _cfg.msg_fantastic.capitalize(),
         "beautiful": _cfg.msg_beautiful.capitalize(),
@@ -1726,7 +1742,7 @@ async def _show_reminder_window(aseco: Aseco, players: str | list[str]) -> None:
         '<?xml version="1.0" encoding="UTF-8"?><manialinks>',
         f'<manialink id="{ML_REMINDER}">',
         f'<frame posn="{rcfg.pos_x} {rcfg.pos_y} 2">',
-        '<quad posn="0 1 0" sizen="81.8 4.5" style="BgsPlayerCard" substyle="BgRacePlayerName"/>',
+        f'<quad posn="0 1 0" sizen="81.8 4.5" {background}/>',
         f'<label posn="16.5 0.3 1" sizen="18 1.8" textsize="2" scale="0.8" halign="right" textcolor="FFFF" text="{_cfg.msg_reminder_at_score}"/>',
         f'<label posn="16.5 -1.5 1" sizen="14 0.2" textsize="1" scale="0.8" halign="right" textcolor="FFFF" text="powered by {_sanitize_ml_text(_active_website().removeprefix("www."))}"/>',
         '<frame posn="19.2 0.45 1">',
@@ -1748,19 +1764,20 @@ async def _show_reminder_window(aseco: Aseco, players: str | list[str]) -> None:
     if _cfg.img_tmx_logo_normal:
         xml.append(f'<quad posn="41.25 0.08 0" sizen="7 4" image="{_cfg.img_tmx_logo_normal}" imagefocus="{_cfg.img_tmx_logo_focus}" url="{_tmx_page_url(aseco)}"/>')
     xml.extend(['</frame>', '</frame>', '</manialink>', '</manialinks>'])
-    payload = ''.join(xml)
-    await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', ','.join(player_logins), payload, 0, False)
-    for login in player_logins:
-        p = _get_player(aseco, login)
-        if p is not None:
-            _ensure_player_state(p)
-            p.data['ManiaKarma']['ReminderWindow'] = True
+    return ''.join(xml)
 
 
 async def _show_mx_window(aseco: Aseco, player: Any) -> None:
     if _cfg.current_state != 7:
         return
-    vote = _effective_vote(player.login)
+    payload = _build_mx_window_xml(aseco, _effective_vote(player.login), _current_map.get("name", ""))
+    await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', player.login, payload, 0, False)
+    _ensure_player_state(player)
+    player.data['ManiaKarma']['ReminderWindow'] = True
+
+
+def _build_mx_window_xml(aseco: Aseco, vote: int, map_name: str) -> str:
+    map_name = _sanitize_ml_text(clean_tm_text(str(map_name), keep_colors=False).replace("$", ""))
     voted = {
         3: '$390' + _cfg.msg_fantastic.capitalize(), 2: '$390' + _cfg.msg_beautiful.capitalize(), 1: '$390' + _cfg.msg_good.capitalize(),
         -1: '$D02' + _cfg.msg_bad.capitalize(), -2: '$D02' + _cfg.msg_poor.capitalize(), -3: '$D02' + _cfg.msg_waste.capitalize(),
@@ -1770,7 +1787,7 @@ async def _show_mx_window(aseco: Aseco, player: Any) -> None:
     xml = [
         '<?xml version="1.0" encoding="UTF-8"?><manialinks>',
         f'<manialink id="{ML_REMINDER}"><frame posn="{rcfg.pos_x} {rcfg.pos_y} 2">',
-        '<quad posn="0 1 0" sizen="81.8 4.5" style="BgsPlayerCard" substyle="BgRacePlayerName"/>',
+        f'<quad posn="0 1 0" sizen="81.8 4.5" {_score_bg_attrs()}/>',
         f'<label posn="16.5 0.3 1" sizen="18 1.8" textsize="2" scale="0.8" halign="right" textcolor="FFFF" text="{_cfg.msg_reminder_at_score}"/>',
         f'<label posn="16.5 -1.5 1" sizen="14 0.2" textsize="1" scale="0.8" halign="right" textcolor="FFFF" text="powered by {_sanitize_ml_text(_active_website().removeprefix("www."))}"/>',
         '<frame posn="19.2 0.45 1">',
@@ -1779,14 +1796,12 @@ async def _show_mx_window(aseco: Aseco, player: Any) -> None:
         f'<label posn="3.75 -1.8 0" sizen="10 0" textsize="1" halign="center" text="{cmd}"/>',
         '</frame>',
         '<frame posn="33 0.2 1">',
-        f'<label posn="40.5 -1.3 0" sizen="50 0" halign="right" textsize="1" text="$000Visit &#187; {clean_tm_text(str(_current_map.get("name", "")), keep_colors=False).replace("$", "")} $Z$000 &#171; at"/>',
+        f'<label posn="40.5 -1.3 0" sizen="50 0" halign="right" textsize="1" textcolor="FFFF" text="Visit &#187; {map_name} &#171; at"/>',
     ]
     if _cfg.img_tmx_logo_normal:
         xml.append(f'<quad posn="41.25 0.08 0" sizen="7 4" image="{_cfg.img_tmx_logo_normal}" imagefocus="{_cfg.img_tmx_logo_focus}" url="{_tmx_page_url(aseco)}"/>')
     xml.extend(['</frame></frame></manialink></manialinks>'])
-    await deliver_ui(aseco, 'SendDisplayManialinkPageToLogin', player.login, ''.join(xml), 0, False)
-    _ensure_player_state(player)
-    player.data['ManiaKarma']['ReminderWindow'] = True
+    return ''.join(xml)
 
 
 async def _close_reminder_window(aseco: Aseco, player: Any | None = None) -> None:

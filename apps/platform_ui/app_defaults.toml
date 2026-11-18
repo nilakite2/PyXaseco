@@ -1,2 +1,29 @@
 [platform_ui.uistyle]
 default = 0 # Default for players without a personal UI preset.
+
+[platform_ui.hud.compact]
+scale = 0.85         # Panel size (0.60-1.00).
+edge_shift = 1.5     # Maximum side nudge for panels outside the tile grid (0-4).
+tile_spacing = 0.90  # Spacing of the upper-left tile grid (0.60-1.00).
+rail_spacing = 0.85  # Vertical spacing of the right-hand records stack (0.60-1.00).
+
+# Added to each selected template's position. Personal /hud offsets are separate.
+[platform_ui.panels.admin]
+offset_x = 0.0
+offset_y = 0.0
+
+[platform_ui.panels.records]
+offset_x = 0.0
+offset_y = 0.0
+
+[platform_ui.panels.donate]
+offset_x = 0.0
+offset_y = 0.0
+
+[platform_ui.panels.vote]
+offset_x = 0.0
+offset_y = 0.0
+
+[platform_ui.panels.stats]
+offset_x = 88.3
+offset_y = -1.0

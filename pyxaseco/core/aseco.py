@@ -40,6 +40,7 @@ from pyxaseco.core.service_registry import ServiceRegistry
 from pyxaseco.core.performance import PerformanceMetrics
 from pyxaseco.core.background_jobs import BackgroundJobs, JobContext
 from pyxaseco.core.record_outbox import RecordOutbox, create_record_outbox
+from pyxaseco.management.config_store import data_path, outbox_path
 from pyxaseco.core.widget_delivery import WidgetDelivery
 from pyxaseco.models import (
     Player, PlayerList, Challenge, Gameinfo, Server, ChatCommand,
@@ -48,7 +49,7 @@ from pyxaseco.models import (
 
 logger = logging.getLogger(__name__)
 
-PYXASECO_VERSION = '1.6.1'
+PYXASECO_VERSION = '1.7'
 TMF_BUILD = '2011-02-21'   # minimum required TMF dedicated server build
 
 # Dedicated server callbacks we handle
@@ -576,9 +577,11 @@ class Aseco:
         if not load_config(config_path, self.settings):
             raise RuntimeError(f'Could not read/parse config file {config_path}')
 
+        outbox = outbox_path(self._base_dir)
         self.record_outbox = create_record_outbox(
-            self._base_dir / 'state' / 'record_outbox.sqlite3',
+            outbox,
             self.settings.durable_record_delivery,
+            lock_path=data_path(self._base_dir, 'locks', 'state', outbox.name + '.lock'),
         )
         self.services.register('record_outbox', self.record_outbox, owner='core')
 

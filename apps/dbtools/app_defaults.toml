@@ -1,7 +1,7 @@
 [dbtools]
 enabled = true
 # Keep backups private. This must be a subfolder inside the controller folder.
-directory = 'backups/dbtools'
+directory = '.pyxaseco-data/backups/dbtools'
 compress = true
 # Limit uncompressed SQL output. Background operations also have a 5-minute deadline.
 max_size_mb = 1024

@@ -1,22 +1,24 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-import shutil
 import sys
 from time import monotonic
 from copy import deepcopy
 from contextvars import ContextVar
 from datetime import datetime
+from decimal import Decimal
 from functools import wraps
+from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pyxaseco.helpers import display_manialink_multi
+from apps.platform_ui.hud_layout import LEGACY_PANEL_TYPES, PANELS, POSITION_STEPS
 from pyxaseco.models import Gameinfo
 from pyxaseco.management.app_policy import (
     MANAGEABLE_STANDALONE_APPS, PROTECTED_STANDALONE_APPS, RELOADABLE_APPS,
 )
-from pyxaseco.toml_tools import move_loadout_entry, read_toml as _read_toml, revision_guard, update_toml_table_scalar
+from pyxaseco.toml_tools import read_toml as _read_toml, revision_guard, update_toml_table_scalar
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -133,14 +135,13 @@ CONFIG_APPS: dict[str, dict[str, str]] = {
 }
 
 CONFIG_APP_DISCOVERY_EXCLUDE = {
-    'social_chat',
     'admin',
     'platform_core',
     'jukebox',
 }
 
 _APPS_USAGE = (
-    'Usage: /admin apps <list|status [name]|config <app>|reload <app>|enable <app>|disable <app>|'
+    'Usage: /admin apps <list|status [name]|config <app>|preview [race/score/table/off] [mode]|reload <app>|enable <app>|disable <app>|'
     ' add <app>|remove <app>|rem <app>|fremove <app> confirm|frem <app> confirm|'
     ' updates|download <package>|review <package>|update <package> [force] [confirm]>'
 )
@@ -158,21 +159,41 @@ def _ui_item(key: str, label: str, **extra: Any) -> dict[str, Any]:
     return item
 
 
+def _ui_score_item(key: str, label: str) -> dict[str, Any]:
+    return _ui_item(f'{key}.score', label, phase='score', parent_table_path=('ui', key),
+                    display_label=label)
+
+
+_YOUR_STATS_ITEM = 'scoretable_lists.your_stats'
+
+
+def _panel_position_item(name: str, label: str, *, key: str | None = None) -> dict[str, Any]:
+    return {'key': key or f'panels.{name}', 'label': label, 'display_label': label,
+            'file': 'apps/platform_ui/app_defaults.toml', 'table_path': ('platform_ui', 'panels', name),
+            'default_fields': {'offset_x': 0.0, 'offset_y': 0.0}}
+
+
 UI_CONFIG_ITEMS: list[dict[str, Any]] = [
     _ui_item('welcome_window', 'Welcome Window'),
     _ui_item('menu', 'Menu'),
-    _ui_item('challenge_widget', 'Challenge Widget'),
+    _ui_item('challenge_widget', 'Challenge Widget', phase='race'),
+    _ui_score_item('challenge_widget', 'Next Challenge'),
     _ui_item('checkpointcount_widget', 'Checkpoint Counter'),
     _ui_item('join_leave_info', 'Join/Leave Info'),
-    _ui_item('donation_widget', 'Donation Widget'),
-    _ui_item('clock_widget', 'Clock Widget'),
+    _ui_item('donation_widget', 'Please Donate'),
+    _ui_item('donation_widget.widget', 'Please Donate Layout', display_label='Please Donate Layout'),
+    _ui_item('clock_widget', 'Clock Widget', phase='race'),
+    _ui_score_item('clock_widget', 'Clock (Score)'),
     _ui_item('banner', 'Banner'),
     _ui_item('allbutton', 'AllButton'),
     _ui_item(
         'karma',
         'Karma',
         widget_table_path=('ui', 'karma', 'karma_widget'),
+        phase='race',
     ),
+    _ui_item('karma.reminder_window.score', 'Karma Reminder', display_label='Karma Reminder'),
+    _ui_item('karma.karma_widget.gamemode.score', 'ManiaKarma (Score)', display_label='ManiaKarma (Score)'),
     _ui_item('ladderlimit_widget', 'Ladderlimit Widget'),
     _ui_item('gamemode_widget', 'Gamemode Widget'),
     _ui_item('player_spectator_widget', 'Player/Spectator Widget'),
@@ -183,14 +204,17 @@ UI_CONFIG_ITEMS: list[dict[str, Any]] = [
     _ui_item('visitors_widget', 'Visitors Widget'),
     _ui_item('discord_widget', 'Discord Widget'),
     _ui_item('force_play_widget', 'Force Play Widget'),
-    _ui_item('favorite_widget', 'Favorite Widget'),
+    _ui_item('favorite_widget', 'Favorite Widget', phase='race'),
+    _ui_score_item('favorite_widget', 'Add to Favorites (Score)'),
     _ui_item('next_environment_widget', 'Next Environment Widget'),
     _ui_item('next_gamemode_widget', 'Next Gamemode Widget'),
+    _ui_item('eyepiece_widget', 'Eyepiece Widget', phase='score'),
     _ui_item('dedimania_records', 'Dedimania Records'),
     _ui_item('local_records', 'Local Records'),
     _ui_item('live_rankings', 'Live Rankings'),
     _ui_item('round_score', 'Round Score'),
-    _ui_item('winning_payout', 'Winning Payout'),
+    _ui_item('winning_payout', 'Finish Winners'),
+    _ui_item('winning_payout.widget', 'Finish Winners Layout', display_label='Finish Winners Layout'),
     _ui_item('scoretable_lists.top_average_times', 'Scoretable: Top Average Times'),
     _ui_item('scoretable_lists.dedimania_records', 'Scoretable: Dedimania Records'),
     _ui_item('scoretable_lists.local_records', 'Scoretable: Local Records'),
@@ -204,10 +228,7 @@ UI_CONFIG_ITEMS: list[dict[str, Any]] = [
     _ui_item('scoretable_lists.top_tracks', 'Scoretable: Top Tracks'),
     _ui_item('scoretable_lists.top_voters', 'Scoretable: Top Voters'),
     _ui_item('scoretable_lists.top_visitors', 'Scoretable: Top Visitors'),
-    _ui_item('scoretable_lists.top_active_players', 'Scoretable: Top Active Players'),
-    _ui_item('scoretable_lists.top_winning_payouts', 'Scoretable: Top Winning Payouts'),
-    _ui_item('scoretable_lists.top_betwins', 'Scoretable: Top BetWins'),
-    _ui_item('scoretable_lists.top_roundscore', 'Scoretable: Top Roundscore'),
+    _panel_position_item('stats', 'Your Stats', key=_YOUR_STATS_ITEM),
 ]
 
 UI_DISCOVERY_EXCLUDE_PREFIXES: tuple[tuple[str, ...], ...] = (
@@ -216,15 +237,30 @@ UI_DISCOVERY_EXCLUDE_PREFIXES: tuple[tuple[str, ...], ...] = (
     ('ui', 'style'),
     ('ui', 'images'),
     ('ui', 'menu'),
+    # Retained legacy settings with no active renderer or config binding.
+    ('ui', 'music_widget'),
+    ('ui', 'scoretable_lists', 'top_active_players'),
+    ('ui', 'scoretable_lists', 'top_winning_payouts'),
+    ('ui', 'scoretable_lists', 'top_betwins'),
+    ('ui', 'scoretable_lists', 'top_roundscore'),
     ('ui', 'features', 'songlist'),
     ('ui', 'welcome_window', 'image'),
     ('ui', 'challenge_widget', 'icons'),
     ('ui', 'challenge_widget', 'title'),
+    ('ui', 'challenge_widget', 'race'),
+    ('ui', 'clock_widget', 'race'),
+    ('ui', 'favorite_widget', 'race'),
+    ('ui', 'eyepiece_widget', 'race'),
+    ('ui', 'eyepiece_widget', 'score'),
     ('ui', 'karma', 'images'),
     ('ui', 'karma', 'widget_styles'),
 )
 
 STATIC_CONFIG_ITEMS: dict[str, list[dict[str, Any]]] = {
+    'platform_ui': [
+        _panel_position_item(name, PANELS[panel][0])
+        for panel, name in LEGACY_PANEL_TYPES.items()
+    ],
     'admin': [
         {
             'key': 'stalker',
@@ -258,6 +294,12 @@ UI_GROUP_ORDER: tuple[str, ...] = (
     'Misc',
 )
 
+_SCORETABLE_WIDGETS = (
+    'scoretable_lists', 'challenge_widget.score', 'clock_widget.score', 'favorite_widget.score',
+    'next_environment_widget', 'next_gamemode_widget', 'eyepiece_widget',
+    'donation_widget', 'winning_payout', 'karma.reminder_window.score', 'karma.karma_widget.gamemode.score',
+)
+
 UI_GROUP_PREFIXES: dict[str, tuple[str, ...]] = {
     'Track & Challenge': (
         'challenge_widget',
@@ -274,8 +316,6 @@ UI_GROUP_PREFIXES: dict[str, tuple[str, ...]] = {
         'ladderlimit_widget',
         'gamemode_widget',
         'favorite_widget',
-        'next_environment_widget',
-        'next_gamemode_widget',
         'tmexchange_widget',
         'toplist_widget',
     ),
@@ -284,7 +324,6 @@ UI_GROUP_PREFIXES: dict[str, tuple[str, ...]] = {
         'local_records',
         'live_rankings',
         'round_score',
-        'winning_payout',
     ),
     'Karma': (
         'features.karma',
@@ -296,8 +335,6 @@ UI_GROUP_PREFIXES: dict[str, tuple[str, ...]] = {
         'allbutton',
         'menu',
         'join_leave_info',
-        'donation_widget',
-        'eyepiece_widget',
         'welcome_window',
         'custom_ui',
     ),
@@ -319,6 +356,9 @@ class AppsManagerService:
         self.release_catalogue = None
         self.copying = False
         self.restart_needed = False
+        self.pending_packages = set()
+        self.pending_config = set()
+        self.package_states = {}
         self.update_settings = {}
         self.next_check = 0
         self.next_notice = 0
@@ -370,6 +410,8 @@ class AppsManagerService:
 
     async def releases(self, aseco, admin, identity=None, *, review=False, force=False,
                        install=False, reviewed=None, quiet=False):
+        from .views import _show_package_review_window, _show_release_window
+
         login = getattr(admin, 'login', '')
         if not _is_masteradmin(aseco, admin, login):
             await _reply(aseco, login, '{#server}> {#error}Only MasterAdmins may check or download releases.')
@@ -398,7 +440,12 @@ class AppsManagerService:
                     return await client.preview(identity, force=force)
                 if identity:
                     return await client.stage(identity)
-                return await client.check()
+                catalogue = await client.check()
+                try:
+                    states = await asyncio.to_thread(client.local_package_states, catalogue)
+                except (ValueError, ManagementError, OSError):
+                    states = {}
+                return {'catalogue': catalogue, 'states': states}
             except (ManagementError, OSError) as error:
                 return {'error': str(error) if isinstance(error, ManagementError) else 'Could not read/write local update files.'}
 
@@ -416,6 +463,9 @@ class AppsManagerService:
                 return
             if install:
                 self.restart_needed = self.restart_needed or data['restart_required']
+                self.package_states[data['package']] = 'installed'
+                if data['restart_required']:
+                    self.pending_packages.add(data['package'])
                 logger.info('[Updates] Copied %s files; report: %s', data['copied'], data['report'])
                 if connected:
                     await _reply(aseco, login, f"{{#server}}> {{#message}}Copied {data['copied']} files; kept {data['kept_modified']} modified files. Backups and diffs saved.")
@@ -423,13 +473,18 @@ class AppsManagerService:
                 self.next_notice = monotonic() + self._interval('notice_interval_seconds', 1800)
             elif review and connected:
                 _show_package_review_window(aseco, admin, data)
-            elif identity and connected:
-                await _reply(aseco, login, f"{{#server}}> {{#message}}{data['id']} {data['version']} downloaded and verified. Use //apps update {identity} to review changes.")
+            elif identity and not review:
+                self.package_states[identity] = 'downloaded'
+                if connected:
+                    await _reply(aseco, login, f"{{#server}}> {{#message}}{data['id']} {data['version']} downloaded and verified. Use //apps update {identity} to review changes.")
+                    if self.release_catalogue:
+                        _show_release_window(aseco, admin, self.release_catalogue)
             elif not identity:
-                self.release_catalogue = data
+                self.release_catalogue = data['catalogue']
+                self.package_states = data['states']
                 self.next_check = monotonic() + self._interval('check_interval_seconds', 3600)
                 if connected and not quiet:
-                    _show_release_window(aseco, admin, data)
+                    _show_release_window(aseco, admin, self.release_catalogue)
                 if quiet:
                     await self.notice(aseco)
 
@@ -448,9 +503,11 @@ class AppsManagerService:
             await _reply(aseco, login, '{#server}> {#message}Validating both publishers in the background. No automatic restart.')
 
     async def handle_action(self, aseco: 'Aseco', admin, answer: list[Any]) -> bool:
+        from .commands import handle_apps_action
         return await handle_apps_action(aseco, admin, answer)
 
     async def handle_command(self, aseco: 'Aseco', login: str, admin, args: list[str]) -> bool:
+        from .commands import _handle_apps_command
         await _handle_apps_command(aseco, login, admin, args)
         return True
 
@@ -636,31 +693,6 @@ def _reply_apps_usage(aseco: 'Aseco', login: str):
     return _reply(aseco, login, '{#server}> {#message}' + _APPS_USAGE)
 
 
-def _apps_action_map(player) -> dict[int, tuple[Any, ...]]:
-    action_map = getattr(player, 'apps_action_map', None)
-    if not isinstance(action_map, dict):
-        action_map = {}
-        setattr(player, 'apps_action_map', action_map)
-    return action_map
-
-
-def _reset_apps_action_map(player) -> None:
-    setattr(player, 'apps_action_map', {})
-    setattr(player, 'apps_action_seed', 12000)
-
-
-def _register_apps_action(player, payload: tuple[Any, ...]) -> int:
-    seed = int(getattr(player, 'apps_action_seed', 12000))
-    action_id = seed + 1
-    setattr(player, 'apps_action_seed', action_id)
-    _apps_action_map(player)[action_id] = payload
-    return action_id
-
-
-def _action_cell(player, label: str, payload: tuple[Any, ...] | None):
-    return [label, _register_apps_action(player, payload)] if payload else label
-
-
 def _coerce_bool(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {'1', 'true', 'on', 'yes'}
@@ -676,6 +708,8 @@ def _parse_numeric_string(value: Any) -> tuple[str, int | float] | None:
     try:
         parsed_float = float(text)
     except Exception:
+        return None
+    if not isfinite(parsed_float):
         return None
     if any(ch in text for ch in ('.', 'e', 'E')):
         return 'float', parsed_float
@@ -742,6 +776,31 @@ def _standalone_status(aseco: 'Aseco', name: str) -> str:
     return 'missing'
 
 
+def _runtime_status(aseco, name, loadout, disk_status=None):
+    service = get_service(aseco)
+    active = name in (getattr(aseco, 'active_apps', ()) or ())
+    if active and loadout == 'disabled':
+        return 'Pending restart: disable'
+    if not active and loadout == 'enabled':
+        return 'Files missing' if disk_status == 'enabled (missing files)' else 'Pending restart: enable'
+    if service and (name in service.pending_packages or name in service.pending_config):
+        return 'Pending restart'
+    if active:
+        return 'Active now'
+    if service and service.package_states.get(name) == 'downloaded':
+        return 'Downloaded, not installed'
+    return disk_status or 'Not active'
+
+
+def _mark_config_pending(aseco, name, pending=True):
+    service = get_service(aseco)
+    if service:
+        if pending:
+            service.pending_config.add(name)
+        else:
+            service.pending_config.discard(name)
+
+
 def _archive_destination(aseco: 'Aseco', name: str) -> Path:
     removed_dir = _removed_apps_dir(aseco)
     removed_dir.mkdir(parents=True, exist_ok=True)
@@ -804,18 +863,21 @@ def _ui_showing_score(aseco: 'Aseco') -> bool:
     return is_score_phase(aseco)
 
 
-def _current_ui_runtime_mode_key(aseco: 'Aseco', base_table: dict[str, Any]) -> str | None:
+def _current_ui_runtime_mode_key(aseco: 'Aseco', base_table: dict[str, Any], scope=None) -> str | None:
     gamemode_table = base_table.get('gamemode')
     if not isinstance(gamemode_table, dict):
         return None
-    if _ui_showing_score(aseco) and isinstance(gamemode_table.get('score'), dict):
+    score = scope[1] == 'score' if scope else _ui_showing_score(aseco)
+    if score and isinstance(gamemode_table.get('score'), dict):
         return 'score'
-    return _current_ui_mode_key(aseco)
+    return scope[0] if scope else _current_ui_mode_key(aseco)
 
 
-def _current_ui_phase_key(aseco: 'Aseco', mode_table: dict[str, Any]) -> str | None:
+def _current_ui_phase_key(aseco: 'Aseco', mode_table: dict[str, Any], scope=None) -> str | None:
     if not isinstance(mode_table, dict):
         return None
+    if scope:
+        return scope[1] if isinstance(mode_table.get(scope[1]), dict) else 'race'
     if not any(isinstance(mode_table.get(name), dict) for name in ('race', 'warmup')):
         return None
     return 'warmup' if bool(getattr(aseco, 'warmup_phase', False)) and isinstance(mode_table.get('warmup'), dict) else 'race'
@@ -827,11 +889,15 @@ def _config_item_target_info_from_data(
     data: dict[str, Any],
     *,
     file_path: Path | None = None,
+    scope=None,
 ) -> dict[str, Any]:
     if file_path is None:
         file_path = _root_dir(aseco) / item['file']
-    base_path = tuple(item['table_path'])
+    base_path = tuple(item.get('parent_table_path') or item['table_path'])
     base_table = _read_nested(data, base_path)
+    default_fields = item.get('default_fields', {})
+    if base_table is None and default_fields:
+        base_table = {}
     if not isinstance(base_table, dict):
         return {
             'file_path': file_path,
@@ -846,7 +912,7 @@ def _config_item_target_info_from_data(
             'widget_mode_table': None,
         }
 
-    effective = dict(base_table)
+    effective = {**default_fields, **base_table}
     write_path = base_path
     mode_key = None
     phase_key = None
@@ -861,7 +927,8 @@ def _config_item_target_info_from_data(
     if widget_base_path:
         widget_root = _read_nested(data, widget_base_path)
         if isinstance(widget_root, dict) and isinstance(widget_root.get('gamemode'), dict):
-            mode_key = _current_ui_runtime_mode_key(aseco, widget_root)
+            mode_key = ((scope[0] if scope else _current_ui_mode_key(aseco)) if item.get('phase') == 'race'
+                        else _current_ui_runtime_mode_key(aseco, widget_root, scope))
             widget_mode_table = widget_root['gamemode'].get(mode_key) if mode_key else None
             if isinstance(widget_mode_table, dict):
                 effective.update(widget_mode_table)
@@ -885,20 +952,20 @@ def _config_item_target_info_from_data(
         }
 
     if _is_ui_item(item) and isinstance(base_table.get('gamemode'), dict):
-        mode_key = _current_ui_runtime_mode_key(aseco, base_table)
+        mode_key = _current_ui_runtime_mode_key(aseco, base_table, scope)
         mode_table = base_table['gamemode'].get(mode_key) if mode_key else None
         if isinstance(mode_table, dict):
             effective.update(mode_table)
             mode_path = base_path + ('gamemode', mode_key)
             write_path = mode_path
-            phase_key = _current_ui_phase_key(aseco, mode_table)
+            phase_key = _current_ui_phase_key(aseco, mode_table, scope)
             if phase_key and isinstance(mode_table.get(phase_key), dict):
                 phase_table = mode_table[phase_key]
                 effective.update(phase_table)
                 phase_path = mode_path + (phase_key,)
                 write_path = phase_path
     elif _is_ui_item(item):
-        direct_phase_key = 'score' if _ui_showing_score(aseco) else 'race'
+        direct_phase_key = item.get('phase') or (scope[1] if scope else ('score' if _ui_showing_score(aseco) else 'race'))
         direct_phase_table = base_table.get(direct_phase_key)
         if isinstance(direct_phase_table, dict):
             effective.update(direct_phase_table)
@@ -922,13 +989,14 @@ def _config_item_target_info_from_data(
         'widget_base_path': widget_base_path,
         'widget_mode_path': widget_mode_path,
         'widget_mode_table': widget_mode_table,
+        'scope': scope,
     }
 
 
-def _config_item_target_info(aseco: 'Aseco', item: dict[str, Any]) -> dict[str, Any]:
+def _config_item_target_info(aseco: 'Aseco', item: dict[str, Any], *, scope=None) -> dict[str, Any]:
     file_path = _root_dir(aseco) / item['file']
     data = read_toml(file_path)
-    return _config_item_target_info_from_data(aseco, item, data, file_path=file_path)
+    return _config_item_target_info_from_data(aseco, item, data, file_path=file_path, scope=scope)
 
 
 def _config_field_write_path(item: dict[str, Any], info: dict[str, Any], field_key: str) -> tuple[str, ...]:
@@ -946,6 +1014,10 @@ def _config_field_write_path(item: dict[str, Any], info: dict[str, Any], field_k
     mode_path = info.get('mode_path')
     mode_table = info.get('mode_table')
     if isinstance(mode_table, dict) and field_key in mode_table and isinstance(mode_path, tuple):
+        return mode_path
+    if (info.get('scope') and isinstance(mode_path, tuple)
+            and item['key'] in ('local_records', 'dedimania_records', 'live_rankings')
+            and field_key in ('width', 'height')):
         return mode_path
 
     widget_mode_path = info.get('widget_mode_path')
@@ -1014,9 +1086,52 @@ def _parse_pair(value: Any) -> tuple[float, float] | None:
     if len(parts) != 2:
         return None
     try:
-        return float(parts[0]), float(parts[1])
-    except Exception:
+        x, y = float(parts[0]), float(parts[1])
+        return (x, y) if isfinite(x) and isfinite(y) else None
+    except ValueError:
         return None
+
+
+def _position_field(key: str) -> tuple[str, str] | None:
+    field = key.lower()
+    if field in ('x', 'y', 'xpos', 'ypos'):
+        axis, prefix = field[0], ''
+    elif field.endswith(('_x', '_y')):
+        axis, prefix = field[-1], field[:-2]
+        prefix = '' if prefix in ('pos', 'position') else prefix.removesuffix('_pos').removesuffix('_position')
+    elif field in ('x_counter', 'y_counter'):
+        axis, prefix = field[0], 'counter'
+    else:
+        return None
+    direction = 'Left / Right' if axis == 'x' else 'Up / Down'
+    return axis, f'{prefix.replace("_", " ").title()}: {direction}' if prefix else direction
+
+
+_SIZE_FIELDS = {
+    'width', 'height', 'size', 'row_height', 'scale', 'textsize', 'textscale', 'text_size',
+    'text_scale', 'min_width', 'max_width', 'char_width', 'edge_shift', 'tile_spacing', 'rail_spacing',
+}
+_LEGACY_BOOLEANS = {'true', 'false', 'on', 'off', 'yes', 'no', '1', '0'}
+
+
+def _size_field(item, key):
+    # Image dimensions are whole pixels, not ManiaLink layout units.
+    return key in _SIZE_FIELDS and not (
+        item['file'] == 'apps/serverstats/app_defaults.toml' and key in {'width', 'height'}
+    )
+
+
+def _geometry_default(item, key, *, position):
+    parts = Path(item['file']).parts
+    module = sys.modules.get(f'apps.{parts[1]}.app') if len(parts) == 3 and parts[0] == 'apps' else None
+    schema = getattr(getattr(module, 'APP_INSTANCE', None), 'settings_schema', None)
+    table_path = item['table_path']
+    if schema is not None and table_path[0] == schema.resolve_section_name():
+        setting_key = '/'.join((*table_path[1:], key))
+        for setting in schema.settings:
+            if setting.key == setting_key and type(setting.default) in (int, float):
+                return setting.default
+    return 0 if position else 1
 
 
 def _config_item_summary_from_info(aseco: 'Aseco', item: dict[str, Any], info: dict[str, Any]) -> str:
@@ -1034,11 +1149,11 @@ def _config_item_summary_from_info(aseco: 'Aseco', item: dict[str, Any], info: d
         return '-'
 
     if item['key'] == 'menu':
-        pos = str(table.get('position', '')).strip()
+        pos = _parse_pair(table.get('position'))
         size = str(table.get('size', '')).strip()
         parts = []
         if pos:
-            parts.append(f'pos={pos}')
+            parts.extend((f'Left/Right={_display_value(pos[0])}', f'Up/Down={_display_value(pos[1])}'))
         if size:
             parts.append(f'size={size}')
         return ', '.join(parts) or '-'
@@ -1050,9 +1165,9 @@ def _config_item_summary_from_info(aseco: 'Aseco', item: dict[str, Any], info: d
             if 'enabled' in widget_table:
                 parts.append(f"widget={_display_value(_coerce_bool(widget_table.get('enabled', False)))}")
             if 'pos_x' in widget_table:
-                parts.append(f"x={widget_table['pos_x']}")
+                parts.append(f"Left/Right={widget_table['pos_x']}")
             if 'pos_y' in widget_table:
-                parts.append(f"y={widget_table['pos_y']}")
+                parts.append(f"Up/Down={widget_table['pos_y']}")
         if info.get('mode_key'):
             parts.insert(0, f"mode={info['mode_key']}")
         return ', '.join(parts[:5])
@@ -1060,10 +1175,10 @@ def _config_item_summary_from_info(aseco: 'Aseco', item: dict[str, Any], info: d
     parts: list[str] = []
     if 'enabled' in table:
         parts.append(f"enabled={_display_value(_coerce_bool(table.get('enabled')))}")
-    if 'pos_x' in table:
-        parts.append(f"x={table['pos_x']}")
-    if 'pos_y' in table:
-        parts.append(f"y={table['pos_y']}")
+    for key, value in table.items():
+        position = _position_field(key)
+        if position and not isinstance(value, (bool, dict)):
+            parts.append(f'{position[1]}={_display_value(value)}')
     if 'width' in table:
         parts.append(f"w={table['width']}")
     if 'height' in table:
@@ -1130,6 +1245,32 @@ def _editable_fields_from_info(aseco: 'Aseco', item: dict[str, Any], info: dict[
         })
         handled_fields.add(field_key)
 
+    def add_geometry(field_key, value, *, write_key=None, component=None):
+        position = _position_field(field_key)
+        if position is None and component is None and not _size_field(item, field_key):
+            return
+        parsed = _parse_numeric_string(value) if isinstance(value, str) else None
+        numeric = parsed[1] if parsed is not None else value
+        if type(value) is bool or (parsed is None and isinstance(value, str)
+                                  and value.strip().lower() in _LEGACY_BOOLEANS):
+            # Old editors could persist a boolean for a quoted 0 or 1.
+            numeric = _geometry_default(item, field_key, position=position is not None)
+            parsed = None
+        if not isinstance(numeric, (int, float)) or not isfinite(numeric):
+            return
+        axis, label = position or (None, {'size_w': 'width', 'size_h': 'height'}.get(field_key, field_key))
+        if item['key'] == 'banner' and field_key == 'width':
+            label = 'Maximum width'
+        write_key = write_key or field_key
+        fields.append({
+            'field_key': field_key, 'label': label, 'axis': axis, 'kind': 'float', 'value': numeric,
+            'geometry': True, 'component': component,
+            'storage': 'string' if isinstance(value, str) else 'number',
+            'input_number': value.strip() if parsed is not None else str(numeric),
+            'write_key': write_key, 'write_path': _config_field_write_path(item, info, write_key),
+        })
+        handled_fields.add(field_key)
+
     def add_bool(field_key: str, label: str, value: Any, *, storage: str | None = None) -> None:
         if field_key in handled_fields:
             return
@@ -1171,31 +1312,23 @@ def _editable_fields_from_info(aseco: 'Aseco', item: dict[str, Any], info: dict[
         if isinstance(widget_table, dict) and 'enabled' in widget_table:
             add_bool('widget_enabled', 'widget_enabled', widget_table.get('enabled', False), storage='string' if isinstance(widget_table.get('enabled'), str) else None)
 
-    pair_pos = _parse_pair(table.get('position')) if item['key'] == 'menu' else None
-    pair_size = _parse_pair(table.get('size')) if item['key'] == 'menu' else None
+    pair_pos = _parse_pair(table.get('position'))
+    pair_size = _parse_pair(table.get('size'))
     if pair_pos is not None:
-        fields.append({'field_key': 'position_x', 'label': 'pos_x', 'kind': 'float', 'value': pair_pos[0], 'step_small': 0.1, 'step_big': 10.0})
-        fields.append({'field_key': 'position_y', 'label': 'pos_y', 'kind': 'float', 'value': pair_pos[1], 'step_small': 0.1, 'step_big': 10.0})
-        handled_fields.update({'position_x', 'position_y', 'position'})
+        add_geometry('position_x', pair_pos[0], write_key='position', component=0)
+        add_geometry('position_y', pair_pos[1], write_key='position', component=1)
+        handled_fields.add('position')
     if pair_size is not None:
-        fields.append({'field_key': 'size_w', 'label': 'width', 'kind': 'float', 'value': pair_size[0], 'step_small': 0.1, 'step_big': 10.0})
-        fields.append({'field_key': 'size_h', 'label': 'height', 'kind': 'float', 'value': pair_size[1], 'step_small': 0.1, 'step_big': 10.0})
-        handled_fields.update({'size_w', 'size_h', 'size'})
+        add_geometry('size_w', pair_size[0], write_key='size', component=0)
+        add_geometry('size_h', pair_size[1], write_key='size', component=1)
+        handled_fields.add('size')
 
-    add_numeric('main_pos_x', 'main_pos_x', 0.1, 10.0, table.get('main_pos_x'))
-    add_numeric('main_pos_y', 'main_pos_y', 0.1, 10.0, table.get('main_pos_y'))
-    add_numeric('submenu_pos_x', 'submenu_pos_x', 0.1, 10.0, table.get('submenu_pos_x'))
-    add_numeric('submenu_pos_y', 'submenu_pos_y', 0.1, 10.0, table.get('submenu_pos_y'))
+    for key, value in table.items():
+        if key not in handled_fields:
+            add_geometry(key, value)
     add_numeric('entries', 'entries', 1, 10, table.get('entries'))
     add_numeric('topcount', 'topcount', 1, 10, table.get('topcount'))
-    add_numeric('pos_x', 'pos_x', 0.1, 10.0, table.get('pos_x'))
-    add_numeric('pos_y', 'pos_y', 0.1, 10.0, table.get('pos_y'))
-    add_numeric('width', 'width', 0.1, 10.0, table.get('width'))
-    add_numeric('height', 'height', 0.1, 10.0, table.get('height'))
-    add_numeric('row_height', 'row_height', 0.05, 0.25, table.get('row_height'))
     add_numeric('number', '# entries', 1, 10, table.get('number'))
-    add_numeric('button_pos_x', 'button_pos_x', 0.1, 10.0, table.get('button_pos_x'))
-    add_numeric('button_pos_y', 'button_pos_y', 0.1, 10.0, table.get('button_pos_y'))
     add_numeric('window_lines', 'window_lines', 1, 10, table.get('window_lines'))
 
     for key, value in table.items():
@@ -1210,7 +1343,7 @@ def _editable_fields_from_info(aseco: 'Aseco', item: dict[str, Any], info: dict[
         if isinstance(value, bool):
             add_bool(key, key, value)
             continue
-        if isinstance(value, str) and value.strip().lower() in {'true', 'false', 'on', 'off', 'yes', 'no', '1', '0'}:
+        if isinstance(value, str) and value.strip().lower() in _LEGACY_BOOLEANS:
             add_bool(key, key, value)
             continue
         if isinstance(value, int) and not isinstance(value, bool):
@@ -1225,8 +1358,8 @@ def _editable_fields_from_info(aseco: 'Aseco', item: dict[str, Any], info: dict[
     return fields
 
 
-def _editable_fields(aseco: 'Aseco', item: dict[str, Any]) -> list[dict[str, Any]]:
-    return _editable_fields_from_info(aseco, item, _config_item_target_info(aseco, item))
+def _editable_fields(aseco: 'Aseco', item: dict[str, Any], *, scope=None) -> list[dict[str, Any]]:
+    return _editable_fields_from_info(aseco, item, _config_item_target_info(aseco, item, scope=scope))
 
 
 def _write_config_value(aseco, item, file_path, table_path, field_key, value):
@@ -1247,25 +1380,23 @@ def _write_config_value(aseco, item, file_path, table_path, field_key, value):
 
 
 @_guard_config_change
-def _update_config_field(aseco: 'Aseco', item: dict[str, Any], field_key: str, delta: float) -> str:
-    info = _config_item_target_info(aseco, item)
-    table_path = _config_field_write_path(item, info, field_key)
+def _update_config_field(aseco: 'Aseco', item: dict[str, Any], field_key: str, delta: float, *, scope=None) -> str:
+    info = _config_item_target_info(aseco, item, scope=scope)
     file_path = info['file_path']
-    table = _read_nested(read_toml(file_path), table_path)
-    if not isinstance(table, dict):
-        return f'{item["key"]}.{field_key}'
+    table = info['effective_table']
 
     def normalize(value: float, kind: str) -> int | float:
         if kind == 'int':
             return int(round(value))
         return round(float(value), 2)
 
-    editable = {entry['field_key']: entry for entry in _editable_fields(aseco, item)}
+    editable = {entry['field_key']: entry for entry in _editable_fields_from_info(aseco, item, info)}
     spec = editable.get(field_key)
     if not spec:
         return f'{item["key"]}.{field_key}'
 
-    write_field_key = 'enabled' if field_key == 'widget_enabled' else field_key
+    write_field_key = spec.get('write_key', 'enabled' if field_key == 'widget_enabled' else field_key)
+    table_path = spec.get('write_path', _config_field_write_path(item, info, write_field_key))
 
     if spec['kind'] == 'bool':
         next_value = True if delta >= 0 else False
@@ -1273,29 +1404,35 @@ def _update_config_field(aseco: 'Aseco', item: dict[str, Any], field_key: str, d
         _write_config_value(aseco, item, file_path, table_path, write_field_key, stored_value)
         return f'{item["key"]}.{field_key} = {_display_value(next_value)}'
 
+    if spec.get('geometry'):
+        if abs(delta) not in POSITION_STEPS:
+            raise ValueError('Position and size use steps of 0.1, 1 or 10.')
+        component = spec['component']
+        components = str(table[write_field_key]).replace(',', ' ').split() if component is not None else None
+        number = components[component] if components is not None else spec['input_number']
+        adjusted = Decimal(number) + Decimal(str(delta))
+        if not isfinite(float(adjusted)) or (not spec['axis'] and adjusted < 0):
+            raise ValueError(f'{spec["label"]} must be a finite number' +
+                             ('.' if spec['axis'] else ' of zero or more.'))
+        if not spec['axis'] and adjusted == 0 and field_key in {
+                'size', 'size_w', 'size_h', 'scale', 'row_height', 'textsize', 'text_size', 'textscale', 'text_scale'}:
+            raise ValueError(f'{spec["label"]} must be greater than zero.')
+        rendered = format(adjusted, 'f')
+        if '.' in rendered:
+            rendered = rendered.rstrip('0').rstrip('.')
+        if components is not None:
+            components[component] = rendered
+            stored_value = ' '.join(components)
+        else:
+            stored_value = rendered if spec.get('storage') == 'string' else float(adjusted)
+        _write_config_value(aseco, item, file_path, table_path, write_field_key, stored_value)
+        return f'{item["key"]}.{spec["label"]} = {rendered}'
+
     current = float(spec['value'])
     next_value = normalize(current + delta, spec['kind'])
 
-    if field_key in {'position_x', 'position_y'}:
-        pair = _parse_pair(table.get('position')) or (0.0, 0.0)
-        x, y = pair
-        if field_key == 'position_x':
-            x = float(next_value)
-        else:
-            y = float(next_value)
-        _write_config_value(aseco, item, file_path, table_path, 'position', f'{_display_value(x)} {_display_value(y)}')
-    elif field_key in {'size_w', 'size_h'}:
-        pair = _parse_pair(table.get('size')) or (0.0, 0.0)
-        w, h = pair
-        if field_key == 'size_w':
-            w = float(next_value)
-        else:
-            h = float(next_value)
-        _write_config_value(aseco, item, file_path, table_path, 'size', f'{_display_value(w)} {_display_value(h)}')
-    else:
-        stored_value: Any = str(next_value) if spec.get('storage') == 'string' else next_value
-        _write_config_value(aseco, item, file_path, table_path, write_field_key, stored_value)
-
+    stored_value = str(next_value) if spec.get('storage') == 'string' else next_value
+    _write_config_value(aseco, item, file_path, table_path, write_field_key, stored_value)
     return f'{item["key"]}.{field_key} = {_display_value(next_value)}'
 
 
@@ -1308,77 +1445,8 @@ def _config_app_counts(aseco: 'Aseco', app_key: str) -> tuple[int, int]:
     return enabled, len(items)
 
 
-def _autosize_widths(
-    table_header: list[str],
-    entries: list[list[Any]],
-    *,
-    min_total: float = 1.08,
-    max_total: float = 1.38,
-) -> list[float]:
-    if not table_header:
-        return [min_total]
-
-    col_count = len(table_header)
-    max_lens = [max(4, len(str(head or ''))) for head in table_header]
-    for row in entries:
-        for idx in range(min(len(row), col_count)):
-            cell = row[idx]
-            text = cell[0] if isinstance(cell, list) else cell
-            max_lens[idx] = max(max_lens[idx], len(str(text or '')))
-
-    col_widths: list[float] = []
-    for idx, length in enumerate(max_lens):
-        if idx >= col_count - 2:
-            width = 0.12 + min(length, 12) * 0.014
-        elif idx == 0:
-            width = 0.18 + min(length, 48) * 0.020
-        else:
-            width = 0.12 + min(length, 40) * 0.015
-        col_widths.append(max(0.12, min(width, 1.10)))
-
-    total = sum(col_widths)
-    if total < min_total:
-        factor = min_total / total if total else 1.0
-        col_widths = [width * factor for width in col_widths]
-        total = sum(col_widths)
-    if total > max_total:
-        factor = max_total / total
-        col_widths = [width * factor for width in col_widths]
-        total = sum(col_widths)
-
-    return [max(min_total, min(total, max_total))] + [round(width, 3) for width in col_widths]
-
-
-def _show_apps_window(
-    aseco: 'Aseco',
-    admin,
-    header: str,
-    icon: list[str | float],
-    table_header: list[str],
-    entries: list[list[Any]],
-    widths: list[float] | None = None,
-) -> None:
-    pages = []
-    page = [table_header]
-    lines = 0
-    for row in entries:
-        page.append(row)
-        lines += 1
-        if lines >= 14:
-            pages.append(page)
-            page = [table_header]
-            lines = 0
-    if len(page) > 1:
-        pages.append(page)
-
-    meta_widths = widths or _autosize_widths(table_header, entries)
-    admin.msgs = [[1, header, meta_widths, icon]]
-    admin.msgs.extend(pages or [[table_header]])
-    display_manialink_multi(aseco, admin)
-
-
 def _ui_config_group_for(item_key: str) -> str:
-    if item_key.startswith('scoretable_lists.'):
+    if any(item_key == key or item_key.startswith(key + '.') for key in _SCORETABLE_WIDGETS):
         return 'Scoretable Lists'
     for group in UI_GROUP_ORDER:
         for prefix in UI_GROUP_PREFIXES.get(group, ()):
@@ -1387,14 +1455,9 @@ def _ui_config_group_for(item_key: str) -> str:
     return 'Misc'
 
 
-def _ui_group_index(group: str) -> int:
-    try:
-        return UI_GROUP_ORDER.index(group)
-    except ValueError:
-        return len(UI_GROUP_ORDER)
-
-
 def _ui_display_label(item: dict[str, Any]) -> str:
+    if item.get('display_label'):
+        return item['display_label']
     key = str(item.get('key') or '').strip()
     parts = tuple(part for part in key.split('.') if part)
     if len(parts) <= 1:
@@ -1418,244 +1481,29 @@ def _can_reload_app(aseco: 'Aseco', app_key: str) -> bool:
     return app_key in RELOADABLE_APPS and _can_configure_app(aseco, app_key)
 
 
-def _config_save_mode(aseco: 'Aseco', app_key: str) -> str:
+def _is_panel_position_item(app_key: str, item_key: str | None) -> bool:
+    return ((app_key == 'ui' and item_key == _YOUR_STATS_ITEM)
+            or (app_key == 'platform_ui' and item_key in {f'panels.{name}' for name in LEGACY_PANEL_TYPES.values()}))
+
+
+def _config_save_mode(aseco: 'Aseco', app_key: str, item_key: str | None = None) -> str:
+    if _is_panel_position_item(app_key, item_key):
+        ui = aseco.get_service('ui/uistyle')
+        return 'reload' if callable(getattr(ui, 'reload_panel_positions', None)) else 'restart'
     return 'reload' if _can_reload_app(aseco, app_key) else 'restart'
 
 
 async def _reload_app_runtime(aseco: 'Aseco', app_key: str, item_key: str | None = None) -> bool:
+    if _is_panel_position_item(app_key, item_key):
+        reload_positions = getattr(aseco.get_service('ui/uistyle'), 'reload_panel_positions', None)
+        if not callable(reload_positions):
+            return False
+        await reload_positions()
+        return True
     if not _can_reload_app(aseco, app_key):
         return False
     from pyxaseco.management.reload import reload_app
     return await reload_app(aseco, app_key, item_key)
-
-
-@_with_config_snapshot
-def _show_apps_manager_window(aseco: 'Aseco', admin) -> None:
-    _reset_apps_action_map(admin)
-    rows: list[list[Any]] = []
-
-    rows.append(['Verified Releases', 'Packages', 'Download only',
-                 _action_cell(admin, 'Check', ('check_releases',)), '', ''])
-
-    rows.append(['{#highlite}Configurable App Homes', '', '', '', '', ''])
-    config_apps = list(_discover_config_apps(aseco).items())
-    config_apps.sort(key=lambda pair: (0 if _standalone_loadout_state(aseco, pair[0]) != 'disabled' else 1, pair[1]['label'].lower()))
-    for app_key, spec in config_apps:
-        loadout_state = _standalone_loadout_state(aseco, app_key)
-        if loadout_state == 'disabled':
-            state_text = 'disabled'
-        else:
-            enabled, total = _config_app_counts(aseco, app_key)
-            state_text = f'{enabled}/{total} on'
-        rows.append([
-            spec['label'],
-            'Config',
-            state_text,
-            _action_cell(admin, 'Config', ('open_config', app_key)),
-            '',
-            _action_cell(admin, 'Reload', ('reload_app', app_key)) if _can_reload_app(aseco, app_key) else '',
-        ])
-
-    while rows and (len(rows) % 14) != 0:
-        rows.append(['', '', '', '', '', ''])
-
-    rows.append(['{#highlite}Standalone Optional Apps', '', '', '', '', ''])
-    standalone_names = list(_standalone_app_names())
-    standalone_names.sort(key=lambda name: (0 if _standalone_loadout_state(aseco, name) != 'disabled' else 1, MANAGEABLE_STANDALONE_APPS.get(name, name).lower()))
-    for app_name in standalone_names:
-        label = MANAGEABLE_STANDALONE_APPS.get(app_name, app_name)
-        status = _standalone_status(aseco, app_name)
-        primary = ''
-        secondary = ''
-        if status == 'enabled':
-            primary = _action_cell(admin, 'Disable', ('toggle_app', 'disable', app_name))
-            if app_name not in PROTECTED_STANDALONE_APPS:
-                secondary = _action_cell(admin, 'Remove', ('archive_app', app_name))
-        elif status == 'disabled':
-            primary = _action_cell(admin, 'Enable', ('toggle_app', 'enable', app_name))
-            if app_name not in PROTECTED_STANDALONE_APPS:
-                secondary = _action_cell(admin, 'Remove', ('archive_app', app_name))
-        elif status == 'removed' and app_name not in PROTECTED_STANDALONE_APPS:
-            primary = _action_cell(admin, 'Add', ('restore_app', app_name))
-        rows.append([
-            label,
-            'App',
-            status,
-            primary,
-            secondary,
-            _action_cell(admin, 'Reload', ('reload_app', app_name)) if _can_reload_app(aseco, app_name) else '',
-        ])
-
-    _show_apps_window(
-        aseco,
-        admin,
-        'Apps Manager',
-        ['Icons128x128_1', 'Buddies'],
-        ['Name', 'Type', 'State', 'Primary', 'Secondary', 'Reload'],
-        rows,
-    )
-
-
-def _show_release_window(aseco, admin, catalogue):
-    from pyxaseco.core.aseco import PYXASECO_VERSION
-    from pyxaseco.management.release_manifest import compatibility
-    _reset_apps_action_map(admin)
-    rows = [['Nothing is installed or restarted by this window.', '', '', '', '', '']]
-    for package in catalogue['packages']:
-        reasons = compatibility(package, PYXASECO_VERSION, '.'.join(map(str, sys.version_info[:3])))
-        dependencies = len(package['requires_apps']) + len(package['python_requirements'])
-        rows.append([package['id'], package['version'],
-                     'Incompatible' if reasons else 'Verified',
-                     _action_cell(admin, 'Download', ('stage_release', package['id'])) if not reasons else '',
-                     _action_cell(admin, 'Review', ('review_release', package['id'])),
-                     '; '.join(reasons) if reasons else str(dependencies) + ' requirements'])
-    rows.append(['Recheck publishers', '', '', _action_cell(admin, 'Check', ('check_releases',)), '', ''])
-    _show_apps_window(aseco, admin, 'Verified Releases', ['Icons128x128_1', 'LoadTrack'],
-                      ['Package', 'Version', 'State', 'Download', 'Preview', 'Compatibility'], rows)
-
-
-def _show_package_review_window(aseco, admin, plan, *, confirm=False):
-    _reset_apps_action_map(admin)
-    rows = [
-        [plan['package'], plan['version'], 'Force Replace' if plan['force'] else 'Keep modified code'],
-        ['Settings', 'Preserved', 'All app_defaults.toml files are backed up first.'],
-        ['Restart', 'Manual', 'Run //pyres after files are copied.'],
-        ['Optional apps', 'Not auto-installed', 'Missing apps stay absent; explicit app installs stay disabled.'],
-    ]
-    for requirement in plan.get('requirements', []):
-        rows.append(['Before copying', 'Owner action', requirement])
-    for item in plan['files']:
-        if item['action'] != 'unchanged':
-            rows.append([item['file'], item['action'].replace('_', ' '), 'Backed up before replacement'])
-    payload = ('apply_release' if confirm else 'confirm_release', plan['package'], plan['review'], plan['force'])
-    if plan.get('requirements'):
-        rows.append(['Requirements not met', 'No files copied', 'Use the existing Python; then review again.'])
-    elif confirm:
-        rows.append(['Confirm file replacement', '', _action_cell(admin, 'Confirm', payload)])
-        rows.append(['Modified official code', 'Replaced' if plan['force'] else 'Kept', 'Existing configuration is always preserved.'])
-    else:
-        rows.append(['Copy reviewed files', '', _action_cell(admin, 'Apply...', payload)])
-        if not plan['force']:
-            rows.append(['Also replace modified code', '', _action_cell(admin, 'Force Replace...', ('force_review', plan['package']))])
-    rows.append(['Recheck publishers', '', _action_cell(admin, 'Packages', ('check_releases',))])
-    admin._release_review = plan
-    _show_apps_window(aseco, admin, 'Confirm Update' if confirm else 'Update Review', ['Icons128x128_1', 'LoadTrack'],
-                     ['File / Item', 'Change / State', 'Details'], rows, widths=[1.38, 0.58, 0.18, 0.62])
-
-
-@_with_config_snapshot
-def _show_app_config_window(aseco: 'Aseco', admin, app_key: str) -> None:
-    spec = _discover_config_apps(aseco).get(app_key)
-    if not spec:
-        return
-
-    _reset_apps_action_map(admin)
-    rows: list[list[Any]] = []
-    last_group = ''
-    items = _config_items_for_app(aseco, app_key)
-    if app_key == 'ui':
-        items = sorted(items, key=lambda item: (_ui_group_index(_ui_config_group_for(item['key'])), _ui_config_group_for(item['key']), item['label']))
-    for item in items:
-        if app_key == 'ui':
-            group = _ui_config_group_for(item['key'])
-            if group != last_group:
-                if rows:
-                    while (len(rows) % 14) != 0:
-                        rows.append(['', '', '', '', '', ''])
-                rows.append([f'{{#highlite}}{group}', '', '', '', '', ''])
-                last_group = group
-        file_path = _root_dir(aseco) / item['file']
-        data = read_toml(file_path)
-        info = _config_item_target_info_from_data(aseco, item, data, file_path=file_path)
-        state = _config_item_state_from_info(item, info)
-        summary = _config_item_summary_from_info(aseco, item, info)
-        editable = _editable_fields_from_info(aseco, item, info)
-        rows.append([
-            _ui_display_label(item) if app_key == 'ui' else item['label'],
-            _config_item_state_text(state),
-            summary,
-            _action_cell(admin, 'Edit', ('open_edit', app_key, item['key'])) if editable else '',
-            _action_cell(admin, 'Enable', ('toggle_config', app_key, item['key'], True)) if state not in {'enabled', 'config', 'missing'} else '',
-            _action_cell(admin, 'Disable', ('toggle_config', app_key, item['key'], False)) if state not in {'disabled', 'config', 'missing'} else '',
-        ])
-
-    save_note = 'Saved and reloaded' if _config_save_mode(aseco, app_key) == 'reload' else 'Saved. Restart required'
-    widths = None
-    icon = ['Icons128x128_1', 'ProfileAdvanced']
-    if app_key == 'ui':
-        widths = [1.38, 0.34, 0.16, 0.40, 0.12, 0.18, 0.18]
-        icon = ['Icons128x128_1', 'Buddies']
-    _show_apps_window(
-        aseco,
-        admin,
-        f'{spec["label"]} Config ({save_note})',
-        icon,
-        ['Item', 'State', 'Summary', 'Edit', 'Enable', 'Disable'],
-        rows,
-        widths=widths,
-    )
-
-
-@_with_config_snapshot
-def _show_item_edit_window(aseco: 'Aseco', admin, app_key: str, item_key: str) -> None:
-    item = next((entry for entry in _config_items_for_app(aseco, app_key) if entry['key'] == item_key), None)
-    if not item:
-        return
-
-    _reset_apps_action_map(admin)
-    fields = _editable_fields(aseco, item)
-    rows: list[list[Any]] = [[
-        '{#highlite}Navigation',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        _action_cell(admin, 'Back', ('open_config', app_key)),
-    ]]
-
-    for field in fields:
-        label = str(field.get('label') or field.get('field_key') or '')
-        value = _display_value(field.get('value'))
-        if field.get('kind') == 'bool':
-            rows.append([
-                label,
-                value,
-                '',
-                '',
-                _action_cell(admin, 'Off', ('adjust_field', app_key, item_key, field['field_key'], -1.0)),
-                _action_cell(admin, 'On', ('adjust_field', app_key, item_key, field['field_key'], 1.0)),
-                '',
-                '',
-            ])
-        else:
-            neg_big = _display_value(-float(field['step_big']))
-            neg_def = _display_value(-1.0)
-            neg_small = _display_value(-float(field['step_small']))
-            pos_small = _display_value(float(field['step_small']))
-            pos_def = _display_value(1.0)
-            pos_big = _display_value(float(field['step_big']))
-            rows.append([
-                label,
-                value,
-                _action_cell(admin, neg_big, ('adjust_field', app_key, item_key, field['field_key'], -float(field['step_big']))),
-                _action_cell(admin, neg_def, ('adjust_field', app_key, item_key, field['field_key'], -1.0)),
-                _action_cell(admin, neg_small, ('adjust_field', app_key, item_key, field['field_key'], -float(field['step_small']))),
-                _action_cell(admin, f'+{pos_small}', ('adjust_field', app_key, item_key, field['field_key'], float(field['step_small']))),
-                _action_cell(admin, f'+{pos_def}', ('adjust_field', app_key, item_key, field['field_key'], 1.0)),
-                _action_cell(admin, f'+{pos_big}', ('adjust_field', app_key, item_key, field['field_key'], float(field['step_big']))),
-            ])
-
-    _show_apps_window(
-        aseco,
-        admin,
-        f'{_config_app_spec(aseco, app_key)["label"]}: {item["label"]}',
-        ['Icons128x128_1', 'ProfileAdvanced'],
-        ['Field', 'Value', '-Big', '-Def', '-Small', '+Small', '+Def', '+Big'],
-        rows,
-        widths=[1.34, 0.24, 0.18, 0.14, 0.14, 0.14, 0.14, 0.18, 0.18],
-    )
 
 
 @_guard_config_change
@@ -1664,6 +1512,8 @@ async def _apply_config_toggle(
     app_key: str,
     item_key: str,
     enabled: bool,
+    *,
+    scope=None,
 ) -> str:
     item = _find_config_item(aseco, app_key, item_key)
     if not item:
@@ -1673,320 +1523,16 @@ async def _apply_config_toggle(
         file_path = _root_dir(aseco) / item['file']
         for path in tuple(item.get('linked_enabled_paths') or ()):
             update_toml_table_scalar(file_path, tuple(path), 'enabled', enabled)
+        _mark_config_pending(aseco, app_key)
         return _restart_required_message(f'{app_key}.stalker.enabled = {str(enabled).lower()}')
 
-    info = _config_item_target_info(aseco, item)
+    info = _config_item_target_info(aseco, item, scope=scope)
     write_path = _config_field_write_path(item, info, 'enabled')
     _write_config_value(aseco, item, info['file_path'], write_path, 'enabled', enabled)
 
-    if _config_save_mode(aseco, app_key) == 'reload' and await _reload_app_runtime(aseco, app_key, item_key):
+    if _config_save_mode(aseco, app_key, item_key) == 'reload' and await _reload_app_runtime(aseco, app_key, item_key):
         return _reload_done_message(f'{app_key}.{item_key}.enabled = {str(enabled).lower()}')
+    _mark_config_pending(aseco, app_key)
     return _restart_required_message(f'{app_key}.{item_key}.enabled = {str(enabled).lower()}')
 
 
-async def handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
-    try:
-        return await _handle_apps_action(aseco, admin, answer)
-    except (ValueError, OSError) as error:
-        await _reply(aseco, getattr(admin, 'login', ''), '{#server}> {#error}Configuration not applied: ' + str(error))
-        return True
-
-
-async def _handle_apps_action(aseco: 'Aseco', admin, answer: list[Any]) -> bool:
-    if not answer or len(answer) < 3:
-        return False
-    action_id = int(answer[2])
-    payload = _apps_action_map(admin).get(int(action_id))
-    if not payload:
-        return False
-
-    login = getattr(admin, 'login', '')
-    if not _is_masteradmin(aseco, admin, login):
-        await _reply(aseco, login, '{#server}> {#error}Only MasterAdmins may use the apps manager.')
-        return True
-
-    kind = payload[0]
-
-    if kind in {'confirm_release', 'apply_release'}:
-        plan = getattr(admin, '_release_review', None)
-        if plan and tuple(payload[1:]) == (plan['package'], plan['review'], plan['force']):
-            if kind == 'confirm_release':
-                _show_package_review_window(aseco, admin, plan, confirm=True)
-            else:
-                service = get_service(aseco)
-                if service is not None:
-                    await service.releases(aseco, admin, plan['package'], install=True,
-                                           reviewed=plan['review'], force=plan['force'])
-        return True
-
-    if kind in {'check_releases', 'stage_release', 'review_release', 'force_review'}:
-        service = get_service(aseco)
-        if service is not None:
-            await service.releases(aseco, admin, str(payload[1]) if kind != 'check_releases' else None,
-                                   review=kind in {'review_release', 'force_review'}, force=kind == 'force_review')
-        return True
-
-    if kind in {'open_config', 'open_edit', 'toggle_config', 'adjust_field', 'reload_app'}:
-        app_key = str(payload[1])
-        if not _can_configure_app(aseco, app_key):
-            await _reply(aseco, login, '{#server}> {#error}App ' + app_key +
-                         ' is not enabled and loaded, or its files are absent. No configuration was changed.')
-            return True
-
-    if kind == 'open_config':
-        _show_app_config_window(aseco, admin, str(payload[1]))
-        return True
-
-    if kind == 'open_edit':
-        _show_item_edit_window(aseco, admin, str(payload[1]), str(payload[2]))
-        return True
-
-    if kind == 'reload_app':
-        app_key = str(payload[1])
-        if await _reload_app_runtime(aseco, app_key):
-            await _reply(aseco, login, _reload_done_message(f'app/{app_key}'))
-        else:
-            await _reply(aseco, login, _restart_required_message(f'app/{app_key}'))
-        _show_apps_manager_window(aseco, admin)
-        return True
-
-    if kind == 'toggle_app':
-        action, name = str(payload[1]), str(payload[2])
-        move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', action == 'enable')
-        await _reply(aseco, login, _restart_required_message(f"app/{name} {action}d in apps.toml"))
-        _show_apps_manager_window(aseco, admin)
-        return True
-
-    if kind == 'archive_app':
-        name = str(payload[1])
-        if name in PROTECTED_STANDALONE_APPS:
-            await _reply(aseco, login, '{#server}> {#error}App files are protected; use Enable/Disable instead.')
-            return True
-        app_dir, _archived = _standalone_paths(aseco, name)
-        if app_dir.exists():
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', False)
-            shutil.move(str(app_dir), str(_archive_destination(aseco, name)))
-            await _reply(aseco, login, _restart_required_message(f'app/{name} moved to apps/00removed and disabled'))
-        _show_apps_manager_window(aseco, admin)
-        return True
-
-    if kind == 'restore_app':
-        name = str(payload[1])
-        if name in PROTECTED_STANDALONE_APPS:
-            await _reply(aseco, login, '{#server}> {#error}App files are protected; use Enable/Disable instead.')
-            return True
-        app_dir, archived = _standalone_paths(aseco, name)
-        if archived is not None:
-            _apps_dir(aseco).mkdir(parents=True, exist_ok=True)
-            shutil.move(str(archived), str(app_dir))
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', True)
-            await _reply(aseco, login, _restart_required_message(f'app/{name} restored from apps/00removed and enabled'))
-        _show_apps_manager_window(aseco, admin)
-        return True
-
-    if kind == 'toggle_config':
-        app_key, item_key, enabled = str(payload[1]), str(payload[2]), bool(payload[3])
-        msg = await _apply_config_toggle(aseco, app_key, item_key, enabled)
-        await _reply(aseco, login, msg)
-        _show_app_config_window(aseco, admin, app_key)
-        return True
-
-    if kind == 'adjust_field':
-        app_key = str(payload[1])
-        item_key = str(payload[2])
-        field_key = str(payload[3])
-        delta = float(payload[4])
-        item = _find_config_item(aseco, app_key, item_key)
-        if not item:
-            await _reply(aseco, login, _unknown_apps_target(item_key))
-            return True
-
-        action_text = _update_config_field(aseco, item, field_key, delta)
-        if _config_save_mode(aseco, app_key) == 'reload' and await _reload_app_runtime(aseco, app_key, item_key):
-            await _reply(aseco, login, _reload_done_message(action_text))
-        else:
-            await _reply(aseco, login, _restart_required_message(action_text))
-        _show_item_edit_window(aseco, admin, app_key, item_key)
-        return True
-
-    return False
-
-
-async def _handle_apps_command(aseco: 'Aseco', login: str, admin, args: list[str]) -> None:
-    try:
-        await _dispatch_apps_command(aseco, login, admin, args)
-    except (ValueError, OSError) as error:
-        await _reply(aseco, login, '{#server}> {#error}Configuration not applied: ' + str(error))
-
-
-async def _dispatch_apps_command(aseco: 'Aseco', login: str, admin, args: list[str]) -> None:
-    if not _is_masteradmin(aseco, admin, login):
-        await _reply(aseco, login, '{#server}> {#error}Only MasterAdmins may change app and feature states.')
-        return
-
-    if not args or str(args[0]).strip().lower() == 'list':
-        _show_apps_manager_window(aseco, admin)
-        return
-
-    action = str(args[0]).strip().lower()
-    name = _normalize_app_name(args[1]) if len(args) > 1 else ''
-    if action == 'update':
-        options = [str(arg).lower() for arg in args[2:]]
-        if not name or options not in ([], ['force'], ['confirm'], ['force', 'confirm']):
-            await _reply(aseco, login, '{#server}> {#message}Usage: //apps update <package> [force] [confirm]')
-            return
-        service = get_service(aseco)
-        if service is not None:
-            confirmed = 'confirm' in options
-            await service.releases(aseco, admin, name, review=not confirmed,
-                                   install=confirmed, force='force' in options)
-        return
-    if action in {'updates', 'download', 'review'}:
-        if (action == 'updates' and len(args) != 1) or (action != 'updates' and len(args) != 2):
-            await _reply(aseco, login, '{#server}> {#message}Usage: //apps updates | //apps download <package> | //apps review <package>')
-            return
-        service = get_service(aseco)
-        if service is not None:
-            await service.releases(aseco, admin, name if action != 'updates' else None, review=action == 'review')
-        return
-    config_apps = _discover_config_apps(aseco)
-
-    if action == 'config':
-        if not name:
-            await _reply_apps_usage(aseco, login)
-            return
-        if name in config_apps:
-            _show_app_config_window(aseco, admin, name)
-            return
-        owner = _config_item_owner(aseco, name)
-        if owner:
-            await _reply(aseco, login, _unknown_apps_target(name))
-            return
-        await _reply(aseco, login, _unknown_apps_target(name))
-        return
-
-    if action == 'reload':
-        if not name:
-            await _reply_apps_usage(aseco, login)
-            return
-        if not _can_configure_app(aseco, name):
-            await _reply(aseco, login, '{#server}> {#error}App ' + name +
-                         ' is not enabled and loaded, or its files are absent. Nothing reloaded.')
-            return
-        if await _reload_app_runtime(aseco, name):
-            await _reply(aseco, login, _reload_done_message(f'app/{name}'))
-            return
-        if name in config_apps or _is_manageable_standalone_app(aseco, name):
-            await _reply(aseco, login, _restart_required_message(f'app/{name}'))
-            return
-        await _reply(aseco, login, _unknown_apps_target(name))
-        return
-
-    if action == 'status':
-        if not name:
-            await _reply_apps_usage(aseco, login)
-            return
-        if name in config_apps and name != 'records_dedimania':
-            state = 'disabled' if _standalone_loadout_state(aseco, name) == 'disabled' else None
-            if state == 'disabled':
-                await _reply(aseco, login, f'{{#server}}> {{#message}}{config_apps[name]["label"]}: {{#highlite}}disabled')
-            else:
-                enabled_count, total = _config_app_counts(aseco, name)
-                await _reply(aseco, login, f'{{#server}}> {{#message}}{config_apps[name]["label"]}: {{#highlite}}{enabled_count}/{total}{{#message}} items enabled.')
-            return
-        if _is_manageable_standalone_app(aseco, name):
-            await _reply(aseco, login, f'{{#server}}> {{#message}}app/{name}: {{#highlite}}{_standalone_status(aseco, name)}')
-            return
-        await _reply(aseco, login, _unknown_apps_target(name))
-        return
-
-    if action in {'enable', 'disable'}:
-        if not name:
-            await _reply_apps_usage(aseco, login)
-            return
-        # Dedimania has editable settings but also supports a service loadout toggle.
-        if name in config_apps and name not in MANAGEABLE_STANDALONE_APPS:
-            await _reply(aseco, login, '{#server}> {#error}Use {#highlite}/admin apps config ' + name + '{#error} for merged features and UI-owned items.')
-            return
-        if _is_manageable_standalone_app(aseco, name):
-            enabled = action == 'enable'
-            app_dir, archived = _standalone_paths(aseco, name)
-            if enabled and not app_dir.exists() and archived is not None:
-                await _reply(aseco, login, '{#server}> {#error}App is archived in {#highlite}apps/00removed{#error}; use {#highlite}/admin apps add ' + name + '{#error} to restore it first.')
-                return
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', enabled)
-            await _reply(aseco, login, _restart_required_message(f"app/{name} {'enabled' if enabled else 'disabled'} in apps.toml"))
-            return
-        await _reply(aseco, login, _unknown_apps_target(name))
-        return
-
-    if action == 'add':
-        if not name:
-            await _reply_apps_usage(aseco, login)
-            return
-        if name in config_apps:
-            await _reply(aseco, login, '{#server}> {#error}' + name + ' is a core config app and cannot be added or removed through /admin apps.')
-            return
-        if name in PROTECTED_STANDALONE_APPS:
-            await _reply(aseco, login, '{#server}> {#error}Protected core apps are not managed through /admin apps.')
-            return
-        app_dir, archived = _standalone_paths(aseco, name)
-        if app_dir.exists():
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', True)
-            await _reply(aseco, login, _restart_required_message(f'app/{name} enabled in apps.toml'))
-            return
-        if archived is not None:
-            _apps_dir(aseco).mkdir(parents=True, exist_ok=True)
-            shutil.move(str(archived), str(app_dir))
-            move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', True)
-            await _reply(aseco, login, _restart_required_message(f'app/{name} restored from apps/00removed and enabled'))
-            return
-        await _reply(aseco, login, '{#server}> {#error}No install source found for {#highlite}' + name + '{#error}. Expected either {#highlite}apps/' + name + '{#error} or {#highlite}apps/00removed/' + name + '{#error}.')
-        return
-
-    if action in {'remove', 'rem'}:
-        if not name:
-            await _reply_apps_usage(aseco, login)
-            return
-        if name in config_apps:
-            await _reply(aseco, login, '{#server}> {#error}' + name + ' is a core config app and cannot be removed through /admin apps.')
-            return
-        if name in PROTECTED_STANDALONE_APPS:
-            await _reply(aseco, login, '{#server}> {#error}Protected core apps may not be removed through /admin apps.')
-            return
-        app_dir, archived = _standalone_paths(aseco, name)
-        if archived is not None and not app_dir.exists():
-            await _reply(aseco, login, '{#server}> {#message}App {#highlite}' + name + '{#message} is already archived in {#highlite}apps/00removed{#message}.')
-            return
-        if not app_dir.exists():
-            await _reply(aseco, login, _unknown_apps_target(name))
-            return
-        move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', False)
-        shutil.move(str(app_dir), str(_archive_destination(aseco, name)))
-        await _reply(aseco, login, _restart_required_message(f'app/{name} moved to apps/00removed and disabled'))
-        return
-
-    if action in {'fremove', 'frem'}:
-        if not name:
-            await _reply_apps_usage(aseco, login)
-            return
-        if len(args) < 3 or str(args[2]).strip().lower() != 'confirm':
-            await _reply(aseco, login, '{#server}> {#error}Destructive removal requires confirmation: ' f'{{#highlite}}/admin apps {action} {name} confirm')
-            return
-        if name in config_apps:
-            await _reply(aseco, login, '{#server}> {#error}' + name + ' is a core config app and cannot be physically deleted through /admin apps.')
-            return
-        if name in PROTECTED_STANDALONE_APPS:
-            await _reply(aseco, login, '{#server}> {#error}Protected core apps may not be forcibly removed through /admin apps.')
-            return
-        app_dir, archived = _standalone_paths(aseco, name)
-        target = app_dir if app_dir.exists() else archived
-        if target is None or not target.exists():
-            await _reply(aseco, login, _unknown_apps_target(name))
-            return
-        move_loadout_entry(_apps_toml_path(aseco), f'app/{name}', False)
-        shutil.rmtree(target)
-        await _reply(aseco, login, _restart_required_message(f'app/{name} permanently removed from disk'))
-        return
-
-    await _reply_apps_usage(aseco, login)

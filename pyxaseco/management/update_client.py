@@ -11,7 +11,7 @@ from urllib.parse import urljoin, urlsplit
 
 import aiohttp
 
-from .config_store import ManagementError, file_lock
+from .config_store import ManagementError, instance_lock, maintenance_area
 from .installation import safe_path
 from .maintenance import _bytes, _replace
 from pyxaseco.core.file_io import file_io
@@ -42,7 +42,7 @@ class UpdateClient:
             raise ManagementError('Apps Manager updates must be configured as a TOML table')
         self.settings = settings
         self.controller_version = controller_version
-        self.area = safe_path(self.root / '.management-maintenance/releases')
+        self.area = safe_path(maintenance_area(self.root) / 'releases')
 
     def _configuration(self):
         if self.settings.get('enabled') is not True:
@@ -93,7 +93,7 @@ class UpdateClient:
         safe_path(self.area)
         self.area.mkdir(parents=True, mode=0o700, exist_ok=True)
         path = safe_path(self.area / ('seen-' + catalogue['channel'] + '.json'))
-        with file_lock(safe_path(self.area / 'catalogue.lock')):
+        with instance_lock(self.root, self.area / 'catalogue.lock', adjacent=False):
             before = _bytes(path)
             previous = read_json(before) if before else None
             if previous is not None:
@@ -106,7 +106,7 @@ class UpdateClient:
             data = json.dumps({'sequence': catalogue['sequence'], 'digest': digest}).encode()
             if before != data:
                 from .config_store import revision
-                _replace(path, data, revision(before) if before else None)
+                _replace(path, data, revision(before) if before else None, root=self.root)
 
     async def _check(self, session):
         github, website, channel, key, verification = self._configuration()
@@ -159,12 +159,12 @@ class UpdateClient:
         folder = safe_path(self.area / name)
         folder.mkdir(mode=0o700, exist_ok=True)
         target = safe_path(folder / 'package.zip')
-        with file_lock(safe_path(folder / 'stage.lock')):
+        with instance_lock(self.root, folder / 'stage.lock', adjacent=False):
             existing = target.read_bytes() if target.exists() and target.stat().st_size <= PACKAGE_LIMIT else None
             if target.exists() and existing is None:
                 raise ManagementError('Existing staged package is too large; review local staging files')
             if existing is None:
-                _replace(target, blob, None)
+                _replace(target, blob, None, root=self.root)
             elif existing != blob:
                 raise ManagementError('Existing staged package differs; no files overwritten')
             evidence = {'catalogue': catalogue, 'catalogue_sha256': digest, 'package': package['id'],
@@ -172,7 +172,8 @@ class UpdateClient:
             path = safe_path(folder / 'review.json')
             from .config_store import revision
             before = _bytes(path)
-            _replace(path, (json.dumps(evidence, indent=2) + '\n').encode(), revision(before) if before else None)
+            _replace(path, (json.dumps(evidence, indent=2) + '\n').encode(), revision(before) if before else None,
+                     root=self.root)
         return {'id': package['id'], 'version': package['version'], 'staged': str(target), 'installed': False}
 
     @staticmethod
@@ -203,6 +204,29 @@ class UpdateClient:
             blob = stream.read(package['size'] + 1)
         validate_archive(blob, package)
         return blob
+
+    def local_package_states(self, catalogue):
+        """Read local download and install state for an approved catalogue."""
+        from .file_updates import FileUpdates
+        from .release_manifest import PUBLIC_APPS
+        ledger, _raw = FileUpdates(self.root)._ledger()
+        identities = {item['id'] for item in catalogue['packages']}
+        if catalogue['schema'] == 3:
+            identities.update(PUBLIC_APPS)
+        states = {}
+        for identity in identities:
+            try:
+                package = self._package(catalogue, identity)
+            except ManagementError:
+                continue
+            entry = ledger['packages'].get(identity, {})
+            if entry.get('sha256') == package['sha256']:
+                states[identity] = 'installed'
+                continue
+            path = safe_path(self.area / (identity + '-' + package['sha256']) / 'package.zip')
+            if path.is_file() and path.stat().st_size == package['size']:
+                states[identity] = 'downloaded'
+        return states
 
     def _compatible(self, package, *, dependencies=False):
         reasons = compatibility(package, self.controller_version, '.'.join(map(str, sys.version_info[:3])))

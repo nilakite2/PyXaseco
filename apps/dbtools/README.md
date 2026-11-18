@@ -26,7 +26,7 @@ Enable `app/dbtools` and restart. Use `app_defaults.toml` or
 `//apps config dbtools` for compression, limits, output, retention and scheduling.
 Scheduling is off by default; `schedule.enabled` and `interval_hours` enable it.
 
-Output defaults to `backups/dbtools/<timestamp>-<id>/`, with SQL/gzip data and
+Output defaults to `.pyxaseco-data/backups/dbtools/<timestamp>-<id>/`, with SQL/gzip data and
 a manifest/checksum. Copy backups elsewhere for protection against disk failure.
 They contain sensitive database data: keep them outside public/web directories.
 

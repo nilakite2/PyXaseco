@@ -3,7 +3,8 @@
 from html import escape
 import math
 
-from pyxaseco.helpers import ML_ID_MAIN, _player_window_style, _s, _send_multipage, format_time
+from pyxaseco.helpers import format_time
+from apps.platform_ui.windows import ML_ID_MAIN, player_window_style, style_value, send_page
 
 
 ROWS_PER_PAGE = 14
@@ -218,7 +219,7 @@ async def show(aseco, player, title, info_rows, stats, valid_page, *, unavailabl
 
     player.msgs = [[1, title, [1.2, .3, .9], ICON, prepare, None, None, render]]
     player.msgs.extend(item['rows'] for item in content)
-    await _send_multipage(aseco, player)
+    await send_page(aseco, player)
 
 
 def chart_xml(aseco, player, header, page, total, rows, series, timed, maximum,
@@ -230,7 +231,7 @@ def chart_xml(aseco, player, header, page, total, rows, series, timed, maximum,
               'muted': 'BBBF', 'accent': '3CFF', 'top': 'FD8F'}
     if preset is not None and preset.base == 1:
         colors.update(preset.palette or {})
-    classic = _player_window_style(aseco, player)
+    classic = player_window_style(aseco, player)
     modern = preset is not None and preset.base == 1 and preset.window is None
     window_width, window_height = 90, 53
     parts = [f'<manialink id="{ML_ID_MAIN}"><frame posn="{-window_width / 2} {window_height / 2} 20">']
@@ -244,7 +245,7 @@ def chart_xml(aseco, player, header, page, total, rows, series, timed, maximum,
                      f' halign="{align}" textcolor="{color or colors["text"]}" text="{escape(text, quote=True)}"/>')
 
     def skin(role, x, y, width, height, color, z=.01):
-        name, substyle = _s(classic, role + '.STYLE'), _s(classic, role + '.SUBSTYLE')
+        name, substyle = style_value(classic, role + '.STYLE'), style_value(classic, role + '.SUBSTYLE')
         if not modern and name and substyle:
             parts.append(f'<quad posn="{x} {y} {z}" sizen="{width} {height}"'
                          f' style="{escape(name, quote=True)}" substyle="{escape(substyle, quote=True)}"/>')

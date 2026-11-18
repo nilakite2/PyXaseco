@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pyxaseco.core.gbx_client import GbxError
-from pyxaseco.helpers import display_manialink_multi, format_time, strip_colors
+from pyxaseco.helpers import format_time, strip_colors
+from apps.platform_ui import record_browser
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -676,36 +677,9 @@ async def chat_rpgrecs(aseco: "Aseco", command: dict):
 
 
 async def _show_rpgrecs(aseco, player, current, rows):
-    login = player.login
-    if not current or not rows:
-        await _send_chat(aseco, login, "{#server}> {#error}Current track has no RPG records.")
+    if not current and not rows:
+        await _send_chat(aseco, player.login, "{#server}> {#error}Current track is not RPG-enabled.")
         return
-
-    show_logins = True
-    extra = 0.2 if getattr(aseco.settings, "lists_colornicks", False) else 0
-    table_rows = []
-    for idx, row in enumerate(rows, start=1):
-        rec_login = _clean_text(row.get("login")) or "?"
-        nick = _pick_display_name(
-            row.get("nickname_raw"),
-            row.get("player_nickname_raw"),
-            row.get("nickname"),
-            row.get("player_nickname"),
-            row.get("NickName"),
-            rec_login,
-        )
-        score = str(row.get("score_text") or "--")
-        if show_logins:
-            table_rows.append([f"{idx:02d}.", "{#black}" + nick, "{#login}" + rec_login, score])
-        else:
-            table_rows.append([f"{idx:02d}.", "{#black}" + nick, score])
-
-    maxrank = max(len(rows), 1)
-    if show_logins:
-        widths = [1.2 + extra, 0.1, 0.45 + extra, 0.4, 0.25]
-    else:
-        widths = [0.8 + extra, 0.1, 0.45 + extra, 0.25]
-    pages = [table_rows[i:i + 15] for i in range(0, len(table_rows), 15)]
-    player.msgs = [[1, f"Current TOP {maxrank} RPG Records:", widths, ["BgRaceScore2", "Podium"]]]
-    player.msgs.extend(pages)
-    display_manialink_multi(aseco, player)
+    runs = [record_browser.Run(row['login'], row['nickname_raw'], row['score'], row['rank'])
+            for row in rows]
+    await record_browser.show(aseco, player, 'RPG Records', runs, show_logins=True)

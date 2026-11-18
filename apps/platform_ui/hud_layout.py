@@ -1,7 +1,8 @@
 """Bounded per-player HUD files and geometry for registered race pages."""
 
 from hashlib import sha256
-from math import isfinite
+from math import isclose, isfinite
+from dataclasses import dataclass, fields
 import os
 import re
 import tempfile
@@ -34,7 +35,7 @@ PANELS = {
     'records_panel': ('Records panel', ('4',)),
     'vote_panel': ('Vote panel', ('5',)),
     'donate_panel': ('Donate panel', ('6',)),
-    'stats_panel': ('Stats panel', ('9',)),
+    'stats_panel': ('Your Stats', ('9',)),
     'fast_records': ('FAST records', ('8585002',)),
     'team': ('FAST Team scores', ('8585005',)),
     'best_finishes': ('Best Finishes', ('342312',)),
@@ -62,13 +63,114 @@ VISIBILITY_ONLY = frozenset((
     'donation_widget', 'winning_payout',
 ))
 BY_PAGE = {page: key for key, (_title, pages) in PANELS.items() for page in pages}
+LEGACY_PANEL_TYPES = {
+    'admin_panel': 'admin', 'records_panel': 'records', 'donate_panel': 'donate',
+    'vote_panel': 'vote', 'stats_panel': 'stats',
+}
+POSITION_STEPS = (.1, 1, 10)
 MAX_BYTES = 64 * 1024
 MAX_STYLES = 32
 MIN_SCALE, MAX_SCALE = .6, 1.5
-LIMITS = {'dx': (-126, 126), 'dy': (-94, 94), 'scale': (MIN_SCALE, MAX_SCALE)}
+LIMITS = {'dx': (-160, 160), 'dy': (-120, 120), 'scale': (MIN_SCALE, MAX_SCALE)}
 DEFAULTS = {'hidden': False, 'dx': 0, 'dy': 0, 'scale': 1}
+DENSITIES = ('standard', 'compact', 'minimal')
+_ESSENTIAL = frozenset(('menu', 'map', 'checkpoint_count', 'splits', 'ztrack'))
+_COMPACT = frozenset((
+    'map', 'local_records', 'external_records', 'fast_records', 'live_rankings',
+    'checkpoint_count', 'splits', 'clock', 'track_count', 'game_mode', 'visitors',
+    'players', 'ladder_limit', 'current_rank', 'tmx', 'toplist', 'favorite',
+    'discord', 'force_play', 'admin_panel', 'records_panel', 'vote_panel',
+    'donate_panel', 'stats_panel', 'team', 'best_finishes', 'best_cps', 'best_runs',
+    'best_secs', 'best_cp_times', 'cp_live', 'karma', 'sponsor_banner',
+))
+_CENTER_ZONE = 16.0
+_HUD_EDGE = 64.0
+_LEFT_TILES = frozenset(('visitors', 'track_count', 'clock', 'force_play', 'discord',
+                         'players', 'game_mode', 'ladder_limit', 'current_rank', 'tmx', 'toplist', 'favorite'))
+_RIGHT_RAIL = frozenset(('karma', 'local_records', 'external_records', 'live_rankings', 'fast_records', 'sponsor_banner'))
+_LEFT_TILE_ORIGIN = (-63.9, 47.8)
+_LEFT_TILE_SIZE = (4.6, 6.5)
+_LEFT_TILE_PITCH = (4.3, 6.1)
+_LEFT_TILE_GAP = .15
+_RIGHT_RAIL_TOP = 33.2
+
+# Stock anchor -> tested Compact anchor, before scaling and spacing the HUD.
+# Match both coordinates so independently positioned widgets keep their anchors.
+_COMPACT_ANCHORS = {
+    '91805': ((49.05, 48), (49.45, 48)),        # Eyepiece challenge
+    '91832': ((-7.9, -34.1), (-6.8, -34.1)),   # Checkpoint counter
+    '91806': ((-54.5, 47.8), (-55.3, 47.8)),   # Clock
+    '91809': ((-59.2, 47.8), (-59.6, 47.8)),   # Track count
+    '91837': ((-54.5, 41.1), (-55.3, 41.7)),   # Players / spectators
+    '5834287': ((-59.2, 41.1), (-59.6, 41.7)), # Discord
+    '5834288': ((-63.9, 41.1), (-63.9, 41.7)), # Force Play
+    '3830000': ((-50, 47.8), (-52.4, 47.8)),   # FuFi button and popup
+    '5834290': ((-64.4, 22.7), (-64.5, 23.6)), # Server banner, when enabled
+    '342312': ((35, 48), (37, 48)),            # Best Finishes
+    '91812': ((49.2, 22.1), (49.4, 22.1)),     # TA local records
+    '91811': ((49.2, .7), (49.4, .9)),         # TA external records
+    **dict.fromkeys(PANELS['karma'][1], ((49.2, 32.86), (49.4, 32.76))),
+    **dict.fromkeys(PANELS['best_cp_times'][1], ((49.7, -20), (50.3, -11.9))),
+    **dict.fromkeys(PANELS['cp_live'][1], ((-64.4, 19), (-64.4, 20))),
+}
 PAGE = re.compile(r'<manialink\b[^>]*?(?:/>|>.*?</manialink>)', re.DOTALL)
 PAGE_ID = re.compile(r'\bid=["\']([^"\']+)["\']')
+
+
+@dataclass(frozen=True)
+class CompactLayout:
+    scale: float = .85
+    edge_shift: float = 1.5
+    tile_spacing: float = .90
+    rail_spacing: float = .85
+
+    @classmethod
+    def from_config(cls, values):
+        limits = {'scale': (.60, 1), 'edge_shift': (0, 4),
+                  'tile_spacing': (.60, 1), 'rail_spacing': (.60, 1)}
+        if not isinstance(values, dict):
+            raise ValueError('Compact HUD settings must be a table.')
+        defaults = cls()
+        result = {}
+        for item in fields(cls):
+            value = values.get(item.name, getattr(defaults, item.name))
+            low, high = limits[item.name]
+            if type(value) not in (int, float) or not low <= value <= high:
+                raise ValueError(f'{item.name} must be a number between {low:g} and {high:g}.')
+            result[item.name] = float(value)
+        return cls(**result)
+
+
+COMPACT_DEFAULT = CompactLayout()
+
+
+def text_geometry(size, scale=1.0):
+    """Use the scale attribute for the fractional part of a native text size."""
+    if not isfinite(size) or size <= 0:
+        size = 1.0
+    base = max(1, int(size))
+    return base, scale * size / base
+
+
+def panel_offsets_from_config(values):
+    if not isinstance(values, dict):
+        raise ValueError('Legacy panel positions must be a table.')
+    offsets = {}
+    for panel, name in LEGACY_PANEL_TYPES.items():
+        table = values.get(name, {})
+        if not isinstance(table, dict):
+            raise ValueError(f'{name} panel positions must be a table.')
+        position = {}
+        for field, key in (('offset_x', 'dx'), ('offset_y', 'dy')):
+            value = table.get(field, 0)
+            low, high = LIMITS[key]
+            if type(value) not in (int, float) or not low <= value <= high:
+                raise ValueError(f'{name}.{field} must be between {low:g} and {high:g}.')
+            if value:
+                position[key] = value
+        if position:
+            offsets[panel] = position
+    return offsets
 
 
 def profile_path(root, login):
@@ -96,7 +198,7 @@ def validate_styles(styles):
                     low, high = LIMITS[key]
                     if type(value) not in (int, float) or not low <= value <= high:
                         raise ValueError('HUD position or size is out of range.')
-                if value != DEFAULTS[key]:
+                if key == 'hidden' or value != DEFAULTS[key] or key == 'scale':
                     overrides[key] = value
             if overrides:
                 clean[name] = overrides
@@ -105,7 +207,7 @@ def validate_styles(styles):
     return result
 
 
-def read_profile(path):
+def read_profile(path, *, with_density=False):
     from pyxaseco.management.installation import safe_path
 
     path = safe_path(path)
@@ -113,24 +215,32 @@ def read_profile(path):
         with path.open('rb') as stream:
             raw = stream.read(MAX_BYTES + 1)
     except FileNotFoundError:
-        return {}
+        return ({}, 'standard') if with_density else {}
     if len(raw) > MAX_BYTES:
         raise ValueError('HUD profile is too large.')
     document = tomllib.loads(raw.decode('utf-8-sig'))
-    if type(document.get('version')) is not int or document['version'] != 1 or document.keys() - {'version', 'styles'}:
+    if type(document.get('version')) is not int or document['version'] != 1 or document.keys() - {'version', 'styles', 'density'}:
         raise ValueError('Unsupported HUD profile format.')
-    return validate_styles(document.get('styles', {}))
+    density = document.get('density', 'standard')
+    if density not in DENSITIES:
+        raise ValueError('Unknown HUD layout.')
+    styles = validate_styles(document.get('styles', {}))
+    return (styles, density) if with_density else styles
 
 
-def write_profile(path, styles):
+def write_profile(path, styles, density='standard'):
     from pyxaseco.management.installation import safe_path
 
     path = safe_path(path)
     styles = validate_styles(styles)
-    if not styles:
+    if density not in DENSITIES:
+        raise ValueError('Unknown HUD layout.')
+    if not styles and density == 'standard':
         path.unlink(missing_ok=True)
         return styles
     lines = ['version = 1']
+    if density != 'standard':
+        lines.append(f'density = "{density}"')
     for preset, panels in sorted(styles.items(), key=lambda item: int(item[0])):
         for name, values in sorted(panels.items()):
             lines.extend(('', f'[styles."{preset}".{name}]'))
@@ -164,6 +274,13 @@ def numbers(value, count):
     return parts
 
 
+def position(node):
+    value = node.get('posn', '0 0 0')
+    count = 2 if len(value.split()) == 2 else 3
+    parts = numbers(value, count)
+    return (*parts, 0.0) if count == 2 else parts
+
+
 def inspect(fragment, *, visibility_only=False):
     if '<!DOCTYPE' in fragment.upper():
         return None, False
@@ -180,43 +297,115 @@ def inspect(fragment, *, visibility_only=False):
                 continue
             if node.tag not in ('frame', 'quad', 'label', 'format') or 'pos' in node.attrib or 'size' in node.attrib:
                 return page, False
-            numbers(node.get('posn', '0 0 0'), 3)
+            position(node)
             if 'sizen' in node.attrib:
                 numbers(node.attrib['sizen'], 2)
             if 'scale' in node.attrib:
                 scale = numbers(node.attrib['scale'], 1)[0]
-                if node.tag != 'label' or not 0 < scale <= 10:
+                if node.tag not in ('label', 'quad') or not 0 < scale <= 10:
                     return page, False
         return page, True
     except (ET.ParseError, ValueError):
         return None, False
 
 
-def transform(xml, overrides):
-    if not overrides or '<!DOCTYPE' in xml.upper():
+def defaults(panel, density, compact=COMPACT_DEFAULT):
+    if density == 'minimal' and panel not in _ESSENTIAL:
+        return {'hidden': True}
+    if density == 'compact' and panel in _COMPACT:
+        return {'scale': compact.scale}
+    return {}
+
+
+def effective(panel, density, overrides, compact=COMPACT_DEFAULT):
+    return defaults(panel, density, compact) | overrides
+
+
+def _compact_x(x, shift):
+    # Keep centered HUDs centered and respect layouts already at the edge.
+    if x < -_CENTER_ZONE:
+        return max(min(x, -_HUD_EDGE), x - shift)
+    if x > _CENTER_ZONE:
+        return min(max(x, _HUD_EDGE), x + shift)
+    return x
+
+
+def _compact_position(panel, x, y, settings):
+    if panel in _LEFT_TILES and -66 <= x <= -44 and 34 <= y <= 48:
+        # Move all tile anchors around a shared corner, not toward separate edges.
+        origin_x, origin_y = _LEFT_TILE_ORIGIN
+        spacing_x, spacing_y = (max(settings.tile_spacing, (size * settings.scale + _LEFT_TILE_GAP) / pitch)
+                                for size, pitch in zip(_LEFT_TILE_SIZE, _LEFT_TILE_PITCH))
+        return (origin_x + (x - origin_x) * spacing_x,
+                origin_y + (y - origin_y) * spacing_y)
+    if panel in _RIGHT_RAIL and x >= 40 and -38 <= y <= _RIGHT_RAIL_TOP:
+        # The native Prev/Best display sits above this rail and is not moved.
+        y = _RIGHT_RAIL_TOP + (y - _RIGHT_RAIL_TOP) * max(settings.scale, settings.rail_spacing)
+    return _compact_x(x, settings.edge_shift), y
+
+
+def panel_geometry(identifier, x, y, overrides, density, compact=COMPACT_DEFAULT, *, server_offset=None):
+    panel = BY_PAGE.get(identifier)
+    fitted = density == 'compact' and (panel in _COMPACT or identifier in _COMPACT_ANCHORS)
+    if panel in VISIBILITY_ONLY:
+        overrides = {}
+    values = effective(panel, density, overrides, compact)
+    dx, dy, scale = (values.get(key, DEFAULTS[key]) for key in ('dx', 'dy', 'scale'))
+    if fitted:
+        anchors = _COMPACT_ANCHORS.get(identifier)
+        if anchors and all(isclose(a, b, rel_tol=0, abs_tol=.0001) for a, b in zip((x, y), anchors[0])):
+            x, y = anchors[1]
+        if panel in _COMPACT:
+            x, y = _compact_position(panel, x, y, compact)
+    server_offset = server_offset or {}
+    return x + dx + server_offset.get('dx', 0), y + dy + server_offset.get('dy', 0), scale
+
+
+def _anchor(identifier, node):
+    x, y, z = position(node)
+    if identifier == '3830000' and node.tag == 'frame':
+        # FuFi wraps its screen-positioned button in a template frame at (0, 0).
+        button = node.find(f'quad[@action="{identifier}"]')
+        if button is not None:
+            bx, by, _ = position(button)
+            x, y = x + bx, y + by
+    return x, y, z
+
+
+def transform(xml, overrides, density='standard', *, compact=COMPACT_DEFAULT, server_offsets=None):
+    server_offsets = server_offsets or {}
+    if (not overrides and not server_offsets and density == 'standard') or '<!DOCTYPE' in xml.upper():
         return xml
 
     def replace(match):
         fragment = match[0]
         identifier = page_id(fragment)
         panel = BY_PAGE.get(identifier)
-        values = overrides.get(panel)
-        if not values:
+        if panel is None:
+            return fragment
+        personal = (overrides or {}).get(panel, {})
+        values = effective(panel, density, personal, compact)
+        fitted = density == 'compact' and (panel in _COMPACT or identifier in _COMPACT_ANCHORS)
+        server_offset = server_offsets.get(panel)
+        if not values and not fitted and not server_offset:
             return fragment
         if values.get('hidden'):
             return f'<manialink id="{identifier}"></manialink>'
-        if panel in VISIBILITY_ONLY:
+        if panel in VISIBILITY_ONLY and not fitted:
             return fragment
         page, adjustable = inspect(fragment)
         if not adjustable:
             return fragment
-        dx, dy, scale = (values.get(key, DEFAULTS[key]) for key in ('dx', 'dy', 'scale'))
         top_level = [node for node in page if node.tag != 'format']
-        anchor_x, anchor_y, _ = numbers(top_level[0].get('posn', '0 0 0'), 3)
-        x = min(62, max(-62, anchor_x + dx)) if dx else anchor_x
-        y = min(46, max(-46, anchor_y + dy)) if dy else anchor_y
+        if not top_level:
+            return fragment
+        anchor_x, anchor_y, _ = _anchor(identifier, top_level[0])
+        x, y, scale = panel_geometry(identifier, anchor_x, anchor_y, personal, density, compact,
+                                    server_offset=server_offset)
+        if x == anchor_x and y == anchor_y and scale == 1:
+            return fragment
         for node in top_level:
-            px, py, pz = numbers(node.get('posn', '0 0 0'), 3)
+            px, py, pz = position(node)
             node.set('posn', f'{x + (px - anchor_x) * scale:.4f} {y + (py - anchor_y) * scale:.4f} {pz:.4f}')
         if scale != 1:
             top_level = set(top_level)
@@ -224,7 +413,7 @@ def transform(xml, overrides):
                 if node is page:
                     continue
                 if node not in top_level and 'posn' in node.attrib:
-                    px, py, pz = numbers(node.attrib['posn'], 3)
+                    px, py, pz = position(node)
                     node.set('posn', f'{px * scale:.4f} {py * scale:.4f} {pz:.4f}')
                 if 'sizen' in node.attrib:
                     width, height = numbers(node.attrib['sizen'], 2)

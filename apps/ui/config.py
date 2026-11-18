@@ -26,6 +26,9 @@ PLUGIN_NAME = 'app/ui'
 PLUGIN_VERSION = CORE_PYXASECO_VERSION
 PLUGIN_MANIALINK_PREFIX = '918'
 PLUGIN_LINE_HEIGHT = 1.8
+MIN_RECORD_WIDTH = 7.0
+MIN_DONATION_WIDTH = 3.6
+MIN_PAYOUT_WIDTH = 15.0
 MIN_PYXASECO_VERSION = CORE_PYXASECO_VERSION
 SUPPORTED_GAME_TOKENS = {'TMF', 'TMFOREVER'}
 
@@ -148,7 +151,7 @@ class ClockWidgetCfg:
     score_pos_x: float = 41.05
     score_pos_y: float = 33.2
     score_bg_style: str = 'BgsPlayerCard'
-    score_bg_substyle: str = 'BgRacePlayerName'
+    score_bg_substyle: str = 'BgCardSystem'
     score_bg_color: str = ''
 
 
@@ -166,7 +169,7 @@ class FavoriteWidgetCfg:
     score_pos_x: float = -47.9
     score_pos_y: float = 33.2
     score_bg_style: str = 'BgsPlayerCard'
-    score_bg_substyle: str = 'BgRacePlayerName'
+    score_bg_substyle: str = 'BgCardSystem'
     score_bg_color: str = ''
 
 
@@ -179,7 +182,7 @@ class NextEnvWidgetCfg:
     pos_y: float = -40.9
     text_color: str = 'FC0F'
     bg_style: str = 'BgsPlayerCard'
-    bg_substyle: str = 'BgRacePlayerName'
+    bg_substyle: str = 'BgCardSystem'
     bg_color: str = ''
 
 
@@ -192,7 +195,7 @@ class NextGamemodeWidgetCfg:
     pos_y: float = -40.9
     text_color: str = 'FC0F'
     bg_style: str = 'BgsPlayerCard'
-    bg_substyle: str = 'BgRacePlayerName'
+    bg_substyle: str = 'BgCardSystem'
     bg_color: str = ''
 
 
@@ -204,11 +207,11 @@ class EyepieceWidgetCfg:
     race_enabled: bool = False
     race_pos_x: float = -62.0
     race_pos_y: float = 47.0
-    score_enabled: bool = True
+    score_enabled: bool = False
     score_pos_x: float = 58.7
     score_pos_y: float = -40.9
     score_bg_style: str = 'BgsPlayerCard'
-    score_bg_substyle: str = 'BgRacePlayerName'
+    score_bg_substyle: str = 'BgCardSystem'
     score_bg_color: str = ''
 
 @dataclass
@@ -375,8 +378,8 @@ def _parse_gm_widgets(root, key: str, default_title: str, *, live: bool = False)
 
     for name, mode in mapping.items():
         sub = _get_node_value(gm_block, name, {})
-        width = max(15.5, _get_float(block, 'WIDTH', 15.5))
-        height = max(0.0, _get_float(block, 'HEIGHT', 0.0))
+        width = max(MIN_RECORD_WIDTH, _get_float(sub, 'WIDTH', _get_float(block, 'WIDTH', 15.5)))
+        height = max(0.0, _get_float(sub, 'HEIGHT', _get_float(block, 'HEIGHT', 0.0)))
         entries = max(1, _get_int(sub, 'ENTRIES', 8))
         topcount = max(0, _get_int(sub, 'TOPCOUNT', 3))
         row_height = max(1.0, _get_float(sub, 'ROW_HEIGHT', PLUGIN_LINE_HEIGHT))
@@ -546,7 +549,7 @@ def _load_config(aseco: 'Aseco') -> None:
 
     _state.challenge = WidgetCfg(
         enabled=_get_bool(challenge_widget, 'ENABLED', True),
-        width=_get_float(challenge_widget, 'WIDTH', 15.5),
+        width=_get_float(challenge_race, 'WIDTH', _get_float(challenge_widget, 'WIDTH', 15.5)),
         pos_x=_get_float(challenge_race, 'POS_X', 49.05),
         pos_y=_get_float(challenge_race, 'POS_Y', 48.0),
         title=str(_get_node_value(challenge_titles, 'CURRENT_TRACK', 'Challenge')),
@@ -648,7 +651,7 @@ def _load_config(aseco: 'Aseco') -> None:
         score_pos_x=_get_float(fav_score, 'POS_X', -47.9),
         score_pos_y=_get_float(fav_score, 'POS_Y', 33.2),
         score_bg_style=str(_get_node_value(fav_score, 'BACKGROUND_STYLE', 'BgsPlayerCard')),
-        score_bg_substyle=str(_get_node_value(fav_score, 'BACKGROUND_SUBSTYLE', 'BgRacePlayerName')),
+        score_bg_substyle=str(_get_node_value(fav_score, 'BACKGROUND_SUBSTYLE', 'BgCardSystem')),
         score_bg_color=str(_get_node_value(fav_score, 'BACKGROUND_COLOR', '')),
     )
 
@@ -671,7 +674,7 @@ def _load_config(aseco: 'Aseco') -> None:
         score_pos_x=_get_float(clk_score, 'POS_X', 41.05),
         score_pos_y=_get_float(clk_score, 'POS_Y', 33.2),
         score_bg_style=str(_get_node_value(clk_score, 'BACKGROUND_STYLE', 'BgsPlayerCard')),
-        score_bg_substyle=str(_get_node_value(clk_score, 'BACKGROUND_SUBSTYLE', 'BgRacePlayerName')),
+        score_bg_substyle=str(_get_node_value(clk_score, 'BACKGROUND_SUBSTYLE', 'BgCardSystem')),
         score_bg_color=str(_get_node_value(clk_score, 'BACKGROUND_COLOR', '')),
     )
 
@@ -685,7 +688,7 @@ def _load_config(aseco: 'Aseco') -> None:
         pos_y=_get_float(nev_blk, 'POS_Y', -40.9),
         text_color=str(_get_node_value(nev_blk, 'TEXT_COLOR', 'FC0F')),
         bg_style=str(_get_node_value(nev_blk, 'BACKGROUND_STYLE', 'BgsPlayerCard')),
-        bg_substyle=str(_get_node_value(nev_blk, 'BACKGROUND_SUBSTYLE', 'BgRacePlayerName')),
+        bg_substyle=str(_get_node_value(nev_blk, 'BACKGROUND_SUBSTYLE', 'BgCardSystem')),
         bg_color=str(_get_node_value(nev_blk, 'BACKGROUND_COLOR', '')),
     )
 
@@ -698,7 +701,7 @@ def _load_config(aseco: 'Aseco') -> None:
         pos_y=_get_float(ngm_blk, 'POS_Y', -40.9),
         text_color=str(_get_node_value(ngm_blk, 'TEXT_COLOR', 'FC0F')),
         bg_style=str(_get_node_value(ngm_blk, 'BACKGROUND_STYLE', 'BgsPlayerCard')),
-        bg_substyle=str(_get_node_value(ngm_blk, 'BACKGROUND_SUBSTYLE', 'BgRacePlayerName')),
+        bg_substyle=str(_get_node_value(ngm_blk, 'BACKGROUND_SUBSTYLE', 'BgCardSystem')),
         bg_color=str(_get_node_value(ngm_blk, 'BACKGROUND_COLOR', '')),
     )
 
@@ -712,11 +715,11 @@ def _load_config(aseco: 'Aseco') -> None:
         race_enabled=_get_bool(ep_race, 'ENABLED', False),
         race_pos_x=_get_float(ep_race, 'POS_X', -62.0),
         race_pos_y=_get_float(ep_race, 'POS_Y', 47.0),
-        score_enabled=_get_bool(ep_score, 'ENABLED', True),
+        score_enabled=_get_bool(ep_score, 'ENABLED', False),
         score_pos_x=_get_float(ep_score, 'POS_X', 58.7),
         score_pos_y=_get_float(ep_score, 'POS_Y', -40.9),
         score_bg_style=str(_get_node_value(ep_score, 'BACKGROUND_STYLE', 'BgsPlayerCard')),
-        score_bg_substyle=str(_get_node_value(ep_score, 'BACKGROUND_SUBSTYLE', 'BgRacePlayerName')),
+        score_bg_substyle=str(_get_node_value(ep_score, 'BACKGROUND_SUBSTYLE', 'BgCardSystem')),
         score_bg_color=str(_get_node_value(ep_score, 'BACKGROUND_COLOR', '')),
     )
 
@@ -753,7 +756,7 @@ def _load_config(aseco: 'Aseco') -> None:
     warm_op = _get_node_value(rs_node, 'WARMUP', {})
     _state.round_score_cfg = {
         'title':  str(_get_node_value(rs_node, 'TITLE', 'Round Score')),
-        'width':  max(20.5, _get_float(rs_node, 'WIDTH', 20.5)),
+        'width':  max(MIN_RECORD_WIDTH, _get_float(rs_node, 'WIDTH', 20.5)),
         'height': max(0.0, _get_float(rs_node, 'HEIGHT', 0.0)),
         'race':   {'icon_style': str(_get_node_value(race_op,'ICON_STYLE','Icons64x64_1')), 'icon_substyle': str(_get_node_value(race_op,'ICON_SUBSTYLE','RestartRace'))},
         'warmup': {'icon_style': str(_get_node_value(warm_op,'ICON_STYLE','BgRaceScore2')), 'icon_substyle': str(_get_node_value(warm_op,'ICON_SUBSTYLE','Warmup'))},
@@ -771,7 +774,7 @@ def _load_config(aseco: 'Aseco') -> None:
             'title': str(_get_node_value(node, 'TITLE', d.get('title', key))),
             'pos_x': _get_float(node, 'POS_X', d.get('pos_x', 0.0)),
             'pos_y': _get_float(node, 'POS_Y', d.get('pos_y', 0.0)),
-            'width': max(15.5, _get_float(node, 'WIDTH', d.get('width', 15.5))),
+            'width': max(MIN_RECORD_WIDTH, _get_float(node, 'WIDTH', d.get('width', 15.5))),
             'height': max(0.0, _get_float(node, 'HEIGHT', d.get('height', 0.0))),
             'entries': _get_int(node, 'ENTRIES', d.get('entries', 6)),
             'row_height': max(1.0, _get_float(node, 'ROW_HEIGHT', d.get('row_height', PLUGIN_LINE_HEIGHT))),
@@ -804,10 +807,10 @@ def _load_config(aseco: 'Aseco') -> None:
     _state.donation_cfg = {
         'enabled': _get_bool(don_node,'ENABLED',False),'text_color': str(_get_node_value(don_node,'TEXT_COLOR','FC0F')),
         'amounts': _don_amounts,'pos_x': _get_float(don_wid,'POS_X',-47.9),'pos_y': _get_float(don_wid,'POS_Y',18.2),
-        'width': max(4.6, _get_float(don_wid, 'WIDTH', 4.6)),
+        'width': max(MIN_DONATION_WIDTH, _get_float(don_wid, 'WIDTH', 4.6)),
         'height': max(0.0, _get_float(don_wid, 'HEIGHT', 0.0)),
         'row_height': max(1.0, _get_float(don_wid, 'ROW_HEIGHT', 1.85)),
-        'bg_style': str(_get_node_value(don_wid,'BACKGROUND_STYLE','BgsPlayerCard')),'bg_substyle': str(_get_node_value(don_wid,'BACKGROUND_SUBSTYLE','BgRacePlayerName')),
+        'bg_style': str(_get_node_value(don_wid,'BACKGROUND_STYLE','BgsPlayerCard')),'bg_substyle': str(_get_node_value(don_wid,'BACKGROUND_SUBSTYLE','BgCardSystem')),
         'bg_color': str(_get_node_value(don_wid,'BACKGROUND_COLOR','')),
         'icon_style': str(_get_node_value(don_wid,'ICON_STYLE','Icons128x128_1')),'icon_substyle': str(_get_node_value(don_wid,'ICON_SUBSTYLE','Coppers')),
         'button_style': str(_get_node_value(don_wid,'BUTTON_STYLE','Bgs1InRace')),'button_substyle': str(_get_node_value(don_wid,'BUTTON_SUBSTYLE','BgIconBorder')),
@@ -822,11 +825,11 @@ def _load_config(aseco: 'Aseco') -> None:
     _state.winning_payout_cfg = {
         'enabled': _get_bool(wp_node,'ENABLED',False),'min_coppers': _get_int(wp_node,'MINIMUM_SERVER_COPPERS',250),
         'pos_x': _get_float(wp_wid,'POS_X',37.8),'pos_y': _get_float(wp_wid,'POS_Y',-30.7),
-        'width': max(25.5, _get_float(wp_wid, 'WIDTH', 25.5)),
+        'width': max(MIN_PAYOUT_WIDTH, _get_float(wp_wid, 'WIDTH', 25.5)),
         'height': max(0.0, _get_float(wp_wid, 'HEIGHT', 0.0)),
         'row_height': max(1.0, _get_float(wp_wid, 'ROW_HEIGHT', 1.8)),
         'title': str(_get_node_value(wp_wid,'TITLE','Finish Winners')),
-        'bg_style': str(_get_node_value(wp_wid,'BACKGROUND_STYLE','BgsPlayerCard')),'bg_substyle': str(_get_node_value(wp_wid,'BACKGROUND_SUBSTYLE','BgRacePlayerName')),
+        'bg_style': str(_get_node_value(wp_wid,'BACKGROUND_STYLE','BgsPlayerCard')),'bg_substyle': str(_get_node_value(wp_wid,'BACKGROUND_SUBSTYLE','BgCardSystem')),
         'bg_color': str(_get_node_value(wp_wid,'BACKGROUND_COLOR','')),
         'title_style': str(_get_node_value(wp_wid,'TITLE_STYLE','BgsPlayerCard')),'title_substyle': str(_get_node_value(wp_wid,'TITLE_SUBSTYLE','ProgressBar')),
         'icon_style': str(_get_node_value(wp_wid,'ICON_STYLE','BgRaceScore2')),'icon_substyle': str(_get_node_value(wp_wid,'ICON_SUBSTYLE','Fame')),

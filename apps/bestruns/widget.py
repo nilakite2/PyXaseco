@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pyxaseco.models import Gameinfo
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_float, as_int, bind_app_settings
 from pyxaseco.core.config import display_path
+from pyxaseco.helpers import safe_manialink_text
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -306,7 +307,7 @@ async def Display_bestruns(aseco: "Aseco"):
                     f'<label scale="{cfg.scale}" posn="{x_label_time} {y_label_time}" '
                     f'sizen="{width_label_time} {height_label_time}" halign="left" valign="center" text="{time_txt}"/>',
                     f'<label scale="{cfg.scale}" posn="{x_label_nickname} {y_label_nickname}" '
-                    f'sizen="{width_label_nickname} {height_label_nickname}" halign="left" valign="center" text="{nickname}"/>',
+                    f'sizen="{width_label_nickname} {height_label_nickname}" halign="left" valign="center" text="{safe_manialink_text(nickname)}"/>',
                     "</frame>",
                 ]
             )

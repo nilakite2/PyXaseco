@@ -2,6 +2,7 @@
 
 from math import isfinite
 from time import monotonic
+from types import SimpleNamespace
 
 from pyxaseco.app_config import (
     AppSetting, AppSettingsSchema, as_bool, as_float, as_int, as_str,
@@ -11,6 +12,7 @@ from pyxaseco.core.base import App
 from pyxaseco.core.file_io import file_io
 from pyxaseco.core.widget_delivery import deliver_ui, is_score_phase
 from apps.platform_ui.uistyle_catalog import Preset
+from apps.platform_ui.hud_layout import LIMITS
 
 from . import competition, live, providers, views
 
@@ -23,22 +25,22 @@ SCHEMA = AppSettingsSchema(app_id='ui_fast', settings=(
     AppSetting('menu/enabled', True, as_bool, 'Use FAST menu; off restores the configured standard menu.'),
     AppSetting('menu/pos_x', -49.9, as_float, 'Menu X position.'),
     AppSetting('menu/pos_y', 47.8, as_float, 'Menu Y position.'),
-    AppSetting('menu/width', 23.0, as_float, 'Menu bar width, 21-40.'),
+    AppSetting('menu/width', 23.0, as_float, 'Width of the menu bar and basis for the popup width.'),
     AppSetting('map/enabled', True, as_bool, 'Use FAST map panel; off restores the configured standard panel.'),
     AppSetting('map/pos_x', 49.05, as_float, 'Map panel X position.'),
     AppSetting('map/pos_y', 48.0, as_float, 'Map panel Y position.'),
-    AppSetting('map/width', 15.5, as_float, 'Map panel width, 15.5-40; leaves the existing clock column clear.'),
+    AppSetting('map/width', 15.5, as_float, 'Width of the map panel.'),
     AppSetting('records/enabled', True, as_bool, 'Use FAST times panel; off restores standard record widgets.'),
     AppSetting('records/pos_x', 43.1, as_float, 'Times panel X position.'),
     AppSetting('records/pos_y', 21.95, as_float, 'Times panel Y position.'),
-    AppSetting('records/width', 21.0, as_float, 'Times panel width, 21-40.'),
+    AppSetting('records/width', 21.0, as_float, 'Width of the times panel.'),
     AppSetting('records/entries', 10, as_int, 'Visible records, 1-20; unused rows are omitted.'),
     AppSetting('records/topcount', 3, as_int, 'Pinned leaders; fewer than entries.'),
-    AppSetting('records/row_height', 1.8, as_float, 'Record row height, 1.8-2.5.'),
+    AppSetting('records/row_height', 1.8, as_float, 'Record row height, 1-10.'),
     AppSetting('splits/enabled', True, as_bool, 'Show live checkpoint times and differences in FAST.'),
     AppSetting('splits/pos_x', -23.0, as_float, 'Live splits X position (left edge).'),
     AppSetting('splits/pos_y', 30.7, as_float, 'Live splits Y position.'),
-    AppSetting('splits/width', 46.0, as_float, 'Live splits width, 30-80.'),
+    AppSetting('splits/width', 46.0, as_float, 'Width of the live splits panel.'),
     AppSetting('splits/comparison', 'best', as_str, 'Initial comparison: best, ideal or reference. Click to cycle.'),
     AppSetting('splits/reference_rank', 1, as_int, 'Record rank in the selected FAST source, 1-10000.'),
     AppSetting('splits/show_position', True, as_bool, 'Live checkpoint position in Rounds, Team, Laps and Cup.'),
@@ -55,7 +57,7 @@ SCHEMA = AppSettingsSchema(app_id='ui_fast', settings=(
     AppSetting('competition/history_rows', 5, as_int, 'Recent counted maps in the FAST panel, 1-10.'),
     AppSetting('competition/pos_x', -64.7, as_float, 'Team match panel X position.'),
     AppSetting('competition/pos_y', 23.65, as_float, 'Team match panel Y position.'),
-    AppSetting('competition/width', 28.0, as_float, 'Team match panel width, 21-40.'),
+    AppSetting('competition/width', 28.0, as_float, 'Width of the Team match panel.'),
 ))
 APP_METADATA = {
     'id': 'ui_fast', 'display_name': 'FAST UI',
@@ -78,16 +80,14 @@ def configuration(section):
         raise ValueError('FAST refresh_seconds must be 1-60.')
     if not 1 <= values['records/entries'] <= 20 or not 0 <= values['records/topcount'] < values['records/entries']:
         raise ValueError('FAST entries must be 1-20; topcount must be non-negative and smaller than entries.')
-    for prefix in ('menu', 'map', 'records', 'splits', 'competition'):
-        minimum_width = 30 if prefix == 'splits' else 15.5 if prefix == 'map' else 21
-        maximum_width = 80 if prefix == 'splits' else 40
-        for key, low, high in (('pos_x', -64.7, 64.7), ('pos_y', -48, 48),
-                               ('width', minimum_width, maximum_width)):
+    for prefix, minimum_width in (('menu', 12), ('map', 3), ('records', 10), ('splits', 4), ('competition', 10)):
+        for key, low, high in (('pos_x', *LIMITS['dx']), ('pos_y', *LIMITS['dy']),
+                               ('width', minimum_width, 128)):
             value = values[f'{prefix}/{key}']
             if not isfinite(value) or not low <= value <= high:
                 raise ValueError(f'FAST {prefix}/{key} must be {low}-{high}.')
-    if not isfinite(values['records/row_height']) or not 1.8 <= values['records/row_height'] <= 2.5:
-        raise ValueError('FAST row_height must be 1.8-2.5.')
+    if not 1 <= values['records/row_height'] <= 10:
+        raise ValueError('FAST row_height must be 1-10.')
     values['splits/comparison'] = values['splits/comparison'].strip().lower()
     if values['splits/comparison'] not in live.MODES:
         raise ValueError('FAST splits/comparison must be best, ideal or reference.')
@@ -133,6 +133,8 @@ class FastUiApp(App):
         self.competition = competition.TeamCompetition()
 
     def register_runtime(self, aseco):
+        aseco.register_service('ui/fast_menu', self, owner='ui_fast')
+        aseco.register_service('ui/score_preview/ui_fast', self.score_preview, owner='ui_fast')
         aseco.add_chat_command('fastui', 'Open the FAST menu or toggle your panels', app='ui_fast',
                                owner='feature/ui_fast', usage='/fastui [panels|toggle <panel>]')
         for event, callback in (
@@ -212,6 +214,40 @@ class FastUiApp(App):
         return views.suppress(xml, menu=self.values['menu/enabled'], track=self.values['map/enabled'],
                               records=self.values['records/enabled'],
                               live_splits=self.values['splits/enabled']) if self.enabled else xml
+
+    def score_preview(self, aseco, player, track, names, *, mode, phase):
+        styles = aseco.get_service('ui/uistyle')
+        if not self.values or not styles or styles.resolve(player).renderer != 'ui_fast':
+            return
+        mode_name = {0: 'Rounds', 1: 'TA', 2: 'Team', 3: 'Laps', 4: 'Stunts', 5: 'Cup'}.get(mode, 'Race')
+        enabled = self.enabled and (phase == 'race' or self.values['show_on_score'])
+        yield views.bar(self.values, mode_name, 8, 2), enabled and self.values['menu/enabled']
+        sample_track = SimpleNamespace(name=track['name'], author=track['author'],
+                                       environment=track['env'], authortime=58820)
+        yield (views.map_panel(self.values, sample_track, track if phase == 'score' else None),
+               enabled and self.values['map/enabled'])
+        rows = [{'login': f'preview{i}', 'rank': i + 1, 'nickname': names[i % len(names)],
+                 'score': 58820 + i * 1370 if mode != 4 else max(1, 900 - i * 25)}
+                for i in range(self.values['records/entries'])]
+        yield (views.records(self.values, SimpleNamespace(title='Local Records'), rows, '', 0, 1,
+                             stunts=mode == 4), enabled and self.values['records/enabled'])
+        if phase == 'race' and mode != 4:
+            model = {'time': 14300, 'finished': False, 'cp': 4, 'total': 29 if mode == 3 else 9,
+                     'lap': 2 if mode == 3 else 0, 'personal': -170, 'title': 'Best split',
+                     'comparison': 260, 'position': (3, 8) if self.values['splits/show_position'] else None}
+            yield views.splits(self.values, model), enabled and self.values['splits/enabled']
+        if mode != 2:
+            return
+        match = {'state': 'running', 'names': (self.values['competition/blue'], self.values['competition/red']),
+                 'totals': (7, 5), 'counted': 1,
+                 'maps': [{'void': False, 'name': track['name'], 'scores': (7, 5)}]}
+        round_ = {'points': (4, 2), 'final': True, 'number': 3, 'players': [
+            {'login': f'preview{i}', 'rank': i + 1, 'name': name, 'team': i % 2, 'points': 3 - i}
+            for i, name in enumerate(names[:3])]}
+        show_match, show_round = self.values['competition/show_panel'], self.values['competition/show_round']
+        yield (views.team_match(self.values, match if show_match or not show_round else None,
+                                round_ if show_round else None),
+               enabled and mode == 2 and self.values['competition/enabled'] and (show_match or show_round))
 
     def panel_available(self, panel):
         if panel == 'team':

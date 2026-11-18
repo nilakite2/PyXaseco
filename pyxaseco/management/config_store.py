@@ -19,10 +19,99 @@ from uuid import uuid4
 
 
 MANAGEMENT_MAINTENANCE_LOCK = 1
+DATA_DIR = '.pyxaseco-data'
+LEGACY_MAINTENANCE = '.management-maintenance'
+RUNTIME_LOCK = '.pyxaseco-runtime.lock'
+OUTBOX_NAME = 'record_outbox.sqlite3'
+OUTBOX_SUFFIXES = ('', '-wal', '-shm', '-journal')
 
 
 class ManagementError(ValueError):
     """An operation was refused without intentionally changing configuration."""
+
+
+def data_path(root: Path, *parts: str) -> Path:
+    """Resolve a controller-owned path without following links inside the instance."""
+    root = Path(root).resolve()
+    target = root / DATA_DIR / Path(*parts)
+    if '..' in target.parts or not target.is_relative_to(root / DATA_DIR):
+        raise ManagementError('Generated data path must stay inside the instance')
+    for path in (target, *target.parents):
+        if path == root:
+            break
+        if path.is_symlink() or path.is_junction():
+            raise ManagementError('Generated data paths may not pass through links or junctions')
+    return target
+
+
+def generated_directory(root: Path, legacy: str, *parts: str) -> Path:
+    """Use the old directory until an offline migration moves it as a unit."""
+    root = Path(root).resolve()
+    old = root / legacy
+    new = data_path(root, *parts)
+    for path in (old, new):
+        if any(parent.is_symlink() or parent.is_junction() for parent in (path, *path.parents)
+               if parent.is_relative_to(root)) or (path.exists() and not path.is_dir()):
+            raise ManagementError('Unsafe generated data directory: ' + str(path))
+    if old.exists() and new.exists():
+        raise ManagementError('Both old and new generated data directories exist: ' + legacy)
+    return old if old.exists() else new
+
+
+def maintenance_area(root: Path) -> Path:
+    return generated_directory(root, LEGACY_MAINTENANCE, 'management', 'maintenance')
+
+
+def cleanup_backup_directory(root: Path) -> Path:
+    return generated_directory(root, '.server-cleanup', 'backups', 'server-cleanup')
+
+
+def outbox_path(root: Path) -> Path:
+    # Keep SQLite sidecars with the database until the offline migration.
+    primary = data_path(root, 'state', OUTBOX_NAME)
+    legacy = Path(root).resolve() / 'state' / primary.name
+    if legacy.parent.is_symlink() or legacy.parent.is_junction():
+        raise ManagementError('Unsafe legacy record outbox directory')
+    for database in (legacy, primary):
+        group = tuple(database.with_name(database.name + suffix) for suffix in OUTBOX_SUFFIXES)
+        if any(path.is_symlink() or path.is_junction() or (path.exists() and not path.is_file()) for path in group):
+            raise ManagementError('Unsafe record outbox file')
+        if not group[0].exists() and any(path.exists() for path in group[1:]):
+            raise ManagementError('Record outbox sidecar exists without its database')
+    if legacy.exists() and primary.exists():
+        raise ManagementError('Both old and new record outboxes exist; reconcile before starting')
+    return legacy if legacy.exists() else primary
+
+
+def controller_config_root(path: Path) -> Path | None:
+    # Generic writers also serve the external installation registry.
+    parents = (path.parent, *path.parents[1:]) if 'apps' in path.parts else (path.parent,)
+    for root in parents:
+        relative = path.relative_to(root)
+        if (len(relative.parts) == 1 or relative.parts[0] == 'apps') and (
+                (root / 'config.toml').is_file() and (root / 'apps.toml').is_file()):
+            return root
+    return None
+
+
+def managed_lock_path(root: Path, path: Path, *, adjacent=True) -> Path:
+    relative = path.relative_to(Path(root).resolve())
+    filename = '.' + relative.name + '.lock' if adjacent else relative.name
+    folder = relative.parts[:-1]
+    if folder[:1] == (DATA_DIR,):
+        folder = folder[1:]
+    return data_path(root, 'locks', *folder, filename)
+
+
+def config_backup_directory(root: Path, path: Path, *, legacy=False) -> Path:
+    group = 'legacy-configuration' if legacy else 'configuration'
+    return data_path(root, 'backups', group, *path.relative_to(Path(root).resolve()).parts[:-1])
+
+
+def instance_lock(root: Path, path: Path, *, adjacent=True):
+    lock = managed_lock_path(root, path, adjacent=adjacent)
+    lock.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    return file_lock(lock)
 
 
 def revision(content: bytes) -> str:
@@ -32,7 +121,7 @@ def revision(content: bytes) -> str:
 @contextmanager
 def file_lock(path: Path):
     """Nonblocking OS lock. Keep the lock file: deleting it introduces races."""
-    if path.is_symlink():
+    if path.is_symlink() or path.is_junction():
         raise ManagementError('Lock files may not be symbolic links')
     fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
     handle = os.fdopen(fd, 'r+b')
@@ -68,9 +157,9 @@ def file_lock(path: Path):
 
 @contextmanager
 def runtime_lock(root: Path):
-    with file_lock(root / '.pyxaseco-runtime.lock'):
-        pending = root / '.management-maintenance' / 'active.json'
-        if pending.exists() or pending.is_symlink():
+    with file_lock(root / RUNTIME_LOCK):
+        pending = maintenance_area(root) / 'active.json'
+        if pending.exists() or pending.is_symlink() or pending.is_junction():
             raise ManagementError('Interrupted maintenance is pending; review and roll back before starting or editing')
         yield
 
@@ -83,12 +172,14 @@ class WriteResult:
 
 
 def update_file(path: Path, transform, *, expected: str | None = None,
-                validator=None, backup: bool = True) -> WriteResult:
+                validator=None, backup: bool = True, root: Path | None = None) -> WriteResult:
     """Transform under a shared lock; never silently overwrite a stale snapshot."""
     path = Path(path).absolute()
-    if path.is_symlink():
+    if path.is_symlink() or path.is_junction():
         raise ManagementError('Configuration files may not be symbolic links')
-    with file_lock(path.with_name('.' + path.name + '.lock')):
+    root = Path(root).resolve() if root is not None else controller_config_root(path)
+    lock = instance_lock(root, path) if root is not None else file_lock(path.with_name('.' + path.name + '.lock'))
+    with lock:
         existed = path.exists()
         before = path.read_bytes() if existed else b''
         if len(before) > 4 * 1024 * 1024:
@@ -109,10 +200,10 @@ def update_file(path: Path, transform, *, expected: str | None = None,
         mode = stat.S_IMODE(path.stat().st_mode) if existed else 0o600
         backup_path = None
         if backup and existed:
-            directory = path.parent / '.management-backups'
+            directory = config_backup_directory(root, path) if root is not None else path.parent / '.management-backups'
             if directory.is_symlink():
                 raise ManagementError('Backup directory may not be a symbolic link')
-            directory.mkdir(mode=0o700, exist_ok=True)
+            directory.mkdir(parents=root is not None, mode=0o700, exist_ok=True)
             stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
             backup_path = directory / f'{path.name}.{stamp}.{uuid4().hex[:8]}.bak'
             with backup_path.open('xb') as saved:
@@ -347,4 +438,4 @@ class ConfigStore:
             if validate:
                 validate(data)
         return update_file(file, lambda text: edit_toml(text, path, value),
-                           expected=expected, validator=check)
+                           expected=expected, validator=check, root=self.root)

@@ -18,6 +18,9 @@ def main(argv=None) -> int:
     parser.add_argument('--registry', help='Explicit instance inventory JSON path')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('list', help='List registered local installations')
+    migrate = commands.add_parser('migrate-data', help='Preview or move generated data into .pyxaseco-data')
+    migrate.add_argument('--folder', required=True, help='Controller folder')
+    migrate.add_argument('--apply', action='store_true', help='Move files after stopping the controller and management tools')
     register = commands.add_parser('register', help='Register an existing installation without starting it')
     register.add_argument('folder')
     register.add_argument('--name', required=True)
@@ -74,6 +77,9 @@ def main(argv=None) -> int:
         registry = InstanceRegistry(args.registry)
         if args.command == 'list':
             result = [asdict(instance) for instance in registry.list()]
+        elif args.command == 'migrate-data':
+            from .data_migration import migrate_data
+            result = migrate_data(args.folder, apply=args.apply)
         elif args.command == 'register':
             result = asdict(registry.register(args.folder, name=args.name, python=args.python_path,
                                              dedicated=args.dedicated))

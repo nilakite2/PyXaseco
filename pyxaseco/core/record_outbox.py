@@ -44,11 +44,12 @@ class RetainedRecord:
 class RecordOutbox:
     durable = True
 
-    def __init__(self, path: Path | None, *, max_records: int = 10000,
+    def __init__(self, path: Path | None, *, lock_path: Path | None = None, max_records: int = 10000,
                  max_payload_bytes: int = 64 * 1024 * 1024):
         if not 1 <= max_records <= 100000 or not 1 <= max_payload_bytes <= 1024 ** 3:
             raise ValueError('invalid outbox retention limits')
         self.path = Path(path) if path is not None else None
+        self.lock_path = lock_path
         self.max_records, self.max_payload_bytes = max_records, max_payload_bytes
         self._executor: ThreadPoolExecutor | None = None
         self._connection: sqlite3.Connection | None = None
@@ -91,7 +92,11 @@ class RecordOutbox:
         return result
 
     def _claim_storage(self):
-        lock_file = self.path.with_suffix(self.path.suffix + '.lock').open('a+b')
+        path = self.lock_path or self.path.with_suffix(self.path.suffix + '.lock')
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if path.is_symlink() or path.is_junction():
+            raise RuntimeError('unsafe record outbox lock path')
+        lock_file = path.open('a+b')
         try:
             if lock_file.seek(0, os.SEEK_END) == 0:
                 lock_file.write(b'0')
@@ -345,7 +350,7 @@ class MemoryRecordOutbox(RecordOutbox):
             self._closed = True
 
 
-def create_record_outbox(path: Path, durable: bool | None = None) -> RecordOutbox:
+def create_record_outbox(path: Path, durable: bool | None = None, *, lock_path: Path | None = None) -> RecordOutbox:
     """Default to memory, but never silently abandon existing durable storage."""
     if path.exists():
         if durable is False:
@@ -354,9 +359,9 @@ def create_record_outbox(path: Path, durable: bool | None = None) -> RecordOutbo
         if durable is None:
             logger.warning('Existing record outbox detected; preserving durable delivery. '
                            'Review pending/uncertain submissions before switching to memory.')
-        return RecordOutbox(path)
+        return RecordOutbox(path, lock_path=lock_path)
     if durable:
         logger.info('Durable record delivery enabled')
-        return RecordOutbox(path)
+        return RecordOutbox(path, lock_path=lock_path)
     logger.info('Record delivery uses memory only; queued submissions do not survive process exit')
     return MemoryRecordOutbox()

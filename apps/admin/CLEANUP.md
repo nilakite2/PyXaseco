@@ -20,7 +20,8 @@ cleanup even if their ability lists are edited to include it.
    controller processing, run shutdown hooks, stop background workers and apps,
    and close the normal database pool. `ms` runs without stopping either process.
 2. Back up selected database tables (definitions and data) and/or MatchSettings
-   under `<controller>/.server-cleanup/<timestamp>/`. Backups contain sensitive data.
+   under `<controller>/.pyxaseco-data/backups/server-cleanup/<timestamp>/`
+   (or the existing `.server-cleanup/` path until migrated). Backups contain sensitive data.
 3. For `ms`/`all`, read the running map UID/filename from the dedicated server.
    Keep exactly one entry for it, creating the entry if it was not saved before.
 4. Atomically update MatchSettings and/or truncate all selected database tables.

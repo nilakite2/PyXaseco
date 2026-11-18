@@ -134,8 +134,8 @@ pos_x = 49.05
 pos_y = 48
 
 [ui.challenge_widget.score]
-width = 17.6
-pos_x = 46.7
+width = 16.1
+pos_x = 48.2
 pos_y = 48
 
 [ui.music_widget]
@@ -452,13 +452,13 @@ masteradmin = false
 [ui.winning_payout.widget]
 background_color = ""
 title = "Finish Winners"
-pos_x = 37.8
+pos_x = 38.5
 pos_y = -30.7
 width = 25.5
 height = 0
 row_height = 1.8
 background_style = "BgsPlayerCard"
-background_substyle = "BgRacePlayerName"
+background_substyle = "BgCardSystem"
 title_style = "BgsPlayerCard"
 title_substyle = "ProgressBar"
 icon_style = "BgRaceScore2"
@@ -479,7 +479,7 @@ public_appreciation_threshold = 50
 
 [ui.donation_widget.widget]
 background_color = ""
-pos_x = -47.9
+pos_x = -48.5
 pos_y = 18.2
 width = 4.6
 height = 0
@@ -487,7 +487,7 @@ row_height = 1.85
 icon_style = "Icons128x128_1"
 icon_substyle = "Coppers"
 background_style = "BgsPlayerCard"
-background_substyle = "BgRacePlayerName"
+background_substyle = "BgCardSystem"
 button_style = "Bgs1InRace"
 button_substyle = "BgIconBorder"
 button_color = "000F"
@@ -618,10 +618,10 @@ background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
 [ui.clock_widget.score]
-pos_x = 41.05
-pos_y = 33.2
+pos_x = -63.65
+pos_y = 28.7
 background_style = "BgsPlayerCard"
-background_substyle = "BgRacePlayerName"
+background_substyle = "BgCardSystem"
 
 [ui.favorite_widget]
 enabled = false
@@ -636,10 +636,10 @@ background_style = "BgsPlayerCard"
 background_substyle = "ProgressBar"
 
 [ui.favorite_widget.score]
-pos_x = -47.9
-pos_y = 33.2
+pos_x = -58.6
+pos_y = 28.7
 background_style = "BgsPlayerCard"
-background_substyle = "BgRacePlayerName"
+background_substyle = "BgCardSystem"
 
 [ui.next_environment_widget]
 enabled = false
@@ -647,10 +647,10 @@ width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = 49.1
-pos_y = -40.9
+pos_x = 43.6
+pos_y = 33.7
 background_style = "BgsPlayerCard"
-background_substyle = "BgRacePlayerName"
+background_substyle = "BgCardSystem"
 
 [ui.next_gamemode_widget]
 enabled = false
@@ -658,16 +658,17 @@ width = 4.6
 height = 6.5
 text_color = "FC0F"
 background_color = ""
-pos_x = 53.9
-pos_y = -40.9
+pos_x = 38.9
+pos_y = 33.7
 background_style = "BgsPlayerCard"
-background_substyle = "BgRacePlayerName"
+background_substyle = "BgCardSystem"
 
 [ui.eyepiece_widget]
 width = 4.6
 height = 6.5
 text_color = "FC0F"
 
+# Legacy compatibility only: the Eyepiece badge is rendered on the score screen.
 [ui.eyepiece_widget.race]
 enabled = false
 pos_x = -62
@@ -675,21 +676,21 @@ pos_y = 47
 
 [ui.eyepiece_widget.score]
 enabled = false
-pos_x = 58.7
-pos_y = -40.9
+pos_x = -53.6
+pos_y = 28.7
 background_style = "BgsPlayerCard"
-background_substyle = "BgRacePlayerName"
+background_substyle = "BgCardSystem"
 
 [ui.scoretable_lists]
 
 [ui.scoretable_lists.top_average_times]
 enabled = true
 title = "Average Last Round"
-pos_x = -63.5
-pos_y = 29.5
+pos_x = -64.1
+pos_y = 22.1
 width = 15.5
 height = 0
-entries = 9
+entries = 6
 row_height = 1.8
 icon_style = "BgRaceScore2"
 icon_substyle = "ScoreLink"
@@ -697,11 +698,11 @@ icon_substyle = "ScoreLink"
 [ui.scoretable_lists.dedimania_records]
 enabled = true
 title = "Dedimania Records"
-pos_x = -63.5
-pos_y = -8
+pos_x = -64.1
+pos_y = -6.4
 width = 15.5
 height = 0
-entries = 8
+entries = 6
 row_height = 1.8
 icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
@@ -709,11 +710,11 @@ icon_substyle = "Rankings"
 [ui.scoretable_lists.local_records]
 enabled = true
 title = "Local Records"
-pos_x = -63.5
-pos_y = 9.85
+pos_x = -64.1
+pos_y = 7.85
 width = 15.5
 height = 0
-entries = 8
+entries = 6
 row_height = 1.8
 icon_style = "Icons128x128_1"
 icon_substyle = "Rankings"
@@ -721,8 +722,8 @@ icon_substyle = "Rankings"
 [ui.scoretable_lists.top_rankings]
 enabled = true
 title = "Top Ranks"
-pos_x = -63.5
-pos_y = 47.5
+pos_x = -64.1
+pos_y = 48.0
 width = 15.5
 height = 0
 entries = 6
@@ -733,8 +734,8 @@ icon_substyle = "Podium"
 [ui.scoretable_lists.top_winners]
 enabled = true
 title = "Top Winners"
-pos_x = -47.9
-pos_y = 47.5
+pos_x = -48.5
+pos_y = 48.0
 width = 15.5
 height = 0
 entries = 6
@@ -745,8 +746,8 @@ icon_substyle = "RT_Cup"
 [ui.scoretable_lists.most_records]
 enabled = true
 title = "Most Records"
-pos_x = -32.3
-pos_y = 47.5
+pos_x = -32.9
+pos_y = 48.0
 width = 15.5
 height = 0
 entries = 6
@@ -757,8 +758,8 @@ icon_substyle = "RestartRace"
 [ui.scoretable_lists.most_finished]
 enabled = true
 title = "Most Finished"
-pos_x = -16.7
-pos_y = 47.5
+pos_x = -17.3
+pos_y = 48.0
 width = 15.5
 height = 0
 entries = 6
@@ -769,8 +770,8 @@ icon_substyle = "Race"
 [ui.scoretable_lists.top_playtime]
 enabled = true
 title = "Hours Played"
-pos_x = -1.1
-pos_y = 47.5
+pos_x = -1.7
+pos_y = 48.0
 width = 15.5
 height = 0
 entries = 6
@@ -781,8 +782,8 @@ icon_substyle = "RT_TimeAttack"
 [ui.scoretable_lists.top_donators]
 enabled = true
 title = "Top Donators"
-pos_x = 14.5
-pos_y = 47.5
+pos_x = 13.9
+pos_y = 48.0
 width = 15.5
 height = 0
 entries = 6
@@ -793,8 +794,8 @@ icon_substyle = "Coppers"
 [ui.scoretable_lists.top_nations]
 enabled = true
 title = "Top Nations"
-pos_x = 30.1
-pos_y = 47.5
+pos_x = 29.5
+pos_y = 48.0
 width = 15.5
 height = 0
 entries = 6
@@ -805,7 +806,7 @@ icon_substyle = "ToolLeague1"
 [ui.scoretable_lists.top_tracks]
 enabled = true
 title = "Top Tracks"
-pos_x = 47.8
+pos_x = 48.6
 pos_y = 17.6
 width = 15.5
 height = 0
@@ -817,7 +818,7 @@ icon_substyle = "NewTrack"
 [ui.scoretable_lists.top_voters]
 enabled = true
 title = "Top Voters"
-pos_x = 47.8
+pos_x = 48.6
 pos_y = 1.5
 width = 15.5
 height = 0
@@ -829,7 +830,7 @@ icon_substyle = "Invite"
 [ui.scoretable_lists.top_visitors]
 enabled = true
 title = "Top Visitors"
-pos_x = 47.8
+pos_x = 48.6
 pos_y = -14.6
 width = 15.5
 height = 0
@@ -975,6 +976,7 @@ night = "http://maniacdn.net/undef.de/xaseco1/records-eyepiece/mood-night-disabl
 
 [ui.menu]
 enabled = true
+quick_navigation = true # Set false to use the original FuFi menu tree.
 menu_caption = "   Menu"
 size = "8 2.2"
 separatorheight = "0.75"
@@ -1126,7 +1128,7 @@ pos_y = "-29.35"
 
 [ui.karma.reminder_window.score]
 pos_x = "-41"
-pos_y = "-26"
+pos_y = "-26.2"
 
 [ui.karma.karma_lottery]
 enabled = "true"
@@ -1170,8 +1172,8 @@ pos_y = "32.86"
 
 [ui.karma.karma_widget.gamemode.score]
 enabled = "true"
-pos_x = "47.8"
-pos_y = "33.2"
+pos_x = "48.3"
+pos_y = "33.7"
 
 [ui.karma.messages]
 welcome = "{#server}*** This Server uses the ManiaKarma world Track vote system at {#highlite}$l[{1}]{2}$l{br}{#server}*** Type {#highlite}/karma help{#server} for more info."

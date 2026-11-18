@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 
 from pyxaseco.core.base import App, Component
 
-from . import lastwin, panels, settings, style, uistyle
+from . import lastwin, navigation, panels, record_browser, settings, style, uistyle
+from .hud_layout import CompactLayout, panel_offsets_from_config
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -22,6 +23,10 @@ APP_METADATA = {
         "apps/platform_ui/presentation.py",
         "apps/platform_ui/hud_layout.py",
         "apps/platform_ui/player_hud.py",
+        "apps/platform_ui/hud_transfer.py",
+        "apps/platform_ui/navigation.py",
+        "apps/platform_ui/record_browser.py",
+        "apps/platform_ui/windows.py",
         "apps/platform_ui/panels.py",
         "apps/platform_ui/settings.py",
         "apps/platform_ui/lastwin.py",
@@ -104,6 +109,8 @@ class PlatformUiApp(App):
     def register_runtime(self, aseco: 'Aseco') -> None:
         for component in self.components:
             component.register(aseco)
+        navigation.register(aseco)
+        record_browser.register(aseco)
 
     async def startup(self, context) -> None:
         for component in self.components:
@@ -116,6 +123,12 @@ class PlatformUiApp(App):
 
 APP_CLASS = PlatformUiApp
 APP_INSTANCE = PlatformUiApp()
+
+
+def validate_config(document, _root):
+    settings = document.get('platform_ui', {})
+    panel_offsets_from_config(settings.get('panels', {}))
+    CompactLayout.from_config(settings.get('hud', {}).get('compact', {}))
 
 
 def register(aseco: "Aseco"):

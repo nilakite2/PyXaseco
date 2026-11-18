@@ -22,9 +22,11 @@ from xml.sax.saxutils import escape
 
 from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
+from apps.platform_ui.presentation import FIXED_HEIGHT
 
-from ..config import _state, _effective_mode
+from ..config import MIN_DONATION_WIDTH, MIN_PAYOUT_WIDTH, MIN_RECORD_WIDTH, _state, _effective_mode
 from ..internal.utils import _handle_special_chars, _safe_ml_text
+from .common import _score_bg_attrs
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -87,13 +89,15 @@ def _scoretable_header(ml_id: int, cfg: dict, widget_height: float) -> str:
 
     px  = cfg.get('pos_x', 0.0)
     py  = cfg.get('pos_y', 0.0)
-    width = max(15.5, float(cfg.get('width', 15.5) or 15.5))
+    width = max(MIN_RECORD_WIDTH, float(cfg.get('width', 15.5) or 15.5))
     ist = escape(cfg.get('icon_style', 'Icons128x128_1'))
     iss = escape(cfg.get('icon_substyle', 'Rankings'))
     ttl = escape(cfg.get('title', ''))
 
     p = []
     p.append(f'<manialink id="{ml_id}">')
+    if cfg.get('height'):
+        p.append(f'<!--{FIXED_HEIGHT}-->')
     p.append(f'<frame posn="{px:.2f} {py:.2f} 0">')
     if bg_color:
         p.append(f'<quad posn="0 0 0.001" sizen="{width:.2f} {widget_height:.2f}"'
@@ -324,14 +328,15 @@ def build_avg_times_for_score(aseco: 'Aseco') -> str:
 # Phase 4d - DonationWidget (ML 91843)
 # ---------------------------------------------------------------------------
 
-def build_donation_widget(aseco: 'Aseco') -> str:
-    cfg = getattr(_state, 'donation_cfg', {})
+def build_donation_widget(aseco: 'Aseco', *, cfg=None) -> str:
+    if cfg is None:
+        cfg = _state.donation_cfg
     if not cfg.get('enabled', False):
         return _empty(ML_DONATION)
 
     amounts  = cfg.get('amounts', [20, 50, 100, 200, 500, 1000])
     bg_style = cfg.get('bg_style', 'BgsPlayerCard')
-    bg_sub   = cfg.get('bg_substyle', 'BgRacePlayerName')
+    bg_sub   = cfg.get('bg_substyle', 'BgCardSystem')
     bg_color = cfg.get('bg_color', '')
     btn_style= cfg.get('button_style', 'Bgs1InRace')
     btn_sub  = cfg.get('button_substyle', 'BgIconBorder')
@@ -341,7 +346,7 @@ def build_donation_widget(aseco: 'Aseco') -> str:
     text_col = cfg.get('text_color', 'FC0F')
     px       = cfg.get('pos_x', -47.9)
     py       = cfg.get('pos_y', 18.2)
-    width    = max(4.6, float(cfg.get('width', 4.6) or 4.6))
+    width    = max(MIN_DONATION_WIDTH, float(cfg.get('width', 4.6) or 4.6))
     row_h    = max(1.0, float(cfg.get('row_height', 1.85) or 1.85))
     widget_height = float(cfg.get('height', 0.0) or (6.55 + len(amounts) * row_h))
     title_center = width / 2.0
@@ -353,12 +358,8 @@ def build_donation_widget(aseco: 'Aseco') -> str:
     p.append(f'<manialink id="{ML_DONATION}">')
     p.append(f'<frame posn="{px:.2f} {py:.2f} 0">')
     p.append(f'<format textsize="1"/>')
-    if bg_color:
-        p.append(f'<quad posn="0 0 0.001" sizen="{width:.2f} {widget_height:.2f}"'
-                 f' bgcolor="{escape(bg_color)}"/>')
-    else:
-        p.append(f'<quad posn="0 0 0.001" sizen="{width:.2f} {widget_height:.2f}"'
-                 f' style="{escape(bg_style)}" substyle="{escape(bg_sub)}"/>')
+    p.append(f'<quad posn="0 0 0.001" sizen="{width:.2f} {widget_height:.2f}"'
+             f' {_score_bg_attrs(bg_style, bg_sub, bg_color)}/>')
     p.append(f'<quad posn="{icon_x:.2f} -0.3 0.002" sizen="3.2 2.7"'
              f' style="{escape(icon_sty)}" substyle="{escape(icon_sub)}"/>')
     p.append(f'<label posn="{title_center:.2f} -3.4 0.1" sizen="{max(width - 0.95, 1.0):.2f} 2"'
@@ -387,13 +388,13 @@ def build_donation_widget(aseco: 'Aseco') -> str:
 # Phase 4e - WinningPayoutWidget (ML 91842)
 # ---------------------------------------------------------------------------
 
-def build_winning_payout_widget(aseco: 'Aseco') -> str:
-    cfg = getattr(_state, 'winning_payout_cfg', {})
+def build_winning_payout_widget(aseco: 'Aseco', *, cfg=None, ranking=None) -> str:
+    if cfg is None:
+        cfg = _state.winning_payout_cfg
     if not cfg.get('enabled', False):
         return _empty(ML_WINNING_PAYOUT)
 
-    mode = _effective_mode(aseco)
-    if mode == Gameinfo.TEAM:
+    if ranking is None and _effective_mode(aseco) == Gameinfo.TEAM:
         return _empty(ML_WINNING_PAYOUT)
 
     lh       = max(1.0, float(cfg.get('row_height', _state.line_height) or _state.line_height))
@@ -405,9 +406,9 @@ def build_winning_payout_widget(aseco: 'Aseco') -> str:
 
     px        = cfg.get('pos_x', 37.8)
     py        = cfg.get('pos_y', -30.7)
-    width     = max(25.5, float(cfg.get('width', 25.5) or 25.5))
+    width     = max(MIN_PAYOUT_WIDTH, float(cfg.get('width', 25.5) or 25.5))
     bg_style  = cfg.get('bg_style', 'BgsPlayerCard')
-    bg_sub    = cfg.get('bg_substyle', 'BgRacePlayerName')
+    bg_sub    = cfg.get('bg_substyle', 'BgCardSystem')
     bg_color  = cfg.get('bg_color', '')
     ttl_style = cfg.get('title_style', 'BgsPlayerCard')
     ttl_sub   = cfg.get('title_substyle', 'ProgressBar')
@@ -424,7 +425,8 @@ def build_winning_payout_widget(aseco: 'Aseco') -> str:
     widget_height = float(cfg.get('height', 0.0) or (lh * 3 + 3.4))
     finishers = []
     try:
-        ranking = await_ranking = getattr(aseco, '_re_last_ranking', [])
+        if ranking is None:
+            ranking = getattr(aseco, '_re_last_ranking', [])
         for i, entry in enumerate(ranking[:3]):
             login    = entry.get('Login', '') if isinstance(entry, dict) else ''
             nick     = entry.get('NickName', login) if isinstance(entry, dict) else str(entry)
@@ -443,12 +445,8 @@ def build_winning_payout_widget(aseco: 'Aseco') -> str:
     p = []
     p.append(f'<manialink id="{ML_WINNING_PAYOUT}">')
     p.append(f'<frame posn="{px:.2f} {py:.2f} 0">')
-    if bg_color:
-        p.append(f'<quad posn="0 0 0.001" sizen="{width:.2f} {widget_height:.2f}"'
-                 f' bgcolor="{escape(bg_color)}"/>')
-    else:
-        p.append(f'<quad posn="0 0 0.001" sizen="{width:.2f} {widget_height:.2f}"'
-                 f' style="{escape(bg_style)}" substyle="{escape(bg_sub)}"/>')
+    p.append(f'<quad posn="0 0 0.001" sizen="{width:.2f} {widget_height:.2f}"'
+             f' {_score_bg_attrs(bg_style, bg_sub, bg_color)}/>')
     p.append(f'<quad posn="0.4 -0.36 0.002" sizen="{max(width - 0.8, 1.0):.2f} 2"'
              f' style="{escape(ttl_style)}" substyle="{escape(ttl_sub)}"/>')
     p.append(f'<quad posn="0.6 0 0.004" sizen="2.5 2.5"'
@@ -492,23 +490,23 @@ def build_winning_payout_widget(aseco: 'Aseco') -> str:
 # Phase 3 - RoundScoreWidget (ML 91831)
 # ---------------------------------------------------------------------------
 
-def build_round_score_widget(aseco: 'Aseco') -> str:
+def build_round_score_widget(aseco: 'Aseco', *, mode=None, sample=None) -> str:
     """
     Port of PHP re_buildRoundScoreWidget().
     Reads round_scores and round_score_pb from _state.
     Shown live during race on each player finish.
     """
-    mode = _effective_mode(aseco)
+    mode = _effective_mode(aseco) if mode is None else mode
     gm_tag = _GM_TAG.get(mode)
 
     rs_cfg  = getattr(_state, 'round_score_cfg', {})
     gm_cfgs = rs_cfg.get('gamemodes', {})
     gm      = gm_cfgs.get(gm_tag or '', {})
 
-    if not gm.get('enabled', False):
+    if sample is None and not gm.get('enabled', False):
         return _empty(ML_ROUND_SCORE)
 
-    warmup    = getattr(_state, 'warmup', False)
+    warmup    = sample is None and getattr(_state, 'warmup', False)
     phase_key = 'warmup' if warmup else 'race'
     phase_cfg = gm.get(phase_key, {})
 
@@ -557,6 +555,8 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
 
     p = []
     p.append(f'<manialink id="{ML_ROUND_SCORE}">')
+    if rs_cfg.get('height'):
+        p.append(f'<!--{FIXED_HEIGHT}-->')
     p.append(f'<frame posn="{pos_x:.2f} {pos_y:.2f} 0">')
     if bg_color:
         p.append(f'<quad posn="0 0 0.001" sizen="{width:.2f} {widget_height:.2f}"'
@@ -576,8 +576,8 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
         p.append(f'<quad posn="0.4 -2.6 0.004" sizen="{width-0.8:.2f} {top_h:.2f}"'
                  f' style="{escape(top_sty)}" substyle="{escape(top_sub)}"/>')
 
-    round_scores = getattr(_state, 'round_scores', {})
-    round_pb     = getattr(_state, 'round_score_pb', {})
+    round_scores = getattr(_state, 'round_scores', {}) if sample is None else sample
+    round_pb     = getattr(_state, 'round_score_pb', {}) if sample is None else {}
 
     if warmup:
         # Warmup: show "No Score during Warm-Up!" message
@@ -620,8 +620,8 @@ def build_round_score_widget(aseco: 'Aseco') -> str:
                 sorted_list.extend(group)
 
         # Get rpoints
-        rpoints = _get_rpoints(aseco, mode, len(sorted_list))
-        team_use_new_rules = bool(
+        rpoints = _get_rpoints(aseco, mode, len(sorted_list)) if sample is None else [10, 6, 4, 3, 2, 1]
+        team_use_new_rules = sample is not None or bool(
             getattr(getattr(getattr(aseco, 'server', None), 'gameinfo', None), 'teamusenewrules', False)
         )
 

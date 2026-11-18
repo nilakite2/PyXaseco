@@ -129,7 +129,7 @@ def initialize_bridge(root: str | Path, *, instance_id=None, enable=False,
         else:
             identity = {'instance_id': instance_id or uuid4().hex, 'protocol': 1, 'operator': 'local-operator'}
             text = '[management]\n' + ''.join(f'{key} = {json.dumps(value)}\n' for key, value in identity.items())
-            update_file(identity_file, lambda _text: text, validator=tomllib.loads)
+            update_file(identity_file, lambda _text: text, validator=tomllib.loads, root=root)
             read_identity(root)
         token_file = root / '.management-token'
         created = not token_file.exists()

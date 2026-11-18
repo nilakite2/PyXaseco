@@ -256,7 +256,8 @@ class TmxJobs:
 
     async def request(self, *, login, nickname, complete, ref='', section='', random_filters=None,
                       vote=False, require_feature_flags=True, current_map=False,
-                      guard=None, discarded=None, acknowledge=True, persist=False) -> Admission:
+                      guard=None, discarded=None, acknowledge=True, persist=False,
+                      apply_promoted=None) -> Admission:
         from . import backend as b
         if 'jukebox' not in self.aseco.active_apps:
             raise RuntimeError('The Jukebox app is disabled.')
@@ -281,7 +282,7 @@ class TmxJobs:
             section = b._tmx_section_for_public_host(host)
             payload.update(kind='add', section=section, track_id=track_id)
             key = f'{section}:{track_id}:{vote}'
-        key += f':{persist}:{id(requester)}'
+        key += f':{persist}:{apply_promoted is not None}:{id(requester)}'
         live_uids = tuple(payload.pop('live_uids', ()))
         job = JobEnvelope.capture(self.aseco.capture_job_context(login=login, nickname=nickname), payload)
 
@@ -328,10 +329,13 @@ class TmxJobs:
                         except (OSError, ValueError) as error:
                             await complete(False, f'TMX file promotion failed ({type(error).__name__}).')
                             return
-                        ok, info = await b.admin_add_tmx_track(self.aseco, str(prepared.track_id), login,
-                                                             prepared.section, use_add_challenge=True,
-                                                             prepared=promoted, requester_nick=nickname,
-                                                             persist=persist)
+                        if apply_promoted is not None:
+                            ok, info = await apply_promoted(promoted)
+                        else:
+                            ok, info = await b.admin_add_tmx_track(self.aseco, str(prepared.track_id), login,
+                                                                 prepared.section, use_add_challenge=True,
+                                                                 prepared=promoted, requester_nick=nickname,
+                                                                 persist=persist)
                     if random_filters is not None and ok:
                         info = {'name': info, 'section': prepared.section, 'uid': prepared.metadata.get('uid', '')}
                     await complete(ok, info)

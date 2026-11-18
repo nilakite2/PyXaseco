@@ -317,6 +317,16 @@ DonateTopLeft = """
 <label posn="34 -0.4 2" sizen="4 1.5" text="%COP7% C" action="36"/>
 </frame></manialink>
 """
+RecordsInline = """
+<manialink id="4"><frame posn="-25 -36 0">
+<quad sizen="50 2.7" style="Bgs1InRace" substyle="NavButton"/>
+<format textsize="1" textcolor="ffff"/>
+<label posn="0.8 -0.5 2" sizen="11.6 2" text="$da2PB:$z %PB%" action="7"/>
+<label posn="12.8 -0.5 2" sizen="11.8 2" text="$aaaLocal:$z %LCL%" action="8"/>
+<label posn="25.2 -0.5 2" sizen="11.8 2" text="$aaaDedi:$z %DED%" action="9"/>
+<label posn="37.6 -0.5 2" sizen="11.8 2" text="$aaaTMX:$z %TMX%" action="10"/>
+</frame></manialink>
+"""
 RecordsLeftBlackBold = """
 <manialink id="4"><frame posn="-64.8 23.3 0">
 <quad sizen="14 11.5" style="Bgs1InRace" substyle="NavButton"/>
@@ -551,42 +561,44 @@ RecordsRightBottomRM = """
 StatsNations = """
 <manialink id="9">
 <frame posn="-63.9 -33.1 0">
-<format textsize="1" textcolor="ddd"/>
-<quad sizen="10 2.2" posn="2 0 0" style="Bgs1InRace" substyle="NavButton"/>
-<label posn="7 -0.3" sizen="8 2" halign="center" textcolor="fff" text="Your Stats"/>
-<quad sizen="14 11.2" posn="0 -1.9 0" style="Bgs1InRace" substyle="NavButton"/>
-<label posn="6.8 -2.7" halign="right" text="Rank:"/>
-<label posn="7.2 -2.7" sizen="6 2" textcolor="fff" text="%RANK%"/>
-<label posn="6.8 -4.7" halign="right" text="Avg:"/>
-<label posn="7.2 -4.7" textcolor="fff" text="%AVG%"/>
-<label posn="6.8 -6.7" halign="right" text="Records:"/>
-<label posn="7.2 -6.7" textcolor="fff" text="%RECS%"/>
-<label posn="6.8 -8.7" halign="right" text="Wins:"/>
-<label posn="7.2 -8.7" textcolor="fff" text="%WINS%"/>
-<label posn="6.8 -10.7" halign="right" text="Played:"/>
-<label posn="7.2 -10.7" textcolor="fff" text="%PLAY%"/>
+<quad posn="0 0 0.001" sizen="14 12.0" style="BgsPlayerCard" substyle="BgCardSystem"/>
+<quad posn="0.4 -0.36 0.002" sizen="13.2 2" style="BgsPlayerCard" substyle="BgCardSystem"/>
+<quad posn="0.6 -0.15 0.004" sizen="2.5 2.5" style="Icons128x128_1" substyle="ProfileAdvanced"/>
+<label posn="3.2 -0.55 0.004" sizen="10.2 0" textsize="1" textcolor="FFFF" text="Your Stats"/>
+<format textsize="1" textcolor="FFFF"/>
+<label posn="0.65 -3.0 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Rank"/>
+<label posn="13.35 -3.0 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%RANK%"/>
+<label posn="0.65 -4.8 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Avg. rank"/>
+<label posn="13.35 -4.8 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%AVG%"/>
+<label posn="0.65 -6.6 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Records"/>
+<label posn="13.35 -6.6 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%RECS%"/>
+<label posn="0.65 -8.4 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Wins"/>
+<label posn="13.35 -8.4 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%WINS%"/>
+<label posn="0.65 -10.2 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Played"/>
+<label posn="13.35 -10.2 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%PLAY%"/>
 </frame>
 </manialink>
 """
 StatsUnited = """
 <manialink id="9">
 <frame posn="-63.9 -33.1 0">
-<format textsize="1" textcolor="ddd"/>
-<quad sizen="10 2.2" posn="2 0 0" style="Bgs1InRace" substyle="NavButton"/>
-<label posn="7 -0.3" sizen="8 2" halign="center" textcolor="ffc" text="Your Stats"/>
-<quad sizen="14 13" posn="0 -1.9 0" style="Bgs1InRace" substyle="NavButton"/>
-<label posn="6.8 -2.7" halign="right" text="Rank:"/>
-<label posn="7.2 -2.7" sizen="6 2" textcolor="fff" text="%RANK%"/>
-<label posn="6.8 -4.7" halign="right" text="Avg:"/>
-<label posn="7.2 -4.7" textcolor="fff" text="%AVG%"/>
-<label posn="6.8 -6.7" halign="right" text="Records:"/>
-<label posn="7.2 -6.7" textcolor="fff" text="%RECS%"/>
-<label posn="6.8 -8.7" halign="right" text="Wins:"/>
-<label posn="7.2 -8.7" textcolor="fff" text="%WINS%"/>
-<label posn="6.8 -10.7" halign="right" text="Played:"/>
-<label posn="7.2 -10.7" textcolor="fff" text="%PLAY%"/>
-<label posn="6.8 -12.7" halign="right" text="Donations:"/>
-<label posn="7.2 -12.7" textcolor="fff" text="%DONS%"/>
+<quad posn="0 0 0.001" sizen="14 13.8" style="BgsPlayerCard" substyle="BgCardSystem"/>
+<quad posn="0.4 -0.36 0.002" sizen="13.2 2" style="BgsPlayerCard" substyle="BgCardSystem"/>
+<quad posn="0.6 -0.15 0.004" sizen="2.5 2.5" style="Icons128x128_1" substyle="ProfileAdvanced"/>
+<label posn="3.2 -0.55 0.004" sizen="10.2 0" textsize="1" textcolor="FFFF" text="Your Stats"/>
+<format textsize="1" textcolor="FFFF"/>
+<label posn="0.65 -3.0 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Rank"/>
+<label posn="13.35 -3.0 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%RANK%"/>
+<label posn="0.65 -4.8 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Avg. rank"/>
+<label posn="13.35 -4.8 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%AVG%"/>
+<label posn="0.65 -6.6 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Records"/>
+<label posn="13.35 -6.6 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%RECS%"/>
+<label posn="0.65 -8.4 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Wins"/>
+<label posn="13.35 -8.4 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%WINS%"/>
+<label posn="0.65 -10.2 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Played"/>
+<label posn="13.35 -10.2 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%PLAY%"/>
+<label posn="0.65 -12.0 0.003" sizen="6.4 1.7" scale="0.9" textcolor="DDDF" text="Donations"/>
+<label posn="13.35 -12.0 0.003" sizen="6.3 1.7" halign="right" scale="0.9" text="%DONS%"/>
 </frame>
 </manialink>
 """

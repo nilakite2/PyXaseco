@@ -9,7 +9,7 @@ from pathlib import Path
 import tomllib
 
 from .app_policy import MANAGEABLE_STANDALONE_APPS, PROTECTED_STANDALONE_APPS, RELOADABLE_APPS
-from .config_store import ConfigStore, ManagementError, edit_toml, runtime_lock, update_file
+from .config_store import ConfigStore, ManagementError, config_backup_directory, edit_toml, runtime_lock, update_file
 from .instances import configured_endpoint, controller_root, read_dotenv
 from .editing import edit_dotenv, origin_hints, secret_key
 
@@ -174,16 +174,26 @@ class ManagementOperations:
         """Caller owns offline exclusion OR runtime queue ordering."""
         self.validate_config_edit(relative, path, value, expected=expected)
         if self.config.path(relative).name == '.env':
-            return update_file(self.config.path(relative), lambda text: edit_dotenv(text, path, value), expected=expected)
+            return update_file(self.config.path(relative), lambda text: edit_dotenv(text, path, value),
+                               expected=expected, root=self.root)
         return self.config.set_toml(relative, path, value, expected=expected)
 
+    def _config_backups(self, file):
+        found = {}
+        for directory in (config_backup_directory(self.root, file),
+                          config_backup_directory(self.root, file, legacy=True),
+                          file.parent / '.management-backups'):
+            if directory.is_symlink() or directory.is_junction():
+                raise ManagementError('Unsafe backup directory')
+            for path in directory.glob(file.name + '.*.bak'):
+                if path.is_file() and not path.is_symlink():
+                    if path.name in found:
+                        raise ManagementError('Config backup exists at both old and new paths')
+                    found[path.name] = path
+        return {name: found[name] for name in sorted(found, reverse=True)[:30]}
+
     def backups(self, relative):
-        file = self.config.path(relative)
-        directory = file.parent / '.management-backups'
-        if directory.is_symlink():
-            raise ManagementError('Unsafe backup directory')
-        return [path.name for path in sorted(directory.glob(file.name + '.*.bak'), reverse=True)
-                if path.is_file() and not path.is_symlink()][:30]
+        return list(self._config_backups(self.config.path(relative)))
 
     def restore_config(self, relative, backup, *, expected, offline=False):
         with self._offline(offline):
@@ -193,15 +203,15 @@ class ManagementOperations:
         file = self.config.path(relative)
         if file.name == 'apps.toml':
             raise ManagementError('Use app-state for loadout changes, not a whole-file restore')
-        if backup not in self.backups(relative):
+        saved = self._config_backups(file).get(backup)
+        if saved is None:
             raise ManagementError('Select an existing recent backup belonging to this file')
-        saved = file.parent / '.management-backups' / backup
         if saved.stat().st_size > 4 * 1024 * 1024:
             raise ManagementError('Backup exceeds editing limit')
         text = saved.read_bytes().decode('utf-8')
         if file.suffix == '.toml':
             tomllib.loads(text)
-        return update_file(file, lambda _old: text, expected=expected)
+        return update_file(file, lambda _old: text, expected=expected, root=self.root)
 
     def set_app_state(self, app_id: str, enabled: bool, *, expected: str, offline: bool = False):
         if app_id not in MANAGEABLE_STANDALONE_APPS or app_id in PROTECTED_STANDALONE_APPS:
@@ -230,7 +240,7 @@ class ManagementOperations:
             result = self.validate(tomllib.loads(text))
             if not result['valid']:
                 raise ManagementError('; '.join(result['errors']))
-        return update_file(self.root / 'apps.toml', transform, expected=expected, validator=check)
+        return update_file(self.root / 'apps.toml', transform, expected=expected, validator=check, root=self.root)
 
 
 def masked(data):

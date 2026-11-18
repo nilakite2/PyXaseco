@@ -28,6 +28,8 @@ from typing import TYPE_CHECKING, Any
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, bind_app_settings
 from pyxaseco.core.config import display_path
 from pyxaseco.models import Gameinfo
+from apps.platform_ui.navigation import player_command
+from .menu_layout import organize
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -102,24 +104,27 @@ def _allow_menu_entry(aseco: "Aseco", player: "Player", entry: "FufiMenuEntry") 
     chatcmd = (entry.chatcmd or "").strip()
     chatcmd_l = chatcmd.lower()
 
-    if chatcmd_l.startswith("/") and not chatcmd_l.startswith("/admin") and not chatcmd_l.startswith("/jfreu"):
-        parts = chatcmd_l[1:].split(None, 1)
-        cmd_name = parts[0].strip() if parts else ""
-        if cmd_name and not aseco.get_command(cmd_name):
+    parts = chatcmd_l.lstrip('/').split()
+    cmd_name = parts[0] if parts else ''
+    if cmd_name and cmd_name not in ('admin', 'jfreu'):
+        if not player_command(aseco, player, cmd_name, include_hidden=not entry.quick,
+                              include_admin=not entry.quick):
             return False
 
-    if chatcmd_l.startswith("/admin"):
+    if cmd_name == 'admin':
         sub = _extract_admin_subcommand(chatcmd_l)
         if not sub:
             return False
 
+        if not aseco.get_command('admin'):
+            return False
         auth_check = _resolve_chat_admin_auth_check()
         if callable(auth_check):
             return bool(auth_check(aseco, player, sub)[0])
         return aseco.allow_ability(player, sub)
 
-    if chatcmd_l.startswith("/jfreu"):
-        return aseco.is_any_admin(player)
+    if cmd_name == 'jfreu':
+        return bool(aseco.get_command('jfreu') and aseco.is_any_admin(player))
 
     if entry.ability:
         return aseco.allow_ability(player, entry.ability)
@@ -134,6 +139,19 @@ def register(aseco: "Aseco"):
     aseco.register_event("onEndRace", fufiMenu_endRace)
     aseco.register_event("onNewChallenge", fufiMenu_newChallenge)
     aseco.register_event("onRestartChallenge", fufiMenu_newChallenge)
+    aseco.add_chat_command('menu', 'Opens the server Menu', app='ui', usage='/menu')
+    aseco.register_event('onChat_menu', open_menu)
+
+
+async def open_menu(aseco, command):
+    from pyxaseco.core.widget_delivery import is_score_phase
+    player = command['author']
+    fast = aseco.get_service('ui/fast_menu')
+    if fast and fast.active(aseco, player) and fast.values['menu/enabled']:
+        await fast.command(aseco, command)
+        return
+    if _fufi_menu and _fufi_menu.blocks and not is_score_phase(aseco):
+        await _fufi_menu.display_menu(player.login, '0000')
 
 
 def _menu_enabled(config: dict[str, Any]) -> bool:
@@ -141,6 +159,16 @@ def _menu_enabled(config: dict[str, Any]) -> bool:
     if isinstance(raw, str):
         return raw.strip().lower() not in {"0", "false", "off", "no"}
     return bool(raw)
+
+
+def _trim_separators(entries):
+    result = []
+    for entry in entries:
+        if entry.type != 'separator' or (result and result[-1].type != 'separator'):
+            result.append(entry)
+    if result and result[-1].type == 'separator':
+        result.pop()
+    return result
 
 
 @dataclass
@@ -157,6 +185,7 @@ class FufiMenuEntry:
     id: str = ""
     parentid: str = "0000"
     entries: list["FufiMenuEntry"] = field(default_factory=list)
+    quick: bool = False
 
     def is_group(self) -> bool:
         return bool(self.entries) or self.chatcmd == ""
@@ -212,7 +241,7 @@ class FufiMenuEntry:
         for entry in result:
             if (not entry.is_group()) or (not menu.group_is_empty(entry, login)) or entry.type == "separator":
                 filtered.append(entry)
-        return filtered
+        return _trim_separators(filtered) if menu.quick_menu else filtered
 
 
 class FufiMenu:
@@ -224,6 +253,7 @@ class FufiMenu:
 
         self.config_path = Path(config_path) if config_path else None
         self.config_root = config_root if isinstance(config_root, dict) else {}
+        self.quick_menu = self.config_root.get('quick_navigation', True) is not False
 
         self.posx = 0.0
         self.posy = 0.0
@@ -239,6 +269,7 @@ class FufiMenu:
         self.blocks: dict[str, str] = {}
         self.entries: list[FufiMenuEntry] = []
         self.entries_list: list[FufiMenuEntry] = []
+        self.destination_entries: dict[str, FufiMenuEntry] = {}
 
         self.app_list = ""
         self.aseco: Aseco | None = None
@@ -486,9 +517,6 @@ class FufiMenu:
 
     def load_entries(self):
         entries_data = self._load_entries_data()
-        if not entries_data:
-            return
-
         for entry_node in entries_data:
             if not isinstance(entry_node, dict):
                 continue
@@ -498,6 +526,8 @@ class FufiMenu:
                 entry = self._entry_from_mapping(entry_node, self.id)
                 self.entries.append(entry)
                 self.entries_list.append(entry)
+        if self.quick_menu:
+            organize(self)
 
     def _load_entries_data(self) -> list[dict[str, Any]]:
         entries_value = self.config_root.get("entries")
@@ -538,6 +568,7 @@ class FufiMenu:
             rights=(str(entry_data.get("rights", "")).lower() == "tmuf"),
             id=self.get_unique_id(),
             parentid=parentid,
+            quick=bool(entry_data.get("quick", False)),
         )
 
         for sub in entry_data.get("entries", []):
@@ -587,6 +618,10 @@ class FufiMenu:
             attrib["rights"] = rights
 
         parent = self.get_entry_by_unique_key(insertInGroup)
+        if parent is self and self.quick_menu and entryPoint:
+            anchor = self.get_entry_by_unique_key(entryPoint)
+            if isinstance(anchor, FufiMenuEntry):
+                parent = self.get_entry_by_id(anchor.parentid) or self
         if not parent:
             if self.aseco:
                 self.aseco.console(
@@ -684,10 +719,9 @@ class FufiMenu:
         block = block[: block.find(end_str)]
         return block
 
-    async def send_menu_button_to_login(self, login: str):
+    def menu_button_xml(self):
         if not {"header", "footer", "menubutton", "icon"}.issubset(self.blocks):
-            logger.warning("[FufiMenu] Menu template blocks missing, skipping menu button render")
-            return
+            return ""
         header = self.blocks["header"].replace("%menuid%", self.manialink_id + "0000").replace("%framepos%", "0 0 1")
         footer = self.blocks["footer"]
         content = (
@@ -707,7 +741,13 @@ class FufiMenu:
             .replace("%style%", self.styles["menuicon"]["style"])
             .replace("%substyle%", self.styles["menuicon"]["substyle"])
         )
-        xml = header + content + icon + footer
+        return header + content + icon + footer
+
+    async def send_menu_button_to_login(self, login: str):
+        xml = self.menu_button_xml()
+        if not xml:
+            logger.warning("[FufiMenu] Menu template blocks missing, skipping menu button render")
+            return
 
         if login == "":
             if self.first_challenge:
@@ -755,6 +795,10 @@ class FufiMenu:
         player = self.aseco.server.players.get_player(login)
         if not player:
             return
+        dispatch = getattr(self.aseco, 'dispatch_chat_command', None)
+        if callable(dispatch):
+            await dispatch(login, "/" + full_cmd)
+            return
 
         # Preferred: central chat handler if available
         for meth_name in ("playerChat", "player_chat", "handle_chat", "handleChat"):
@@ -790,7 +834,7 @@ class FufiMenu:
             return
     
         entry = self.get_entry_by_id(action)
-        if not entry:
+        if not isinstance(entry, FufiMenuEntry) or not self.entry_accessible(login, entry):
             return
     
         if entry.is_group():
@@ -829,9 +873,17 @@ class FufiMenu:
                 return entry
         return None
 
+    def entry_accessible(self, login, entry):
+        parent = self.get_entry_by_id(entry.parentid)
+        visible = (self.get_valid_entries(login) if parent is self
+                   else parent.get_valid_entries(self, login) if isinstance(parent, FufiMenuEntry) else ())
+        return entry in visible and (parent is self or self.entry_accessible(login, parent))
+
     def get_entry_by_unique_key(self, unique: str) -> FufiMenu | FufiMenuEntry | None:
         if unique == "":
             return self
+        if unique in self.destination_entries:
+            return self.destination_entries[unique]
         for entry in self.entries_list:
             if entry.unique == unique:
                 return entry
@@ -855,7 +907,7 @@ class FufiMenu:
         for entry in result:
             if (not entry.is_group()) or (not self.group_is_empty(entry, login)) or entry.type == "separator":
                 filtered.append(entry)
-        return filtered
+        return _trim_separators(filtered) if self.quick_menu else filtered
 
     async def close_menu(self, login: str):
         xml = f'<?xml version="1.0" encoding="UTF-8"?><manialinks><manialink id="{self.manialink_id}0001"></manialink></manialinks>'
@@ -876,6 +928,14 @@ class FufiMenu:
             await self.display_menu(login, ids[-2])
 
     async def display_menu(self, login: str, id_: str):
+        entry = self.get_entry_by_id(id_)
+        visible = (entry.get_valid_entries(self, login) if isinstance(entry, FufiMenuEntry)
+                   else self.get_valid_entries(login))
+        if not self.quick_menu or any(item.indicator for item in visible):
+            await self.refresh_indicators()
+        await self.render_menu(login, id_)
+
+    async def refresh_indicators(self):
         try:
             self.gameinfo = await self.aseco.client.query("GetCurrentGameInfo", 1) or {}
         except Exception:
@@ -893,13 +953,22 @@ class FufiMenu:
         except Exception:
             self.challenge_download_allowed = None
 
+    async def render_menu(self, login: str, id_: str):
         ids = self.get_window_ids(id_)
 
-        posx = self.posx + self.width if self.horientation == 1 else self.posx
-        posy = self.posy
+        button_x, button_y, scale = self.posx, self.posy, 1
+        player = self.aseco.server.players.get_player(login)
+        hud = getattr(self.aseco.get_service('ui/uistyle'), 'hud', None)
+        if player and hud:
+            button_x, button_y, scale = hud.panel_geometry(player, self.manialink_id + '0000', button_x, button_y)
+        posx = button_x + self.width * scale if self.horientation == 1 else button_x
+        posy = button_y
         content = ""
         oldId = None
         entries: list[FufiMenuEntry] = []
+        if self.quick_menu and len(ids) > 1:
+            oldId, id_ = ids[-2:]
+            ids = [id_]
 
         for wid in ids:
             itemoffset = 0
@@ -922,11 +991,12 @@ class FufiMenu:
             windowheight = self.get_window_height(entries)
             windowy = posy + itemoffset
             if self.vorientation == 1:
-                if windowy > self.posy:
-                    windowy = self.posy
+                if windowy > button_y:
+                    windowy = button_y
             else:
-                if windowy - windowheight < (self.posy - self.height):
-                    windowy = self.posy - self.height + windowheight
+                button_bottom = button_y - self.height * scale
+                if windowy - windowheight < button_bottom:
+                    windowy = button_bottom + windowheight
 
             content += (
                 self.blocks["menuwindow"]
@@ -1136,6 +1206,22 @@ async def fufiMenu_startup(aseco: "Aseco", _param=None):
         _fufi_menu.aseco = aseco
 
     await aseco.release_event("onMenuLoaded", _fufi_menu)
+
+
+def preview_menu_button(aseco):
+    if _fufi_menu is not None:
+        return _fufi_menu.menu_button_xml(), True
+    bound = bind_app_settings(FUFI_MENU_SETTINGS_SCHEMA, getattr(aseco, "_base_dir", None))
+    config = bound.values["config"]
+    if not isinstance(config, dict) or not config:
+        return "", False
+    sample = FufiMenu(config, bound.source_path)
+    try:
+        sample.load_settings()
+        sample.load_styles()
+    except (TypeError, ValueError, IndexError):
+        return "", False
+    return sample.menu_button_xml(), _menu_enabled(config)
 
 
 async def fufiMenu_newChallenge(aseco: "Aseco", _param=None):

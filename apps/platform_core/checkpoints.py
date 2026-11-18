@@ -53,8 +53,8 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onPlayerFinish1',    _store_finish)
     aseco.register_event('onPlayerInfoChanged',_spec_togglecp)
 
-    aseco.add_chat_command('cptms',  'Shows local checkpoint times: /cptms [rank|me|cp N]')
-    aseco.add_chat_command('sectms', 'Shows local sector times: /sectms [rank|me|cp N]')
+    aseco.add_chat_command('cptms',  'Shows local checkpoint times', usage='/cptms [rank|me|cp N]')
+    aseco.add_chat_command('sectms', 'Shows local sector times', usage='/sectms [rank|me|cp N]')
 
     aseco.register_event('onChat_cptms',   chat_cptms)
     aseco.register_event('onChat_sectms',  chat_sectms)

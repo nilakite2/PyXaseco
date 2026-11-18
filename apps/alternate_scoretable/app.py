@@ -82,6 +82,8 @@ class AlternateScoretableApp(App):
         self.warn_at = 0
 
     def register_runtime(self, aseco):
+        aseco.register_service('ui/score_preview/alternate_scoretable', self.score_preview,
+                               owner='alternate_scoretable')
         aseco.add_chat_command('scoretable', 'Show Alternate Scoretable or /scoretable help',
                                app='alternate_scoretable', owner='feature/alternate_scoretable',
                                usage='/scoretable [help]', category='chat-server')
@@ -99,6 +101,19 @@ class AlternateScoretableApp(App):
             ('onWidgetVisibilityChanged', self.visibility),
         ):
             aseco.register_event(event, callback)
+
+    def score_preview(self, _aseco, player, track, names, *, mode, phase):
+        if not self.values:
+            return
+        rows = [{'rank': i + 1, 'name': name, 'login': f'preview{i}', 'team': i % 2,
+                 'time': 58820 + i * 1370, 'score': (980 - i * 25 if mode == 4 else max(1, 12 - i)),
+                 'pb': 980 - i * 25 if mode == 4 else 58820 + i * 1370, 'finishes': 3,
+                 'ladder': 100 + i, 'online': 600 + i * 50, 'connected': True, 'spectator': False}
+                for i, name in enumerate(names)]
+        data = {'rows': rows, 'mode': mode, 'map': track['name'], 'players': len(rows),
+                'spectators': 2, 'pb_available': True, 'teams': {0: 7, 1: 5}}
+        markup, _page = views.window(data, self.values, player.login)
+        yield markup, self.enabled and self.values['show_at_score']
 
     def configuration(self, aseco):
         return validate_values(bind_app_settings(SCHEMA, aseco._base_dir).values)

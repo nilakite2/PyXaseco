@@ -16,6 +16,8 @@ APP_METADATA = {
     "description": "Optional in-game app and app_defaults manager for admin use.",
     "modules": [
         "apps/apps_manager/service.py",
+        "apps/apps_manager/commands.py",
+        "apps/apps_manager/views.py",
     ],
     "entries": [
         "app/apps_manager",

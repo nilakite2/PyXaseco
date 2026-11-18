@@ -16,7 +16,7 @@ import aiomysql
 
 from pyxaseco.app_services import get_localdb_service, localdb_get_pool
 from pyxaseco.core.file_io import file_io
-from pyxaseco.management.config_store import ManagementError, update_file
+from pyxaseco.management.config_store import ManagementError, cleanup_backup_directory, update_file
 
 
 logger = logging.getLogger(__name__)
@@ -120,10 +120,8 @@ async def prepare(aseco, mode):
 
 
 def _backup_directory(root):
-    parent = Path(root).resolve() / '.server-cleanup'
-    if parent.is_symlink():
-        raise ManagementError('Cleanup backup directory may not be a symbolic link')
-    parent.mkdir(mode=0o700, exist_ok=True)
+    parent = cleanup_backup_directory(root)
+    parent.mkdir(parents=True, mode=0o700, exist_ok=True)
     folder = parent / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ-') + secrets.token_hex(4))
     folder.mkdir(mode=0o700)
     return folder
@@ -243,6 +241,7 @@ async def command(aseco, admin, args):
     try:
         if getattr(aseco, '_shutdown_requested', False):
             raise ManagementError('Controller is already shutting down')
+        backup_path = cleanup_backup_directory(aseco._base_dir).relative_to(aseco._base_dir).as_posix()
         pending = getattr(aseco, '_cleanup_pending', {})
         if len(args) == 1:
             plan = await prepare(aseco, args[0])
@@ -253,7 +252,7 @@ async def command(aseco, admin, args):
             if plan.matchsettings:
                 await reply(f'{{#message}}Keep only the running map in MatchSettings: {plan.matchsettings}. Game settings and map files are preserved.')
             await reply('{#message}Dedicated stays online; ms runs live. db/all briefly restart PyXaseco; records during that gap are not tracked. A failed DB cleanup leaves PyXaseco stopped for review.')
-            await reply(f'{{#message}}Backups: .server-cleanup/. Confirm within {TTL}s: //cleanupserver {plan.mode} confirm {token}')
+            await reply(f'{{#message}}Backups: {backup_path}/. Confirm within {TTL}s: //cleanupserver {plan.mode} confirm {token}')
             return
         saved = pending.pop(admin.login, None)
         if (not saved or saved[0] is not admin or saved[1].mode != args[0]
@@ -263,11 +262,11 @@ async def command(aseco, admin, args):
         if await prepare(aseco, plan.mode) != plan:
             raise ManagementError('Cleanup targets changed; request a new preview')
         if plan.database:
-            await reply('{#message}Cleanup confirmed. Dedicated stays online; PyXaseco will restart after successful DB cleanup. Backups: .server-cleanup/.')
+            await reply(f'{{#message}}Cleanup confirmed. Dedicated stays online; PyXaseco will restart after successful DB cleanup. Backups: {backup_path}/.')
             await aseco.shutdown(after_close=lambda: execute(aseco, plan))
         else:
             await execute(aseco, plan)
-            await reply('{#message}MatchSettings cleaned: only the running map remains. Server and PyXaseco stay online. Backups: .server-cleanup/.')
+            await reply(f'{{#message}}MatchSettings cleaned: only the running map remains. Server and PyXaseco stay online. Backups: {backup_path}/.')
     except (OSError, ValueError, aiomysql.Error, ET.ParseError) as error:
         logger.warning('[CleanupServer] Refused: %s', error)
         await reply('{#error}Cleanup refused: ' + str(error))

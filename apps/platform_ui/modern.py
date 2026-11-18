@@ -56,10 +56,12 @@ def record_widget(*, ml_id, cfg, entries, online, login, mode, palette, mark_onl
     width = cfg.width
     line_h = max(1.0, cfg.row_height)
     visible = [entry for entry in entries if entry.get('score') is not None and entry.get('rank') != '--'][:cfg.entries]
-    height = 2.65 + line_h * len(visible)
+    height = cfg.height or (2.65 + line_h * len(visible))
+    if cfg.height:
+        visible = visible[:max(0, int((height - 2.65) / line_h + 1e-8))]
     parts = [f'<manialink id="{ml_id}"><frame posn="{cfg.pos_x:.4f} {cfg.pos_y:.4f} 0">',
              _quad(0, 0, .001, width, height, cfg.bg_color or c['background'], click_action),
-             _quad(0, 0, .002, width, 2.55, c['header']),
+             _quad(0, 0, .002, width, min(2.55, height), c['header']),
              _quad(0, 0, .003, .16, height, c['accent'])]
     has_icon = bool(cfg.icon_style and cfg.icon_substyle)
     if has_icon:

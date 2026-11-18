@@ -31,7 +31,7 @@ APP_METADATA = {
     ],
     "depends_on": [
         "platform_core",
-        "ui",
+        "platform_ui",
     ],
 }
 
@@ -42,7 +42,7 @@ class DedimaniaApp(App):
             app_id="records_dedimania",
             display_name="Records Dedimania",
             description="Dedimania records service, chat flows, and related records widget ownership.",
-            depends_on=("platform_core", "ui"),
+            depends_on=("platform_core", "platform_ui"),
             entry_modules=("app/records_dedimania",),
             settings_schema=DEDI_SETTINGS_SCHEMA,
         )

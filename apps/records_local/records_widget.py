@@ -6,13 +6,7 @@ from typing import TYPE_CHECKING
 from pyxaseco.helpers import format_time
 from pyxaseco.models import Gameinfo
 
-from apps.ui.config import _state, _effective_mode
-from apps.ui.hud import (
-    append_window_start,
-    append_window_end,
-    append_four_player_columns,
-)
-from apps.ui.internal.utils import _handle_special_chars
+from apps.ui import record_widgets as ui
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -136,25 +130,23 @@ def _close_to_you(records, login: str, limit: int, topcount: int, player_nick: s
 
 
 async def _draw_local_player(aseco: 'Aseco', login: str):
-    from apps.ui.widgets.common import _hide, _send
-    from apps.ui.widgets.records_common import _build_record_widget
 
-    if not _state.player_visible.get(login, True):
-        await _hide(aseco, login, ML_LOCAL)
+    if not ui.visible(login):
+        await ui.hide(aseco, login, ML_LOCAL)
         return
 
-    if _state.challenge_show_next:
-        await _hide(aseco, login, ML_LOCAL)
+    if ui.shows_next_map():
+        await ui.hide(aseco, login, ML_LOCAL)
         return
 
-    mode = _effective_mode(aseco)
-    cfg = _state.local.get(mode)
+    mode = ui.game_mode(aseco)
+    cfg = ui.panel(mode, local=True)
     if not cfg or not cfg.enabled:
-        await _hide(aseco, login, ML_LOCAL)
+        await ui.hide(aseco, login, ML_LOCAL)
         return
 
     all_recs = list(aseco.server.records)
-    online = {p.login for p in aseco.server.players.all()} if _state.mark_online else set()
+    online = ui.online_logins(aseco)
 
     player = aseco.server.players.get_player(login)
     player_nick = player.nickname if player and getattr(player, 'nickname', '') else login
@@ -167,10 +159,10 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
     entries = _close_to_you(all_recs, login, cfg.entries, cfg.topcount, player_nick,
                             include_no_record=preset is None or preset.base != 1)
     xml = renderer(player, ml_id=ML_LOCAL, cfg=cfg, login=login,
-                   entries=[{**entry, 'nickname': _handle_special_chars(entry.get('nickname', ''))} for entry in entries],
-                   online=online, mode=mode, mark_online=_state.mark_online) if callable(renderer) else None
+                   entries=[{**entry, 'nickname': ui.clean_nickname(entry.get('nickname', ''))} for entry in entries],
+                   online=online, mode=mode, mark_online=ui.marks_online()) if callable(renderer) else None
     if xml is None:
-        xml = _build_record_widget(
+        xml = ui.build_record_widget(
             ml_id=ML_LOCAL,
             cfg=cfg,
             login=login,
@@ -181,14 +173,13 @@ async def _draw_local_player(aseco: 'Aseco', login: str):
         )
     # Full presentation participates: preset, nicknames, online markers and layout.
     digest = str(hash((preset_id, xml)))
-    if _state.player_local_digest.get(login) == digest:
+    if ui.current_digest(login, local=True) == digest:
         return
-    await _send(aseco, login, xml)
-    _state.player_local_digest[login] = digest
+    await ui.send(aseco, login, xml)
+    ui.set_digest(login, digest, local=True)
 
 
 async def _build_local_records_window(aseco: 'Aseco', page: int) -> str:
-    from apps.ui.internal.utils import _safe_ml_text
 
     records = list(aseco.server.records)
     if not records:
@@ -240,7 +231,7 @@ async def _build_local_records_window(aseco: 'Aseco', page: int) -> str:
     title = f'Local Records   |   Page {page + 1}/{max_pages}   |   {total} Record{"s" if total != 1 else ""}'
 
     p: list[str] = []
-    append_window_start(
+    ui.append_window_start(
         p,
         ml_window=ML_WINDOW,
         ml_subwin=ML_SUBWIN,
@@ -251,8 +242,8 @@ async def _build_local_records_window(aseco: 'Aseco', page: int) -> str:
     )
     p.append(page_buttons(page, max_pages))
 
-    p.append(f'<format textsize="1" textcolor="{_state.style.col_default}"/>')
-    append_four_player_columns(p)
+    p.append(f'<format textsize="1" textcolor="{ui.style().col_default}"/>')
+    ui.append_four_player_columns(p)
 
     online = {pl.login for pl in aseco.server.players.all()}
 
@@ -268,18 +259,18 @@ async def _build_local_records_window(aseco: 'Aseco', page: int) -> str:
             y_bg = -(1.83 * line - 0.2) if (1.83 * line - 0.2) > 0 else 0.2
             p.append(
                 f'<quad posn="{offset + 0.4:.2f} {y_bg:.2f} 0.03" sizen="16.95 1.83" '
-                f'style="{_state.style.hi_other_style}" substyle="{_state.style.hi_other_sub}"/>'
+                f'style="{ui.style().hi_other_style}" substyle="{ui.style().hi_other_sub}"/>'
             )
 
         y = 1.83 * line
         p.append(f'<label posn="{2.6 + offset:.2f} -{y:.2f} 0.04" sizen="2 1.7" halign="right" scale="0.9" text="{i + 1}."/>')
-        p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.04" sizen="4 1.7" halign="right" scale="0.9" textcolor="{_state.style.col_scores}" text="{_safe_ml_text(score_str)}"/>')
-        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.04" sizen="11.2 1.7" scale="0.9" text="{_safe_ml_text(nick)}"/>')
+        p.append(f'<label posn="{6.4 + offset:.2f} -{y:.2f} 0.04" sizen="4 1.7" halign="right" scale="0.9" textcolor="{ui.style().col_scores}" text="{ui.label_text(score_str)}"/>')
+        p.append(f'<label posn="{6.9 + offset:.2f} -{y:.2f} 0.04" sizen="11.2 1.7" scale="0.9" text="{ui.label_text(nick)}"/>')
 
         line += 1
         if line >= 25:
             offset += 19.05
             line = 0
 
-    append_window_end(p)
+    ui.append_window_end(p)
     return ''.join(p)

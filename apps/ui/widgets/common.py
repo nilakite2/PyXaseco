@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from xml.sax.saxutils import escape
 
 from pyxaseco.core.widget_delivery import deliver_ui
 
@@ -8,6 +9,19 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
+
+
+def _bg_attrs(style: str, substyle: str, color: str = '') -> str:
+    if color:
+        return f'bgcolor="{escape(color)}"'
+    return f'style="{escape(style)}" substyle="{escape(substyle)}"'
+
+
+def _score_bg_attrs(style: str = 'BgsPlayerCard', substyle: str = 'BgCardSystem', color: str = '') -> str:
+    # Existing installs may have the old shipped score background in their TOML.
+    if (style, substyle) == ('BgsPlayerCard', 'BgRacePlayerName'):
+        substyle = 'BgCardSystem'
+    return _bg_attrs(style, substyle, color)
 
 
 async def _send(aseco: 'Aseco', login: str, xml: str):

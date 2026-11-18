@@ -29,7 +29,7 @@ APP_METADATA = {
     ],
     "depends_on": [
         "platform_core",
-        "ui",
+        "platform_ui",
     ],
 }
 
@@ -40,7 +40,7 @@ class TrialRecordsApp(App):
             app_id="records_trial",
             display_name="Records Trial",
             description="Trial API-backed records service and related records widget ownership.",
-            depends_on=("platform_core", "ui"),
+            depends_on=("platform_core", "platform_ui"),
             entry_modules=("app/records_trial",),
         )
 

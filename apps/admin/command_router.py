@@ -369,7 +369,7 @@ def _auth_check(aseco: 'Aseco', admin, sub: str):
     sub = (sub or '').strip().lower()
 
     public_admin_commands = {'help', 'helpall', 'listmasters', 'listadmins', 'listops'}
-    masteradmin_only = {'addadmin', 'removeadmin', 'cleanupserver'}
+    masteradmin_only = {'addadmin', 'removeadmin', 'cleanupserver', 'replacemap'}
     admin_or_master_only = {'addop', 'removeop', 'tmatch'}
 
     if sub in public_admin_commands:

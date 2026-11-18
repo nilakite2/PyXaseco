@@ -122,6 +122,69 @@ async def _prefetch_next_challenge(aseco):
         _state.next_challenge = await _get_next_track_info(aseco, _effective_mode(aseco))
 
 
+def _build_next_challenge_xml(nxt):
+    st = _state.style
+    cfg = _state.challenge
+    nxt_name = str(nxt.get('name', '-') or '-')
+    nxt_author = str(nxt.get('author', '-') or '-')
+    nxt_env = str(nxt.get('env', '') or '')
+    nxt_mood = str(nxt.get('mood', '') or '')
+    nxt_atime = str(nxt.get('authortime', '-') or '-')
+    nxt_date = _track_short_date_text(nxt)
+    icon_style = _state.challenge_next.icon_style
+    icon_substyle = _state.challenge_next.icon_substyle
+    title_text = _state.challenge_next.title or 'Next Track'
+
+    # Width: use challenge_next.width from XML <score><width> if set, else the
+    # score default configured in config.py.
+    widget_h = 14.1
+    _score_w = _state.challenge_next.width
+    widget_w = _score_w if _score_w > 0.0 else cfg.width
+    _score_x = _state.challenge_next.pos_x
+    _score_y = _state.challenge_next.pos_y
+
+    xml = (
+        f'<manialink id="{ML_CHALLENGE}">'
+        f'<frame posn="{_score_x:.4f} {_score_y:.4f} 0">'
+        f'<format textsize="1" textcolor="{st.col_default}"/>'
+        f'<quad posn="0 0 0.001" sizen="{widget_w:.4f} {widget_h:.4f}"'
+        f' action="{ML_TOGGLE}"'
+        f' style="{st.bg_style}" substyle="{st.bg_substyle}"/>'
+        f'<quad posn="0.4 -0.36 0.002" sizen="{widget_w - 0.8:.4f} 2"'
+        f' style="{st.title_style}" substyle="{st.title_sub}"/>'
+        f'<quad posn="0.6 -0.15 0.004" sizen="2.5 2.5"'
+        f' style="{escape(icon_style)}" substyle="{escape(icon_substyle)}"/>'
+        f'<label posn="3.2 -0.55 0.004" sizen="10.2 0" textsize="1"'
+        f' text="{_safe_ml_text(title_text)}"/>'
+        # Track name
+        f'<label posn="1.35 -3 0.11" sizen="{widget_w - 2:.4f} 2"'
+        f' text="{_safe_ml_text(_clip(nxt_name, 80))}"/>'
+        f'<frame posn="0.5 -6 0">'
+        f'<label posn="0.85 1 0.11" sizen="{widget_w - 2:.4f} 2" scale="0.9"'
+        f' text="{_safe_ml_text(f"by {_clip(nxt_author, 80)}")}"/>'
+        f'{_score_env_icon_xml(nxt_env)}'
+        f'<label posn="3.3 -1.1 0.11" sizen="7.0 2" scale="0.9"'
+        f' text="{_safe_ml_text(nxt_env)}"/>'
+        f'<quad posn="11.1 -0.47 0.11" sizen="2.6 2.6" halign="right"'
+        f' style="Icons128x128_1" substyle="Manialink"/>'
+        f'<label posn="11.3 -1.1 0.11" sizen="6.0 2" scale="0.9"'
+        f' text="{_safe_ml_text(nxt_mood)}"/>'
+        f'</frame>'
+        f'<frame posn="0.5 -10.3 0">'
+        f'<quad posn="2.95 1.48 0.04" sizen="2.5 2.5" halign="right"'
+        f' style="BgRaceScore2" substyle="ScoreReplay"/>'
+        f'<label posn="3.3 1.0 0.04" sizen="6.2 2" scale="0.8"'
+        f' text="{_safe_ml_text(nxt_atime)}"/>'
+        f'<quad posn="11.1 1.63 0.04" sizen="2.6 2.6" halign="right"'
+        f' style="Icons128x128_1" substyle="Advanced"/>'
+        f'<label posn="11.3 1.0 0.04" sizen="6.0 2" scale="1"'
+        f' text="{_safe_ml_text(nxt_date)}"/>'
+        f'</frame>'
+        f'</frame></manialink>'
+    )
+    return xml
+
+
 async def _draw_challenge_player(aseco: 'Aseco', login: str):
     from .widgets.common import _hide, _send
 
@@ -129,71 +192,8 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
         await _hide(aseco, login, ML_CHALLENGE)
         return
 
-    st = _state.style
-    cfg = _state.challenge
-
     if _state.challenge_show_next:
-        # Score-state: show next track info using the same compact values as the
-        # race widget: name, author, author time and short date.
-        # Uses _state.next_challenge cached in _on_end_race.
-        nxt = _state.next_challenge
-        nxt_name = str(nxt.get('name', '-') or '-')
-        nxt_author = str(nxt.get('author', '-') or '-')
-        nxt_env = str(nxt.get('env', '') or '')
-        nxt_mood = str(nxt.get('mood', '') or '')
-        nxt_atime = str(nxt.get('authortime', '-') or '-')
-        nxt_date = _track_short_date_text(nxt)
-        icon_style = _state.challenge_next.icon_style
-        icon_substyle = _state.challenge_next.icon_substyle
-        title_text = _state.challenge_next.title or 'Next Track'
-
-        # Width: use challenge_next.width from XML <score><width> if set, else the
-        # score default configured in config.py.
-        widget_h = 14.1
-        _score_w = _state.challenge_next.width
-        widget_w = _score_w if _score_w > 0.0 else cfg.width
-        _score_x = _state.challenge_next.pos_x if _state.challenge_next.pos_x != 0.0 else cfg.pos_x
-        _score_y = _state.challenge_next.pos_y if _state.challenge_next.pos_y != 0.0 else cfg.pos_y
-
-        xml = (
-            f'<manialink id="{ML_CHALLENGE}">'
-            f'<frame posn="{_score_x:.4f} {_score_y:.4f} 0">'
-            f'<format textsize="1" textcolor="{st.col_default}"/>'
-            f'<quad posn="0 0 0.001" sizen="{widget_w:.4f} {widget_h:.4f}"'
-            f' action="{ML_TOGGLE}"'
-            f' style="{st.bg_style}" substyle="{st.bg_substyle}"/>'
-            f'<quad posn="0.4 -0.36 0.002" sizen="{widget_w - 0.8:.4f} 2"'
-            f' style="{st.title_style}" substyle="{st.title_sub}"/>'
-            f'<quad posn="0.6 -0.15 0.004" sizen="2.5 2.5"'
-            f' style="{escape(icon_style)}" substyle="{escape(icon_substyle)}"/>'
-            f'<label posn="3.2 -0.55 0.004" sizen="10.2 0" textsize="1"'
-            f' text="{_safe_ml_text(title_text)}"/>'
-            # Track name
-            f'<label posn="1.35 -3 0.11" sizen="{widget_w - 2:.4f} 2"'
-            f' text="{_safe_ml_text(_clip(nxt_name, 80))}"/>'
-            f'<frame posn="0.5 -6 0">'
-            f'<label posn="0.85 1 0.11" sizen="{widget_w - 2:.4f} 2" scale="0.9"'
-            f' text="{_safe_ml_text(f"by {_clip(nxt_author, 80)}")}"/>'
-            f'{_score_env_icon_xml(nxt_env)}'
-            f'<label posn="3.3 -1.1 0.11" sizen="7.0 2" scale="0.9"'
-            f' text="{_safe_ml_text(nxt_env)}"/>'
-            f'<quad posn="11.1 -0.47 0.11" sizen="2.6 2.6" halign="right"'
-            f' style="Icons128x128_1" substyle="Manialink"/>'
-            f'<label posn="11.3 -1.1 0.11" sizen="6.0 2" scale="0.9"'
-            f' text="{_safe_ml_text(nxt_mood)}"/>'
-            f'</frame>'
-            f'<frame posn="0.5 -10.3 0">'
-            f'<quad posn="2.95 1.48 0.04" sizen="2.5 2.5" halign="right"'
-            f' style="BgRaceScore2" substyle="ScoreReplay"/>'
-            f'<label posn="3.3 1.0 0.04" sizen="6.2 2" scale="0.8"'
-            f' text="{_safe_ml_text(nxt_atime)}"/>'
-            f'<quad posn="11.1 1.63 0.04" sizen="2.6 2.6" halign="right"'
-            f' style="Icons128x128_1" substyle="Advanced"/>'
-            f'<label posn="11.3 1.0 0.04" sizen="6.0 2" scale="1"'
-            f' text="{_safe_ml_text(nxt_date)}"/>'
-            f'</frame>'
-            f'</frame></manialink>'
-        )
+        xml = _build_next_challenge_xml(_state.next_challenge)
     else:
         # Race-state: show current track info.
         cur = getattr(aseco.server, 'challenge', None)
@@ -212,54 +212,61 @@ async def _draw_challenge_player(aseco: 'Aseco', login: str):
             )
         except Exception as e:
             logger.debug('[Eyepiece/Challenge] current small widget TMX info failed: %r', e)
-        cur_name = str(cur_data.get('name', '') or '')
-        cur_author = str(cur_data.get('author', '') or '')
-        cur_atime = str(cur_data.get('authortime', '?') or '?')
-        cur_date = _track_short_date_text(cur_data)
-
-        side = 'right' if cfg.pos_x < 0 else 'left'
-        w_off = cfg.width - 15.5
-        if side == 'right':
-            icon_x = 12.5 + w_off
-            title_x = 12.4 + w_off
-            halign = 'right'
-        else:
-            icon_x = 0.6
-            title_x = 3.2
-            halign = 'left'
-
-        xml = (
-            f'<manialink id="{ML_CHALLENGE}">'
-            f'<frame posn="{cfg.pos_x:.4f} {cfg.pos_y:.4f} 0">'
-            f'<format textsize="1" textcolor="{st.col_default}"/>'
-            f'<quad posn="0 0 0.01" sizen="{cfg.width:.4f} 8.65"'
-            f' action="{ML_TOGGLE}"'
-            f' style="{st.bg_style}" substyle="{st.bg_substyle}"/>'
-            f'<quad posn="0.4 -0.36 0.02"'
-            f' sizen="{cfg.width - 0.8:.4f} 2"'
-            f' style="{st.title_style}" substyle="{st.title_sub}"/>'
-            f'<quad posn="{icon_x:.4f} 0 0.04"'
-            f' sizen="2.5 2.5"'
-            f' style="{cfg.icon_style}" substyle="{cfg.icon_substyle}"/>'
-            f'<label posn="{title_x:.4f} -0.55 0.04"'
-            f' sizen="10.2 0" halign="{halign}" textsize="1"'
-            f' text="{_safe_ml_text(cfg.title)}"/>'
-            f'<label posn="1 -2.7 0.04" sizen="13.55 2" scale="1"'
-            f' text="{_safe_ml_text(_clip(cur_name, 80))}"/>'
-            f'<label posn="1 -4.5 0.04" sizen="14.85 2" scale="0.9"'
-            f' text="{_safe_ml_text(f"by {_clip(cur_author, 80)}")}"/>'
-            f'<quad posn="0.7 -6.25 0.04" sizen="1.7 1.7"'
-            f' style="BgRaceScore2" substyle="ScoreReplay"/>'
-            f'<label posn="2.7 -6.55 0.04" sizen="6.2 2" scale="0.8"'
-            f' text="{_safe_ml_text(cur_atime)}"/>'
-            f'<quad posn="9 -6.25 0.04" sizen="2.0 2.0"'
-            f' style="Icons128x128_1" substyle="Advanced"/>'
-            f'<label posn="11.0 -6.55 0.04" sizen="6.2 2" scale="1"'
-            f' text="{_safe_ml_text(cur_date)}"/>'
-            f'</frame></manialink>'
-        )
+        xml = _build_current_challenge_xml(cur_data)
 
     await _send(aseco, login, xml)
+
+
+def _build_current_challenge_xml(cur_data):
+    st = _state.style
+    cfg = _state.challenge
+    cur_name = str(cur_data.get('name', '') or '')
+    cur_author = str(cur_data.get('author', '') or '')
+    cur_atime = str(cur_data.get('authortime', '?') or '?')
+    cur_date = _track_short_date_text(cur_data)
+
+    side = 'right' if cfg.pos_x < 0 else 'left'
+    w_off = cfg.width - 15.5
+    if side == 'right':
+        icon_x = 12.5 + w_off
+        title_x = 12.4 + w_off
+        halign = 'right'
+    else:
+        icon_x = 0.6
+        title_x = 3.2
+        halign = 'left'
+
+    xml = (
+        f'<manialink id="{ML_CHALLENGE}">'
+        f'<frame posn="{cfg.pos_x:.4f} {cfg.pos_y:.4f} 0">'
+        f'<format textsize="1" textcolor="{st.col_default}"/>'
+        f'<quad posn="0 0 0.01" sizen="{cfg.width:.4f} 8.65"'
+        f' action="{ML_TOGGLE}"'
+        f' style="{st.bg_style}" substyle="{st.bg_substyle}"/>'
+        f'<quad posn="0.4 -0.36 0.02"'
+        f' sizen="{cfg.width - 0.8:.4f} 2"'
+        f' style="{st.title_style}" substyle="{st.title_sub}"/>'
+        f'<quad posn="{icon_x:.4f} 0 0.04"'
+        f' sizen="2.5 2.5"'
+        f' style="{cfg.icon_style}" substyle="{cfg.icon_substyle}"/>'
+        f'<label posn="{title_x:.4f} -0.55 0.04"'
+        f' sizen="10.2 0" halign="{halign}" textsize="1"'
+        f' text="{_safe_ml_text(cfg.title)}"/>'
+        f'<label posn="1 -2.7 0.04" sizen="13.55 2" scale="1"'
+        f' text="{_safe_ml_text(_clip(cur_name, 80))}"/>'
+        f'<label posn="1 -4.5 0.04" sizen="14.85 2" scale="0.9"'
+        f' text="{_safe_ml_text(f"by {_clip(cur_author, 80)}")}"/>'
+        f'<quad posn="0.7 -6.25 0.04" sizen="1.7 1.7"'
+        f' style="BgRaceScore2" substyle="ScoreReplay"/>'
+        f'<label posn="2.7 -6.55 0.04" sizen="6.2 2" scale="0.8"'
+        f' text="{_safe_ml_text(cur_atime)}"/>'
+        f'<quad posn="9 -6.25 0.04" sizen="2.0 2.0"'
+        f' style="Icons128x128_1" substyle="Advanced"/>'
+        f'<label posn="11.0 -6.55 0.04" sizen="6.2 2" scale="1"'
+        f' text="{_safe_ml_text(cur_date)}"/>'
+        f'</frame></manialink>'
+    )
+    return xml
 
 
 

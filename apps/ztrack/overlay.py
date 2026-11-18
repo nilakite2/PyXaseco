@@ -45,7 +45,7 @@ def register(aseco: 'Aseco'):
     aseco.register_event('onRestartChallenge',       zt_begin_round)
     aseco.register_event('onNewChallenge',           zt_new_challenge)
     aseco.register_event('onCheckpoint',             zt_checkpoint)
-    aseco.register_event('onPlayerConnect',          zt_player_connect)
+    aseco.register_service('ui/compare_run', compare_run, owner='ztrack')
     aseco.register_event('onPlayerDisconnect',       zt_player_disconnect)
     aseco.register_event('onEndRace',                zt_end_race)
 
@@ -54,10 +54,10 @@ def register(aseco: 'Aseco'):
 # /ztrack command
 # ---------------------------------------------------------------------------
 
-def _checks(values, score, expected=0):
+def _checks(values, score, expected=0, *, limit=512):
     if isinstance(values, str):
         values = values.split(',')
-    if not isinstance(values, (list, tuple)) or not 1 <= len(values) <= 512:
+    if not isinstance(values, (list, tuple)) or not 1 <= len(values) <= limit:
         return []
     try:
         if any(isinstance(value, bool) or not str(value).isdecimal() for value in values):
@@ -203,13 +203,22 @@ async def zt_end_race(aseco: 'Aseco', _params):
     await deliver_ui(aseco, 'SendDisplayManialinkPage', xml, 0, False)
 
 
-async def zt_player_connect(aseco: 'Aseco', player: 'Player'):
-    await aseco.client.query_ignore_result(
-        'ChatSendServerMessageToLogin',
-        aseco.format_colors(
-            '{#server}>> {#message}This server is running zTrack, '
-            'type {#highlite}/ztrack {#message}for more information'),
-        player.login)
+async def compare_run(aseco, player, run, title):
+    count = int(getattr(aseco.server.challenge, 'nbchecks', 0) or 0)
+    checks = _checks(run.splits, run.score, count, limit=5000)
+    if not checks:
+        message = 'Comparison needs a complete checkpoint run matching the current map.'
+    else:
+        _zt[player.login] = {'Mode': 'Pinned', 'Source': title, 'Rec': 0,
+                             'Target': _resolve_view_target(aseco, player) or player.login,
+                             'Comparison': 'cp', 'Pinned': {'source': title, 'checks': checks},
+                             'Label': run.login}
+        message = f'Comparing checkpoint times against {run.login}. Use /ztrack off to stop.'
+        if _is_viewer_spec_like(player):
+            await _send_ml(aseco, player.login, True)
+        else:
+            await _send_ml_self(aseco, player.login, True)
+    await aseco.client.query_ignore_result('ChatSendServerMessageToLogin', aseco.format_colors(message), player.login)
 
 
 async def zt_player_disconnect(aseco: 'Aseco', player: 'Player'):
@@ -328,7 +337,7 @@ async def zt_checkpoint(aseco: 'Aseco', params: list):
                           if _is_viewer_spec_like(viewer) else login)
         if info.get('Target') != cp_login or not info.get('Mode'):
             continue
-        reference = _reference(aseco, info['Mode'], int(info.get('Rec', 0)))
+        reference = info.get('Pinned') or _reference(aseco, info['Mode'], int(info.get('Rec', 0)))
         info['Source'] = reference['source'] if reference else info['Mode']
         delta = None
         if reference and time is not None and relative_index < len(reference['checks']):
@@ -353,6 +362,8 @@ async def zt_checkpoint(aseco: 'Aseco', params: list):
 # ---------------------------------------------------------------------------
 
 def _mode_label(info):
+    if info.get('Label'):
+        return info['Label']
     source = info.get('Source') or info.get('Mode', '')
     suffix = ' sector' if info.get('Comparison') == 'sector' else ''
     return f'{source} {info.get("Rec", 0) + 1}{suffix}'

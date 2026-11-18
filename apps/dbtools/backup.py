@@ -13,7 +13,7 @@ import time
 import aiomysql
 
 from pyxaseco.core.file_io import file_io
-from pyxaseco.management.config_store import ManagementError
+from pyxaseco.management.config_store import DATA_DIR, ManagementError, generated_directory
 
 
 MARKER = 'pyxaseco-dbtools-v1'
@@ -22,11 +22,15 @@ SYSTEM_DATABASES = {'mysql', 'sys', 'information_schema', 'performance_schema'}
 LIVE_WARNING = 'Best-effort live export: concurrent writes may make tables reflect different moments.'
 FILES = {'manifest.json', 'manifest.json.tmp', 'database.sql', 'database.sql.gz',
          'database.sql.part', 'database.sql.gz.part'}
+LEGACY_DIRECTORY = 'backups/dbtools'
+DEFAULT_DIRECTORY = f'{DATA_DIR}/backups/dbtools'
 
 
 def directory(root, relative):
     root = Path(root).resolve()
     relative = Path(relative)
+    if relative in (Path(LEGACY_DIRECTORY), Path(DEFAULT_DIRECTORY)):
+        return generated_directory(root, LEGACY_DIRECTORY, 'backups', 'dbtools')
     target = root / relative
     if relative.is_absolute() or target.is_symlink() or target.resolve() == root or not target.resolve().is_relative_to(root):
         raise ManagementError('Backup directory must be a subfolder inside the controller folder.')

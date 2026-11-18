@@ -11,14 +11,11 @@ from uuid import uuid4
 import zipfile
 
 from .config_backup import backup_app_defaults
-from .config_store import ManagementError, file_lock, revision
+from .config_store import ManagementError, instance_lock, maintenance_area, revision
 from .credentials import protect_token
 from .installation import safe_path, _write
 from .maintenance import _bytes, _replace, configuration_file
 from .release_manifest import read_json, validate_archive
-
-
-LEDGER = '.management-maintenance/file-releases.json'
 
 
 def _hash(data):
@@ -28,10 +25,11 @@ def _hash(data):
 class FileUpdates:
     def __init__(self, root):
         self.root = safe_path(root)
-        self.area = safe_path(self.root / '.management-maintenance')
+        self.area = maintenance_area(self.root)
+        self.ledger = (self.area / 'file-releases.json').relative_to(self.root).as_posix()
 
     def _ledger(self):
-        raw = _bytes(safe_path(self.root / LEDGER))
+        raw = _bytes(safe_path(self.root / self.ledger))
         data = read_json(raw) if raw is not None else {'schema': 1, 'controller': str(self.root), 'packages': {}}
         if (not isinstance(data, dict) or data.get('schema') != 1 or data.get('controller') != str(self.root)
                 or not isinstance(data.get('packages'), dict)):
@@ -95,7 +93,7 @@ class FileUpdates:
             previous = {}
         previous = self._selected(package, previous)
         selected = self._selected(package, package['files'])
-        rows, snapshots = [], {LEDGER: _hash(raw)}
+        rows, snapshots = [], {self.ledger: _hash(raw)}
         for name in sorted(set(selected) | set(previous)):
             # Only paths authenticated by a package inventory may be considered.
             from .release_manifest import package_path
@@ -134,8 +132,8 @@ class FileUpdates:
     def apply(self, package, blob, *, reviewed=None, force=False, confirmed=False):
         if confirmed is not True:
             raise ManagementError('Confirm file replacement first; no files changed')
-        safe_path(self.area).mkdir(mode=0o700, exist_ok=True)
-        with file_lock(safe_path(self.area / 'file-update.lock')):
+        safe_path(self.area).mkdir(parents=True, mode=0o700, exist_ok=True)
+        with instance_lock(self.root, self.area / 'file-update.lock', adjacent=False):
             active = safe_path(self.area / 'active.json')
             if active.exists():
                 raise ManagementError('A previous maintenance operation needs recovery first')
@@ -197,20 +195,20 @@ class FileUpdates:
                     files = {name: package['files'][name] for name in incoming if name.startswith('apps/' + app + '/')}
                     if files:
                         ledger['packages'][app] = {'version': package['version'], 'sha256': package['sha256'], 'files': files}
-            changes[LEDGER] = (json.dumps(ledger, indent=2) + '\n').encode()
-            before_files[LEDGER] = ledger_raw
+            changes[self.ledger] = (json.dumps(ledger, indent=2) + '\n').encode()
+            before_files[self.ledger] = ledger_raw
             report = dict(plan, backup=backup, state='prepared', copied=[])
             def save_report():
                 path = folder / 'report.json'
-                _replace(path, (json.dumps(report, indent=2) + '\n').encode(), _hash(_bytes(path)))
+                _replace(path, (json.dumps(report, indent=2) + '\n').encode(), _hash(_bytes(path)), root=self.root)
                 protect_token(path)
             save_report()
-            _replace(active, json.dumps({'id': identity, 'kind': 'file-update'}).encode(), None)
+            _replace(active, json.dumps({'id': identity, 'kind': 'file-update'}).encode(), None, root=self.root)
             protect_token(active)
             copied = []
             try:
                 for name, data in changes.items():
-                    _replace(safe_path(self.root / name), data, _hash(before_files.get(name)))
+                    _replace(safe_path(self.root / name), data, _hash(before_files.get(name)), root=self.root)
                     copied.append(name)
                 report.update(state='copied', copied=copied)
                 save_report()
@@ -218,7 +216,7 @@ class FileUpdates:
             except Exception as error:
                 try:
                     for name in reversed(copied):
-                        _replace(safe_path(self.root / name), before_files.get(name), _hash(changes[name]))
+                        _replace(safe_path(self.root / name), before_files.get(name), _hash(changes[name]), root=self.root)
                     report.update(state='rolled-back', copied=copied)
                     save_report()
                     active.unlink()

@@ -6,7 +6,7 @@ import html
 import logging
 from typing import TYPE_CHECKING
 
-from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_bool, as_float, as_int, as_str, bind_app_settings
+from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_bool, as_float, as_str, bind_app_settings
 from pyxaseco.helpers import strip_colors, strip_sizes
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ BANNER_SETTINGS_SCHEMA = AppSettingsSchema(
         AppSetting('banner/min_width', 7.0, as_float, 'Minimum banner width.', 'banner'),
         AppSetting('banner/char_width', 0.82, as_float, 'Estimated per-character width.', 'banner'),
         AppSetting('banner/height', 2.7, as_float, 'Banner height.', 'banner'),
-        AppSetting('banner/text_size', 1, as_int, 'Banner text size.', 'banner'),
+        AppSetting('banner/text_size', 1.0, as_float, 'Banner text size.', 'banner'),
         AppSetting('banner/text_x', 0.6, as_float, 'Banner text X offset.', 'banner'),
         AppSetting('banner/text_y', -0.35, as_float, 'Banner text Y offset.', 'banner'),
         AppSetting('banner/background_style', 'Bgs1InRace', as_str, 'Banner background style.', 'banner'),
@@ -45,7 +45,7 @@ _min_width = 7.0
 _char_width = 0.82
 _height = 2.7
 _scale = 1.0
-_text_size = 1
+_text_size = 1.0
 _text_x = 0.6
 _text_y = -0.35
 _bg_style = 'Bgs1InRace'
@@ -75,7 +75,7 @@ def _apply_app_defaults(aseco: "Aseco") -> None:
     _min_width = float(bound.values['banner/min_width'])
     _char_width = float(bound.values['banner/char_width'])
     _height = float(bound.values['banner/height'])
-    _text_size = int(bound.values['banner/text_size'])
+    _text_size = float(bound.values['banner/text_size'])
     _text_x = float(bound.values['banner/text_x'])
     _text_y = float(bound.values['banner/text_y'])
     _bg_style = str(bound.values['banner/background_style'] or 'Bgs1InRace')
@@ -92,6 +92,8 @@ async def _get_banner_text(aseco: "Aseco") -> str:
 
 
 def _build_xml(banner_text: str) -> str:
+    from apps.platform_ui.hud_layout import text_geometry
+    text_size, text_scale = text_geometry(_text_size, _scale)
     visible_text = strip_sizes(strip_colors(banner_text, for_tm=False), for_tm=False).strip()
     visible_len = max(1, len(visible_text))
     width = min(_max_width, max(_min_width, 1.2 + (visible_len * _char_width)))
@@ -101,14 +103,14 @@ def _build_xml(banner_text: str) -> str:
             '<?xml version="1.0" encoding="UTF-8"?>',
             f'<manialink id="{ML_ID}">',
             f'<frame posn="{_pos_x} {_pos_y} 0">',
-            f'<format textsize="{_text_size}"/>',
+            f'<format textsize="{text_size}"/>',
             (
                 f'<quad posn="0 0 0" sizen="{width:.2f} {_height}" scale="{_scale}" '
                 f'halign="left" valign="top" style="{_bg_style}" substyle="{_bg_substyle}" />'
             ),
             (
                 f'<label posn="{_text_x} {_text_y} 0.1" sizen="{max(1.0, width - 1.2):.2f} {_height}" '
-                f'scale="{_scale}" halign="left" valign="top" text="{banner_text}"/>'
+                f'scale="{text_scale:.4f}" halign="left" valign="top" text="{banner_text}"/>'
             ),
             "</frame>",
             "</manialink>",

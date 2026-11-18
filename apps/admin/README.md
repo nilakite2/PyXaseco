@@ -12,6 +12,7 @@ Commands use `/admin <command>` or the shorter `//<command>` form.
 | `//help`, `//helpall` | List available administrative commands and syntax. |
 | `//skip`, `//restart`, `//endround` | Control the current race/map. |
 | `//add <TMX_ID>`, `//addlocal` | Add maps permanently; see command help for local-file syntax. |
+| `//replacemap <TMX ID or URL> [section]` | Preview replacing the current map. Use `//replacemap confirm` or `//replacemap cancel`. MasterAdmin only. |
 | `//remove`, `//erase` | Remove a playlist entry; erase also removes its map file. |
 | `//readtracklist`, `//writetracklist`, `/ms` | Load/save MatchSettings or open the MatchSettings picker. |
 | `//forceteam <login> red\|blue`, `//forcespec` | Move a player to a team or spectators. |
@@ -36,6 +37,12 @@ not an assumed hard-coded path. The dedicated-server account must allow the RPCs
 
 - `//add` saves the permanent playlist to MatchSettings; public `/add` is temporary.
 - Removing/erasing a map does not automatically skip the current map.
+- `//replacemap` requires Jukebox for the TMX download and access to the
+  dedicated server's local MatchSettings. It keeps the rotation slot, backs up
+  the selected MatchSettings, and does not delete the old GBX or any records.
+  A different UID gets its own records; nothing is copied between UIDs.
+  If the dedicated server cannot stage a same-UID replacement beside the
+  original, the command stops without removing the original.
 - Cleanup previews and backs up before destructive work. MatchSettings cleanup
   keeps the currently running map; database cleanup affects the entire configured
   database, including other instances if shared. Read the confirmation carefully.

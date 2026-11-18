@@ -1,4 +1,4 @@
-# PyXaseco 1.6.1
+# PyXaseco 1.7
 
 PyXaseco is a Python-based server controller for TrackMania Nations Forever and
 TrackMania United Forever. It builds on the familiar XAseco experience: records,
@@ -134,9 +134,11 @@ Commands for optional apps are available only when those apps are loaded.
 
 | Command | Purpose |
 | --- | --- |
-| `/help`, `/helpall` | Show registered public commands. |
+| `/menu` | Browse Maps, Records, Checkpoints, Server, and My UI. With Eyepiece enabled, the existing tools are grouped by topic. Custom groups and actions remain available. |
+| `/help [command]`, `/helpall` | Show registered public commands or help for one command. |
 | `/server` | Server information and enabled-integration health. |
-| `/recs`, `/pb` | Current-map local records and your saved personal best. |
+| `/recs`, `/pb` | Current-map local records and your saved personal best. Select a record in the list to open its available split tools. |
+| `/recordcp <number>` | Jump to a split in the open record window. |
 | `/list`, `/jukebox` | Browse maps and manage map requests. |
 | `/tmxinfo`, `/xlist` | TMX map information and searches. |
 | `/karma`, `/karma details` | Map voting information and statistics. |
@@ -162,6 +164,33 @@ Apps Manager also supports optional verified file updates with MasterAdmin
 review, configuration backups and manual restart. This is not required to run
 PyXaseco or to maintain it through ordinary file copies. See
 [Apps Manager](apps/apps_manager/README.md) for the in-game update commands.
+
+### Generated Data
+
+PyXaseco stores generated files in `.pyxaseco-data/`: file locks (including
+`locks/apps/`), update downloads and history, configuration and cleanup backups,
+default DBTools backups, and the optional durable record outbox. Keep this
+folder private, include it in instance backups, and leave it out of release ZIPs.
+Editable TOMLs, `.env`, player HUD profiles, and `logfile.txt` stay where they are.
+Custom DBTools backup paths are unchanged. Keep shipping `pyxaseco/management/`:
+it is controller code used by the in-game updater, not instance data.
+
+Existing installations can use their old data paths until migrated. With
+PyXaseco and any management tools stopped, preview from the controller folder:
+
+```powershell
+py -3.12 -m pyxaseco.management migrate-data --folder .
+```
+
+Add `--apply` to move the listed paths. Migration preserves existing files,
+refuses existing destinations or unfinished maintenance, and does not touch the
+dedicated server or its database. Keep the move list with your backup if you
+need to return to a version that only knows the old paths.
+
+The Administrator Console is not part of this change. Its runtime and launcher
+locks, bridge discovery and credentials, and service control retain their legacy
+paths. Use the updated controller's tools, not an older Console, for offline
+file maintenance after migrating.
 
 ## Credits And License
 

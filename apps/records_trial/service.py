@@ -19,7 +19,8 @@ import time
 import urllib.parse
 from typing import TYPE_CHECKING
 
-from pyxaseco.helpers import display_manialink_multi, format_time, strip_colors
+from pyxaseco.helpers import format_time, strip_colors
+from apps.platform_ui import record_browser
 from pyxaseco.models import Gameinfo
 
 if TYPE_CHECKING:
@@ -509,16 +510,20 @@ async def _load_trial_pb(uid, login):
     if record is None:
         return result
     try:
-        params = urllib.parse.urlencode({'login': record['best_login'], 'limit': 5000})
-        endpoint = urllib.parse.quote(uid, safe='')
-        payload = await _json_request(
-            f'{_trial_api_base()}/api/trial-checkpoint-runs/{endpoint}?{params}', timeout=12)
-        result['stats'], result['run'], result['limited'] = info.personal_splits(
-            payload, _track_all_uids(track), record)
+        result['stats'], result['run'], result['limited'] = await _trial_run_splits(uid, _track_all_uids(track), record)
     except Exception as error:
         logger.warning('[TrialRecords] Personal checkpoint information unavailable (%s)', type(error).__name__)
         result['unavailable'] = True
     return result
+
+
+async def _trial_run_splits(uid, known_uids, record):
+    from . import info
+    params = urllib.parse.urlencode({'login': record['best_login'], 'limit': 5000})
+    endpoint = urllib.parse.quote(uid, safe='')
+    payload = await _json_request(
+        f'{_trial_api_base()}/api/trial-checkpoint-runs/{endpoint}?{params}', timeout=12)
+    return info.personal_splits(payload, known_uids, record)
 
 
 async def _chat_trial_details(aseco: 'Aseco', command: dict, *, personal=False):
@@ -751,19 +756,19 @@ async def chat_trialrecs(aseco: 'Aseco', command: dict):
 
 
 async def _show_trialrecs(aseco, player, current, rows):
-    login = player.login
+    from . import info
     if not current and not rows:
-        await _send_chat(aseco, login, '{#server}> {#error}Current track is not Trial-enabled.')
-        return
-    if not rows:
-        await _send_chat(aseco, login, '{#server}> {#error}No Trial records available.')
+        await _send_chat(aseco, player.login, '{#server}> {#error}Current track is not Trial-enabled.')
         return
 
-    show_logins = True
-    extra = 0.2 if getattr(aseco.settings, 'lists_colornicks', False) else 0
-    table_rows = []
+    uid = aseco.server.challenge.uid
+    known_uids = frozenset(_track_all_uids(current))
+    runs, records = [], {}
     for idx, row in enumerate(rows, start=1):
-        rec_login = str(row.get('login') or '?')
+        rec_login = str(row.get('login') or row.get('best_login') or '')
+        record = info.personal_record([row], rec_login)
+        if not record:
+            continue
         nick = _pick_display_name(
             row.get('player_nickname_raw'),
             row.get('nickname_raw'),
@@ -776,21 +781,28 @@ async def _show_trialrecs(aseco, player, current, rows):
             row.get('Nickname'),
             rec_login,
         )
-        try:
-            score = format_time(int(row.get('best_score') or row.get('score') or 0))
-        except Exception:
-            score = '--'
-        if show_logins:
-            table_rows.append([f'{idx:02d}.', '{#black}' + nick, '{#login}' + rec_login, score])
-        else:
-            table_rows.append([f'{idx:02d}.', '{#black}' + nick, score])
+        run = record_browser.Run(rec_login, nick, record['best_score'], idx)
+        runs.append(run)
+        records[run] = record
 
-    maxrank = max(len(rows), 1)
-    if show_logins:
-        widths = [1.2 + extra, 0.1, 0.45 + extra, 0.4, 0.25]
-    else:
-        widths = [0.8 + extra, 0.1, 0.45 + extra, 0.25]
-    pages = [table_rows[i:i+15] for i in range(0, len(table_rows), 15)]
-    player.msgs = [[1, f'Current TOP {maxrank} Trial Records:', widths, ['BgRaceScore2', 'Podium']]]
-    player.msgs.extend(pages)
-    display_manialink_multi(aseco, player)
+    async def fetch(run):
+        record = records.get(run) or {'best_score': run.score, 'best_login': run.login}
+        stats, _, _ = await _trial_run_splits(uid, known_uids, record)
+        return tuple(item['checkpoint_time_ms'] for item in stats)
+
+    async def personal(login, _player_id, _nickname):
+        record = info.personal_record(rows, login)
+        if not record:
+            data = await _load_trial_pb(uid, login)
+            if data['unavailable']:
+                raise RuntimeError('Trial checkpoint provider unavailable')
+            record = data['record']
+            if record:
+                return record_browser.Run(record['best_login'], record['nickname'], record['best_score'],
+                    record['rank'], record_browser.split_values(tuple(row['checkpoint_time_ms'] for row in data['stats'])))
+            return None
+        return next((run for run, match in records.items() if match['best_login'] == record['best_login']
+                     and run.score == record['best_score']), None)
+
+    await record_browser.show(aseco, player, 'Trial Records', runs, pb=personal,
+                             fetch=fetch if current else None, show_logins=True)

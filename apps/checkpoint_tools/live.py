@@ -97,7 +97,7 @@ TIME_CELL_SPEC_TARGET = 6
 
 MAX_DISPLAY_ROWS = 24
 POS_X = -64.4
-POS_Y = 19
+POS_Y = 19.0
 
 WIDGET_UPDATE_INTERVAL = 100
 MIN_WIDGET_UPDATE_INTERVAL = 50
@@ -698,13 +698,14 @@ class _CPLive:
         return True
 
     def build_list_xml(self, viewer_prefers_plain: bool, viewer_is_spectator: bool) -> str:
-        hud = [f'<manialink id="{ID_LIST}">']
-        y = POS_Y - 1.9
+        # Match the title's anchor so both pages scale as one widget.
+        hud = [f'<manialink id="{ID_LIST}"><frame posn="{POS_X} {POS_Y}">']
+        y = -1.9
 
         for row in self.list_rows:
             login = row["Login"]
             p = self.players[login]
-            hud.append(f'<frame posn="{POS_X} {y}">')
+            hud.append(f'<frame posn="0 {y}">')
 
             if viewer_is_spectator and not row["IsSpectator"]:
                 hud.append(
@@ -765,7 +766,7 @@ class _CPLive:
             hud.append("</frame>")
             y -= 1.8
 
-        hud.append("</manialink>")
+        hud.append("</frame></manialink>")
         return "".join(hud)
 
     # -------------------- sending / flushing --------------------
