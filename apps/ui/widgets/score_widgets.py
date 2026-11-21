@@ -255,7 +255,8 @@ def build_dedi_records_for_score(aseco: 'Aseco') -> str:
                 if best <= 0:
                     continue
                 score_text = format_time(best)
-            records.append((i + 1, score_text, nick))
+            rank = rec.get('rank', i + 1) if source_rows is rpg_rows else i + 1
+            records.append((rank, score_text, nick))
             if len(records) >= entries:
                 break
     except Exception as e:

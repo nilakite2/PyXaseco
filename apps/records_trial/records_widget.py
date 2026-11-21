@@ -11,6 +11,7 @@ from pyxaseco.models import Gameinfo
 
 from apps.ui import record_widgets as ui
 from apps.ui.record_widgets import ML_DEDI, ML_SUBWIN, ML_WINDOW
+from .info import record_rank
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -76,8 +77,9 @@ def _normalise_trial_record(rec: dict, rank: int) -> dict | None:
     )
     nickname = ui.clean_nickname(nickname)
 
+    resolved_rank = record_rank(rec, rank)
     return {
-        'rank': int(rec.get('rank') or rec.get('Pos') or rank),
+        'rank': resolved_rank,
         'login': login,
         'nickname': nickname,
         'score': best,
@@ -88,7 +90,7 @@ def _normalise_trial_record(rec: dict, rank: int) -> dict | None:
         'NickName': nickname,
         'Best': best,
         'Score': best,
-        'Pos': int(rec.get('Pos') or rank),
+        'Pos': resolved_rank,
     }
 
 

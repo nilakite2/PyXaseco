@@ -49,6 +49,7 @@ ACTION_ADMIN_BASE = 7400     # 7401.. etc
 ACTION_RECPANEL_BASE = 7300  # 7301.. etc
 ACTION_VOTEPANEL_BASE = 7500 # 7501.. etc
 ACTION_DONPANEL_BASE = 7200  # 7201.. etc
+ACTION_DEFAULT_BASE = 8040000
 
 # Functional panel action ids
 # Records panel templates use the original XAseco ids 7..10.
@@ -650,6 +651,63 @@ async def admin_panel(aseco: "Aseco", command: dict):
         admin_only=True,
     )
 
+async def chat_panel_pref(aseco: "Aseco", command: dict):
+    """Set server defaults without overwriting any player's saved selection."""
+    player = command["author"]
+    sub, _, value = str(command.get("params") or "").strip().partition(" ")
+    sub = sub.lower()
+    choices = {"style": ("window_style", "", "window style"),
+               "admpanel": ("admin_panel", "Admin", "admin panel"),
+               "donpanel": ("donate_panel", "Donate", "donate panel"),
+               "recpanel": ("records_panel", "Records", "records panel"),
+               "votepanel": ("vote_panel", "Vote", "vote panel")}
+    if sub not in choices or not aseco.is_any_admin(player) or not aseco.allow_ability(player, sub):
+        return
+    if getattr(aseco.settings, "lock_password", "") and not getattr(player, "unlocked", False):
+        return
+    setting, prefix, title = choices[sub]
+    if sub == "style":
+        from . import style
+        catalog = style._load_styles_config(aseco)
+    else:
+        catalog = _load_panel_templates(aseco)
+    names = [name for name in sorted(catalog) if not prefix or name.startswith(prefix)]
+    value = value.strip()
+    if not value or value == "help":
+        current = getattr(aseco.settings, setting, "") or "off"
+        await _send_login(aseco, player.login,
+                          f"{{#server}}> Default {title}: {{#highlite}}{current}{{#server}}. Use //{sub} <name|off|list>.")
+        return
+    if value == "list":
+        names.append("off")
+        player.tracklist = [{"default_panel_command": sub, "default_panel": name} for name in names]
+        rows = [[f"{index:02d}.", ["{#black}" + name, ACTION_DEFAULT_BASE + index]]
+                for index, name in enumerate(names, 1)]
+        player.msgs = [[1, f"Currently available default {title}s:", [0.8, 0.1, 0.7], ["Icons128x128_1", "Custom"]]]
+        player.msgs.extend(rows[index:index + 15] for index in range(0, len(rows), 15))
+        display_manialink_multi(aseco, player)
+        return
+    selected = ""
+    if value.casefold() != "off":
+        candidate = value if value.casefold().startswith(prefix.casefold()) else prefix + value
+        selected = next((name for name in names if name.casefold() == candidate.casefold()), "")
+        if not selected or not catalog[selected]:
+            await _send_login(aseco, player.login,
+                              f"{{#server}}> {{#error}}No valid {title}, use {{#highlite}}//{sub} list{{#error}}!")
+            return
+    # These legacy commands change runtime defaults; personal choices stay in players_extra.
+    if sub == "style":
+        data = style._get_style_data(aseco, selected) if selected else None
+        aseco.style = data["STYLES"] if data else {}
+    else:
+        kind = {"admpanel": "admin", "donpanel": "donate", "recpanel": "records", "votepanel": "vote"}[sub]
+        _default_panels[kind] = catalog[selected] if selected else ""
+    setattr(aseco.settings, setting, selected)
+    aseco.console("[Admin] {1} selects default {2} [{3}]", player.login, title, selected or "off")
+    await aseco.client.query_ignore_result("ChatSendServerMessage", aseco.format_colors(
+        f"{{#server}}> {{#admin}}Default {title} set to {{#highlite}}{selected or 'off'}{{#admin}}."))
+
+
 async def display_admpanel(aseco: "Aseco", player: "Player"):
     xml = _player_panel(player, "admin")
     if not xml:
@@ -941,7 +999,8 @@ async def _handle_panel_command(
 
     if admin_only:
         try:
-            is_admin = aseco.is_any_admin(player)
+            is_admin = (aseco.is_any_admin(player) and aseco.allow_ability(player, "panel")
+                        and (not getattr(aseco.settings, "lock_password", "") or getattr(player, "unlocked", False)))
         except Exception:
             is_admin = False
         if not is_admin:
@@ -1164,6 +1223,13 @@ async def event_panels(aseco: "Aseco", answer: list):
 
     player = aseco.server.players.get_player(login)
     if not player:
+        return
+
+    index = _action_index_from_base(ACTION_DEFAULT_BASE, action, len(player.tracklist))
+    if index is not None:
+        item = player.tracklist[index]
+        if "default_panel_command" in item and "default_panel" in item:
+            await _fire_admin_command(aseco, player, item["default_panel_command"] + " " + item["default_panel"])
         return
 
     # ------------------------------------------------------------------

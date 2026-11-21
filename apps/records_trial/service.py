@@ -781,7 +781,7 @@ async def _show_trialrecs(aseco, player, current, rows):
             row.get('Nickname'),
             rec_login,
         )
-        run = record_browser.Run(rec_login, nick, record['best_score'], idx)
+        run = record_browser.Run(rec_login, nick, record['best_score'], info.record_rank(row, idx))
         runs.append(run)
         records[run] = record
 

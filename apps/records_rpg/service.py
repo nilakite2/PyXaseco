@@ -174,7 +174,11 @@ def _normalize_rpg_record(rec: dict, rank: int, stars: int, challenge_uid: str) 
         or login
     )
     challenge_uid = _clean_text(rec.get("challenge_uid") or challenge_uid)
-    resolved_rank = _safe_int(rec.get("rank"), rank)
+    resolved_rank = _safe_int(rec.get('rank'))
+    if resolved_rank <= 0:
+        resolved_rank = _safe_int(rec.get('Pos'))
+    if resolved_rank <= 0:
+        resolved_rank = rank
     return {
         "rank": resolved_rank,
         "login": login,
@@ -210,10 +214,10 @@ def _normalize_rpg_records_payload(payload: object, requested_uid: str) -> tuple
     rtype = _safe_int(payload.get("type"), 0)
 
     rows: list[dict] = []
-    for idx, rec in enumerate(raw_records, start=1):
+    for rec in raw_records:
         if isinstance(rec, dict) and _clean_text(rec.get('challenge_uid') or challenge_uid) != challenge_uid:
             raise ValueError('RPG record identity mismatch')
-        row = _normalize_rpg_record(rec, idx, stars, challenge_uid)
+        row = _normalize_rpg_record(rec, len(rows) + 1, stars, challenge_uid)
         if row is not None:
             rows.append(row)
 

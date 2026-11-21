@@ -65,6 +65,14 @@ def checkpoint_stats(payload, known_uids):
     return sorted(result, key=lambda row: row['checkpoint_index'])
 
 
+def record_rank(row, fallback):
+    for key in ('rank', 'rank_no', 'Pos'):
+        value = _number(row.get(key))
+        if value is not None and value >= 1 and value.is_integer():
+            return int(value)
+    return fallback
+
+
 def personal_record(records, login):
     matches = []
     for position, row in enumerate(records, 1):
@@ -79,7 +87,7 @@ def personal_record(records, login):
             continue
         best_login = str(row.get('best_login') or row.get('player_login') or row.get('login') or login)
         matches.append({'best_score': int(score), 'best_login': best_login,
-                        'rank': row.get('rank') or row.get('rank_no') or position,
+                        'rank': record_rank(row, position),
                         'nickname': row.get('player_nickname') or row.get('nickname') or best_login})
     return min(matches, key=lambda row: row['best_score']) if matches else None
 
