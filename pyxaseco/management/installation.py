@@ -28,7 +28,7 @@ PLATFORM = 'windows' if os.name == 'nt' else 'linux'
 ROOT_FILES = frozenset(('main.py', 'config.toml', 'apps.toml', 'adminops.toml',
     'bannedips.toml', 'messages.toml', 'nations.toml', 'settings.toml', '.env.example',
     'requirements.txt', 'requirements-admin.txt', 'PyXaseco.bat', 'PyXasecoAdmin.bat',
-    'README.md', 'LICENSE'))
+    'README.md', 'LICENSE', 'map_imports/README.md'))
 TREES = {'apps': {'.py', '.toml'}, 'pyxaseco': {'.py'}, 'database': {'.sql'},
          'administrator': {'.py', '.png'}}
 
