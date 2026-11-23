@@ -1380,6 +1380,8 @@ async def admin_add_tmx_track(
     prepared: tuple | None = None,
     requester_nick: str = '',
     persist: bool = False,
+    queue_for_play: bool = True,
+    matchsettings_path: pathlib.Path | None = None,
 ) -> tuple[bool, str]:
     tracks_root = pathlib.Path(
         getattr(
@@ -1493,7 +1495,7 @@ async def admin_add_tmx_track(
         if persist:
             try:
                 from pyxaseco.core.file_io import file_io
-                await file_io(_ensure_matchsettings_entry, _matchsettings_path(aseco), rel_insert, uid)
+                await file_io(_ensure_matchsettings_entry, matchsettings_path or _matchsettings_path(aseco), rel_insert, uid)
             except Exception as e:
                 logger.warning('[TMX] Could not persist %s in MatchSettings: %s', server_file, e)
                 live_filename = str(server_track.get('FileName', '') or server_file)
@@ -1551,7 +1553,7 @@ async def admin_add_tmx_track(
         display_name = strip_colors(raw_name, for_tm=False)
 
         # /admin add: auto-queue newly added map
-        if use_add_challenge:
+        if use_add_challenge and queue_for_play:
             try:
                 live_filename = server_track.get('FileName', server_filename) or server_filename
 

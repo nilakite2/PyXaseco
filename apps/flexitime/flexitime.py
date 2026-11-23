@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
+from xml.sax.saxutils import quoteattr
 
 from pyxaseco.app_config import AppSetting, AppSettingsSchema, as_bool, as_int, as_str, bind_app_settings
 from pyxaseco.app_services import localdb_get_pool
@@ -23,6 +24,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ML_ID = 29288
+
+HUD_GEOMETRY = {
+    'pos_x': (60.0, -64, 64),
+    'pos_y': (20.0, -48, 48),
+    'width': (18.0, 0, 128),
+    'height': (5.0, 0, 96),
+    'text_scale': (0.6, 0.1, 3),
+}
+HUD_DEFAULTS = {key: limits[0] for key, limits in HUD_GEOMETRY.items()}
+
+
+def hud_geometry(table):
+    if not isinstance(table, dict):
+        raise ValueError('FlexiTime HUD settings must be a table.')
+    layout = {}
+    for key, (default, lower, upper) in HUD_GEOMETRY.items():
+        value = table.get(key, default)
+        if type(value) not in (int, float) or not lower <= value <= upper:
+            raise ValueError(f'FlexiTime HUD {key} must be between {lower:g} and {upper:g}.')
+        layout[key] = float(value)
+    return layout
 
 
 def _as_login_list(value, default=None) -> list[str]:
@@ -77,6 +99,7 @@ class FlexiTime:
         self.warn_colour = 'ff4'
         self.danger_time = 60
         self.danger_colour = 'f44'
+        self.hud = HUD_DEFAULTS.copy()
 
         self.time_left = self.default_time * 60
         self.author_time = 0
@@ -105,6 +128,7 @@ class FlexiTime:
     def _load_config(self) -> None:
         try:
             bound = bind_app_settings(FLEXITIME_SETTINGS_SCHEMA, getattr(self.aseco, '_base_dir', None))
+            layout = hud_geometry(bound.section.get('hud', {}))
             self.admin_level = int(bound.values['admin_level'])
             self.admins = list(bound.values['whitelist'])
             self.default_time = int(bound.values['default_time'])
@@ -118,6 +142,7 @@ class FlexiTime:
             self.warn_colour = str(bound.values['warn_colour'])
             self.danger_time = int(bound.values['danger_time'])
             self.danger_colour = str(bound.values['danger_colour'])
+            self.hud = layout
             self.time_left = self.default_time * 60
         except Exception as exc:
             logger.warning('[FlexiTime] Could not read app defaults: %s', exc)
@@ -227,13 +252,18 @@ class FlexiTime:
 
         colour = self._colour()
         showtime = self._time_str(self.time_left)
-        xpos = '120' if self.paused else '60'
+        layout = self.hud
+        xpos = 120.0 if self.paused else layout['pos_x']
+        width, height = layout['width'], layout['height']
+        backdrop = (
+            f'<quad posn="8 0 0" sizen="{width:g} {height:g} 0.08" halign="right" valign="center" '
+            'style="BgsPlayerCard" substyle="BgPlayerCardBig"/>'
+        ) if width and height else ''
+        text = quoteattr('$s$' + colour + showtime)
         body = (
-            f'<frame scale="1" posn="{xpos} 20">'
-            f'<quad posn="8 0 0" sizen="18 5 0.08" halign="right" valign="center" '
-            f'style="BgsPlayerCard" substyle="BgPlayerCardBig"/>'
-            f'<label posn="3.5 0.1 0.1" halign="right" valign="center" scale="0.6" '
-            f'style="TextRaceChrono" text="$s${colour}{showtime}"/>'
+            f'<frame scale="1" posn="{xpos:g} {layout["pos_y"]:g}">{backdrop}'
+            f'<label posn="3.5 0.1 0.1" halign="right" valign="center" scale="{layout["text_scale"]:g}" '
+            f'style="TextRaceChrono" text={text}/>'
             '</frame>'
         )
         hud = f'<?xml version="1.0" encoding="UTF-8"?><manialink id="{ML_ID}">{body}</manialink>'

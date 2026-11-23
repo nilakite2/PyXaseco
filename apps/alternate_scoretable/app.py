@@ -19,7 +19,7 @@ SCHEMA = AppSettingsSchema(app_id='alternate_scoretable', settings=(
     AppSetting('enabled', True, as_bool, 'Enable Alternate Scoretable.'),
     AppSetting('entries', 20, as_int, 'Rows per page, 5-20.'),
     AppSetting('show_at_score', True, as_bool, 'Automatically open at the end of the map.'),
-    AppSetting('show_at_finish', True, as_bool, 'Automatically open after a positive finish.'),
+    AppSetting('show_at_finish', False, as_bool, 'Automatically open after a positive finish.'),
     AppSetting('delay_score_display', 5, as_int, 'End-of-map delay, 0-30 seconds.'),
     AppSetting('delay_finish_display', 3, as_int, 'Finish popup delay, 0-30 seconds.'),
     AppSetting('score_display_time', 20, as_int, 'Automatic end-of-map popup duration, 1-120 seconds.'),

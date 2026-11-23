@@ -127,10 +127,13 @@ async def _db_query(sql: str, params: tuple = ()) -> list[tuple]:
     """Run a SELECT and return rows as list of tuples. Returns [] on error."""
     context = _score_queries.get()
     if context is not None:
-        from .score_data import score_data
+        from .score_data import ScoreUnavailable, score_data
         rows = score_data(context['aseco']).request(sql, params)
         if rows is None:
             context['loading'] = True
+        elif isinstance(rows, ScoreUnavailable):
+            context['unavailable'] = True
+            return []
         return rows or []
     try:
         pool = await localdb_get_pool(getattr(_state, 'aseco', None))
@@ -621,10 +624,11 @@ async def draw_all_score_columns(aseco: 'Aseco') -> None:
             xml = await builder(aseco)
         finally:
             _score_queries.reset(token)
-        if context['loading']:
+        if context.get('unavailable') or context['loading']:
             cfg = getattr(_state, attribute)
             xml = (_stl_header(page_id, cfg, 1) +
-                   _stl_row_score_nick(0, '', 'Loading...', cfg.get('row_height', _state.line_height),
+                   _stl_row_score_nick(0, '', 'Data unavailable' if context.get('unavailable') else 'Loading...',
+                                       cfg.get('row_height', _state.line_height),
                                        '', 'DDDF', cfg.get('width', 15.5)) +
                    _stl_footer())
         encoded_size = len(xml.encode('utf-8'))

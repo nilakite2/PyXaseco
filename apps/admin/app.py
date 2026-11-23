@@ -19,6 +19,7 @@ APP_METADATA = {
         "apps/admin/server.py",
         "apps/admin/cleanup.py",
         "apps/admin/map.py",
+        "apps/admin/map_import.py",
         "apps/admin/replace_map.py",
         "apps/admin/matchsettings.py",
         "apps/admin/player.py",

@@ -5,6 +5,7 @@ import random
 from typing import TYPE_CHECKING, Any
 
 from pyxaseco.core.base import Component
+from pyxaseco.core.playlist import playlist
 
 if TYPE_CHECKING:
     from pyxaseco.core.aseco import Aseco
@@ -34,6 +35,7 @@ COMMAND_SPECS = [
     ('cjb', 'Clears the entire jukebox'),
     ('clearhist', 'Clears (part of) track history'),
     ('add', 'Permanently adds track from TMX: /admin add <id> [tmnf|tmu|tmo|tms|tmn]'),
+    ('addfile', 'Import TMX IDs: /admin addfile <file.txt> [tmnf|tmu|tmo|tms|tmn], or cancel'),
     ('addthis', 'Adds current /add-ed track permanently'),
     ('addlocal', 'Adds a local track (<filename>)'),
     ('replacemap', 'Safely replace the current rotation slot from TMX after confirmation'),
@@ -70,6 +72,11 @@ async def handle_subcommand(
     chattitle: str,
 ) -> bool:
     from . import command_router as admin_chat
+
+    if sub == 'addfile':
+        from .map_import import command as import_maps
+        await import_maps(aseco, admin, args)
+        return True
 
     if sub == 'replacemap':
         from .replace_map import command as replace_map
@@ -146,7 +153,7 @@ async def handle_subcommand(
                 )
                 return True
 
-            track_list = await aseco.client.query('GetChallengeList', 5000, 0) or []
+            track_list = await playlist(aseco).snapshot(refresh=True)
             prev_track = None
             for track in track_list:
                 tuid = str(track.get('UId', '') or track.get('Uid', '') or '').strip()
@@ -400,7 +407,7 @@ async def handle_subcommand(
 
     if sub in ('shuffle', 'shufflemaps'):
         try:
-            track_list = await aseco.client.query('GetChallengeList', 5000, 0) or []
+            track_list = await playlist(aseco).snapshot(refresh=True)
             random.shuffle(track_list)
             file_names = [t['FileName'] for t in track_list]
             await aseco.client.query_ignore_result('SetChallengeList', file_names)
@@ -517,7 +524,7 @@ async def handle_subcommand(
     if sub == 'nextenv':
         try:
             env = aseco.server.challenge.environment
-            track_list = await aseco.client.query('GetChallengeList', 5000, 0) or []
+            track_list = await playlist(aseco).snapshot(refresh=True)
             for track in track_list:
                 if track.get('Environnement', '') == env and track['FileName'] != aseco.server.challenge.filename:
                     await aseco.client.query_ignore_result('SetNextChallengeList', [track])
@@ -670,7 +677,7 @@ async def handle_subcommand(
 
     if sub == 'listdupes':
         try:
-            tracks = await aseco.client.query('GetChallengeList', 5000, 0) or []
+            tracks = await playlist(aseco).snapshot(refresh=True)
             names: dict[str, bool] = {}
             dupes = []
             for track in tracks:
@@ -731,7 +738,9 @@ class AdminMapDomain(Component):
         )
 
     def register(self, aseco: 'Aseco') -> None:
+        from .map_import import tick
         _register_specs(aseco)
+        aseco.register_event('onEverySecond', tick)
 
 
 MAP_DOMAIN = AdminMapDomain()

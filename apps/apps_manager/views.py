@@ -158,6 +158,7 @@ def _show_apps_manager_window(aseco: 'Aseco', admin) -> None:
 
     service = get_service(aseco)
     release_state = ('Pending restart' if service and service.restart_needed else
+                     'Local files differ' if service and 'local_changes' in service.package_states.values() else
                      'Downloaded, not installed' if service and 'downloaded' in service.package_states.values() else '')
     rows.append(['Verified Releases', 'Packages', release_state,
                  _action_cell(admin, 'Check', ('check_releases',)), '', ''])
@@ -232,12 +233,14 @@ def _show_release_window(aseco, admin, catalogue):
         dependencies = len(package['requires_apps']) + len(package['python_requirements'])
         identity = package['id']
         local = service.package_states.get(identity) if service else None
-        state = ('Pending restart' if service and identity in service.pending_packages else
+        pending = service and identity in service.pending_packages
+        state = ('Local files differ; restart pending' if local == 'local_changes' and pending else
+                 'Local files differ' if local == 'local_changes' else 'Pending restart' if pending else
                  'Downloaded, not installed' if local == 'downloaded' else
                  'Installed' if local == 'installed' else 'Incompatible' if reasons else 'Verified')
         rows.append([identity, package['version'], state,
                      _action_cell(admin, 'Download', ('stage_release', identity)) if not reasons and local != 'downloaded' else '',
-                     _action_cell(admin, 'Review', ('review_release', identity)) if local in {'downloaded', 'installed'} and not reasons else '',
+                     _action_cell(admin, 'Review', ('review_release', identity)) if local in {'downloaded', 'installed', 'local_changes'} and not reasons else '',
                      '; '.join(reasons) if reasons else str(dependencies) + ' requirements'])
     rows.append(['Recheck publishers', '', '', _action_cell(admin, 'Check', ('check_releases',)), '', ''])
     _show_apps_window(aseco, admin, 'Verified Releases', ['Icons128x128_1', 'LoadTrack'],
@@ -268,13 +271,15 @@ def _show_package_review_window(aseco, admin, plan, *, confirm=False):
         rows.append(['Modified official code', 'Replaced' if plan['force'] else 'Kept', 'Existing configuration is always preserved.'])
     else:
         rows.append(['Copy reviewed files', '', _action_cell(admin, 'Apply...', payload)])
-        if not plan['force']:
+        if not plan['force'] and counts['keep_modified']:
             rows.append(['Also replace modified code', '', _action_cell(admin, 'Force Replace...', ('force_review', plan['package']))])
     rows.append(['Recheck publishers', '', _action_cell(admin, 'Packages', ('check_releases',))])
     for item in plan['files']:
         if item['action'] != 'unchanged':
             detail = ('Left in place' if item['action'] in {'keep_modified', 'preserve_config'} else
                       'New release file' if item['action'] == 'add' else 'Backed up before change')
+            if item['action'] == 'keep_modified' and item.get('reason'):
+                detail = item['reason'] + '; kept'
             rows.append([item['file'], item['action'].replace('_', ' '), detail])
     admin._release_review = plan
     _show_apps_window(aseco, admin, 'Confirm Update' if confirm else 'Update Review', ['Icons128x128_1', 'LoadTrack'],

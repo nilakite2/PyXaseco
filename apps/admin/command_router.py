@@ -369,7 +369,7 @@ def _auth_check(aseco: 'Aseco', admin, sub: str):
     sub = (sub or '').strip().lower()
 
     public_admin_commands = {'help', 'helpall', 'listmasters', 'listadmins', 'listops'}
-    masteradmin_only = {'addadmin', 'removeadmin', 'cleanupserver', 'replacemap'}
+    masteradmin_only = {'addadmin', 'removeadmin', 'cleanupserver', 'replacemap', 'addfile'}
     admin_or_master_only = {'addop', 'removeop', 'tmatch'}
 
     if sub in public_admin_commands:
@@ -923,7 +923,8 @@ async def _delegate_if_exists(
 
 async def _find_track_uid_by_filename(aseco: 'Aseco', fname: str) -> str:
     try:
-        tracks = await aseco.client.query('GetChallengeList', 5000, 0) or []
+        from pyxaseco.core.playlist import playlist
+        tracks = await playlist(aseco).snapshot(refresh=True)
         for t in tracks:
             if t.get('FileName', '') == fname:
                 return t.get('UId', '') or t.get('Uid', '') or ''

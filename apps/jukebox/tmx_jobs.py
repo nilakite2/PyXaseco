@@ -257,7 +257,7 @@ class TmxJobs:
     async def request(self, *, login, nickname, complete, ref='', section='', random_filters=None,
                       vote=False, require_feature_flags=True, current_map=False,
                       guard=None, discarded=None, acknowledge=True, persist=False,
-                      apply_promoted=None) -> Admission:
+                      apply_promoted=None, queue_for_play=True, matchsettings_path=None) -> Admission:
         from . import backend as b
         if 'jukebox' not in self.aseco.active_apps:
             raise RuntimeError('The Jukebox app is disabled.')
@@ -301,8 +301,14 @@ class TmxJobs:
                 await b._reply(self.aseco, login, '{#server}> {#error}Pending TMX request cancelled after context changed.')
 
         async def commit(prepared):
+            from contextlib import nullcontext
+            preset_lock = nullcontext()
+            if matchsettings_path is not None:
+                if not hasattr(self.aseco, '_ms_load_lock'):
+                    self.aseco._ms_load_lock = asyncio.Lock()
+                preset_lock = self.aseco._ms_load_lock
             try:
-                async with self._commit_lock:
+                async with self._commit_lock, preset_lock:
                     if guard is not None and not await guard():
                         if discarded is not None:
                             await discarded()
@@ -335,7 +341,8 @@ class TmxJobs:
                             ok, info = await b.admin_add_tmx_track(self.aseco, str(prepared.track_id), login,
                                                                  prepared.section, use_add_challenge=True,
                                                                  prepared=promoted, requester_nick=nickname,
-                                                                 persist=persist)
+                                                                 persist=persist, queue_for_play=queue_for_play,
+                                                                 matchsettings_path=matchsettings_path)
                     if random_filters is not None and ok:
                         info = {'name': info, 'section': prepared.section, 'uid': prepared.metadata.get('uid', '')}
                     await complete(ok, info)

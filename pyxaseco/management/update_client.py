@@ -36,8 +36,10 @@ class UpdateClient:
                 data = tomllib.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
                 section = data.get('apps_manager', {})
                 settings = section.get('updates', {}) if isinstance(section, dict) else None
-            except (tomllib.TOMLDecodeError, UnicodeError):
-                raise ManagementError('Apps Manager update settings contain invalid TOML') from None
+            except tomllib.TOMLDecodeError as error:
+                raise ManagementError(f'apps/apps_manager/app_defaults.toml: {error}') from None
+            except UnicodeError:
+                raise ManagementError('apps/apps_manager/app_defaults.toml must use UTF-8 encoding') from None
         if not isinstance(settings, dict):
             raise ManagementError('Apps Manager updates must be configured as a TOML table')
         self.settings = settings
@@ -209,7 +211,8 @@ class UpdateClient:
         """Read local download and install state for an approved catalogue."""
         from .file_updates import FileUpdates
         from .release_manifest import PUBLIC_APPS
-        ledger, _raw = FileUpdates(self.root)._ledger()
+        updates = FileUpdates(self.root)
+        ledger, _raw = updates._ledger()
         identities = {item['id'] for item in catalogue['packages']}
         if catalogue['schema'] == 3:
             identities.update(PUBLIC_APPS)
@@ -221,7 +224,7 @@ class UpdateClient:
                 continue
             entry = ledger['packages'].get(identity, {})
             if entry.get('sha256') == package['sha256']:
-                states[identity] = 'installed'
+                states[identity] = 'installed' if updates.matches_release(package, entry['files']) else 'local_changes'
                 continue
             path = safe_path(self.area / (identity + '-' + package['sha256']) / 'package.zip')
             if path.is_file() and path.stat().st_size == package['size']:

@@ -127,6 +127,11 @@ CONFIG_APPS: dict[str, dict[str, str]] = {
         'save_mode': 'reload',
         'description': 'Checkpoint live overlay settings',
     },
+    'flexitime': {
+        'label': 'FlexiTime',
+        'save_mode': 'reload',
+        'description': 'Time Attack timer settings and HUD layout',
+    },
     'endlesstmxr': {
         'label': 'Endless TMX Random',
         'save_mode': 'reload',
@@ -426,8 +431,16 @@ class AppsManagerService:
         from pyxaseco.core.background_jobs import Admission, JobEnvelope, JobPolicy
         if not aseco.jobs.running:
             return
-        self.configure_updates(aseco)
-        client = UpdateClient(_root_dir(aseco), PYXASECO_VERSION, settings=dict(self.update_settings))
+        try:
+            client = UpdateClient(_root_dir(aseco), PYXASECO_VERSION)
+        except (ManagementError, OSError) as error:
+            self.update_settings = {}
+            logger.warning('[Updates] %s', error)
+            if not quiet:
+                await _reply(aseco, login, '{#server}> {#error}' + (
+                    str(error) if isinstance(error, ManagementError) else 'Could not read the Apps Manager update settings.'))
+            return
+        self.update_settings = client.settings
         self.release_busy = True
         self.copying = install
         job = JobEnvelope.capture(aseco.capture_job_context(login=login), {'package': identity})
@@ -463,7 +476,7 @@ class AppsManagerService:
                 return
             if install:
                 self.restart_needed = self.restart_needed or data['restart_required']
-                self.package_states[data['package']] = 'installed'
+                self.package_states[data['package']] = 'local_changes' if data['kept_modified'] else 'installed'
                 if data['restart_required']:
                     self.pending_packages.add(data['package'])
                 logger.info('[Updates] Copied %s files; report: %s', data['copied'], data['report'])
@@ -639,6 +652,15 @@ def _config_items_for_app(aseco: 'Aseco', app_key: str) -> list[dict[str, Any]]:
 
     file_path = _app_defaults_path_for_app(aseco, app_key)
     if file_path.exists():
+        if app_key == 'flexitime':
+            from apps.flexitime.flexitime import HUD_DEFAULTS
+            append_item({
+                'key': 'hud', 'label': 'Timer HUD',
+                'file': 'apps/flexitime/app_defaults.toml',
+                'table_path': ('flexitime', 'hud'),
+                'default_fields': HUD_DEFAULTS,
+                'field_labels': {'width': 'Background width', 'height': 'Background height', 'text_scale': 'Timer text scale'},
+            })
         data = read_toml(file_path)
         for root_key, root_value in data.items():
             if not isinstance(root_value, dict):
@@ -1259,6 +1281,7 @@ def _editable_fields_from_info(aseco: 'Aseco', item: dict[str, Any], info: dict[
         if not isinstance(numeric, (int, float)) or not isfinite(numeric):
             return
         axis, label = position or (None, {'size_w': 'width', 'size_h': 'height'}.get(field_key, field_key))
+        label = item.get('field_labels', {}).get(field_key, label)
         if item['key'] == 'banner' and field_key == 'width':
             label = 'Maximum width'
         write_key = write_key or field_key

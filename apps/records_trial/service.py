@@ -230,6 +230,8 @@ async def get_trial_track(uid: str, *, timeout=30, include_links=False) -> dict 
         url += '?include_links=1'
     payload = await _json_request(url, timeout=timeout)
     row = _normalize_trial_track_payload(payload)
+    if not _tmf_track(row):
+        return None
     if isinstance(row, dict) and not _track_matches_uid(row, uid):
         logger.info(
             "[TrialRecords] Ignoring mismatched Trial track for %s; API returned %s",
@@ -366,6 +368,10 @@ async def _load_trial_snapshot(uid):
     return track, rows
 
 
+def _tmf_track(track):
+    return isinstance(track, dict) and bool(track) and str(track.get('tmx_section') or '').strip().upper() != 'TM2'
+
+
 async def _tr_sync_current_track(aseco: 'Aseco', _param=None):
     global _current_track, _current_records, _last_checked_uid
     if not _enabled:
@@ -448,8 +454,9 @@ def _trial_delivery(aseco):
         return data
     async def send(data):
         response = _normalize_trial_finish_payload(await _json_post(
-            f"{_trial_api_base()}/api/trial-finish", data))
+            f"{_trial_api_base()}/api/trial-finish", dict(data, game='TMF')))
         if (response.get('ok') is not True or not isinstance(response.get('changed'), bool)
+                or not _tmf_track(response.get('track'))
                 or not _track_matches_uid(response.get('track'), data['uid'])
                 or str(response.get('login') or '') != data['login']
                 or int(response.get('score') or 0) != data['score']):

@@ -13,6 +13,16 @@ _edit_revisions = ContextVar('toml_edit_revisions', default=None)
 
 
 @contextmanager
+def _toml_source(path):
+    try:
+        yield
+    except tomllib.TOMLDecodeError as error:
+        file = Path(path)
+        name = f'apps/{file.parent.name}/{file.name}' if file.name == 'app_defaults.toml' else file.name
+        raise ValueError(f'{name}: {error}') from error
+
+
+@contextmanager
 def revision_guard(path):
     file = Path(path).resolve()
     token = _edit_revisions.set({file: revision(file.read_bytes())})
@@ -74,7 +84,7 @@ def write_toml(path: str | Path, data: dict[str, Any]) -> None:
 
 
 def read_toml(path: str | Path) -> dict[str, Any]:
-    with Path(path).open('rb') as fh:
+    with _toml_source(path), Path(path).open('rb') as fh:
         data = tomllib.load(fh)
     return data if isinstance(data, dict) else {}
 
@@ -87,8 +97,9 @@ def update_toml_table_scalar(
 ) -> None:
     revisions = _edit_revisions.get()
     file = Path(path).resolve()
-    saved = update_file(file, lambda text: edit_toml(text, (*table_path, key), value),
-                        expected=revisions.get(file) if revisions else None, validator=tomllib.loads)
+    with _toml_source(path):
+        saved = update_file(file, lambda text: edit_toml(text, (*table_path, key), value),
+                            expected=revisions.get(file) if revisions else None, validator=tomllib.loads)
     if revisions is not None:
         revisions[file] = saved.revision
 
@@ -105,5 +116,6 @@ def move_loadout_entry(path: str | Path, entry: str, enabled: bool) -> dict[str,
         updated = edit_toml(updated, ('loadout', 'disabled'), inactive)
         result.update(tomllib.loads(updated))
         return updated
-    update_file(Path(path), change, validator=tomllib.loads)
+    with _toml_source(path):
+        update_file(Path(path), change, validator=tomllib.loads)
     return result

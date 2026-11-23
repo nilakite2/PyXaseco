@@ -3,7 +3,7 @@ enabled = true
 # Rows per page: 5-20. No empty rows are drawn.
 entries = 20
 show_at_score = true
-show_at_finish = true
+show_at_finish = false
 # Delays: 0-30 seconds. Durations: 1-120 seconds.
 delay_score_display = 5
 delay_finish_display = 3
