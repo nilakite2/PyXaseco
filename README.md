@@ -1,4 +1,4 @@
-# PyXaseco 1.7
+# PyXaseco 1.7.1
 
 PyXaseco is a Python-based server controller for TrackMania Nations Forever and
 TrackMania United Forever. It builds on the familiar XAseco experience: records,
